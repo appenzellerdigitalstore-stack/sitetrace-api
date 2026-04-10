@@ -35,6 +35,10 @@
       if (!url) {
         resultBox.innerHTML = "❌ Please enter a URL";
         return;
+        if (!url.startsWith("http")) {
+  resultBox.innerHTML = "❌ URL must start with http or https";
+  return;
+}
       }
 
       // UI state
