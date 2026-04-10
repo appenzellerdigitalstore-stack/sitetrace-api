@@ -54,13 +54,20 @@
         if (data.status === "error") {
           resultBox.innerHTML = "❌ Error: " + data.message;
         } else {
-          resultBox.innerHTML = `
-            <h3 style="margin-top:0;">📊 Results</h3>
-            <p><strong>Title:</strong> ${data.title}</p>
-            <p><strong>Description:</strong> ${data.meta_description}</p>
-            <p><strong>H1 Count:</strong> ${data.h1_count}</p>
-            <p><strong>Response Time:</strong> ${data.response_time}</p>
-          `;
+        resultBox.innerHTML = `
+  <h3 style="margin-top:0;">📊 Results</h3>
+
+  <p><strong>SEO Score:</strong> ${data.seo_score}/100</p>
+
+  <p><strong>Title:</strong> ${data.title}</p>
+  <p><strong>Description:</strong> ${data.meta_description}</p>
+
+  <p><strong>H1 Count:</strong> ${data.h1_count}</p>
+  <p><strong>Images:</strong> ${data.images}</p>
+  <p><strong>Images with ALT:</strong> ${data.images_with_alt}</p>
+
+  <p><strong>Response Time:</strong> ${data.response_time}</p>
+`;
         }
 
       } catch (err) {
