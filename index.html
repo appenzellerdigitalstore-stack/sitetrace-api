@@ -1,39 +1,75 @@
 <!DOCTYPE html>
-
 <html>
 <head>
   <title>SiteTrace</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
 <body style="font-family: Arial; text-align: center; margin-top: 80px; background:#0f172a; color:white;">
 
   <h1>SiteTrace 🔎</h1>
 
-<input id="urlInput" type="text" placeholder="https://example.com"
- style="width:350px; padding:12px; border-radius:8px; border:none; margin-top:10px;" />
+  <input id="urlInput" type="text" placeholder="https://example.com"
+    style="width:350px; padding:12px; border-radius:8px; border:none; margin-top:10px;" />
 
-<br><br>
+  <br><br>
 
-<button onclick="analyze()"
- style="padding:12px 20px; border:none; border-radius:8px; background:#22c55e; color:black; font-weight:bold; cursor:pointer;">
-Analyze </button>
+  <button id="btn" onclick="analyze()"
+    style="padding:12px 20px; border:none; border-radius:8px; background:#22c55e; color:black; font-weight:bold; cursor:pointer;">
+    Analyze
+  </button>
 
-  <pre id="result"
-    style="margin-top:30px; text-align:left; display:inline-block; background:#020617; padding:20px; border-radius:10px;"></pre>
+  <p id="loading" style="display:none; margin-top:15px;">⏳ Analyzing...</p>
+
+  <div id="result"
+    style="margin-top:30px; text-align:left; display:inline-block; background:#020617; padding:20px; border-radius:10px; min-width:300px;">
+  </div>
 
   <script>
     async function analyze() {
       const url = document.getElementById('urlInput').value;
+      const resultBox = document.getElementById('result');
+      const loading = document.getElementById('loading');
+      const btn = document.getElementById('btn');
 
-      const response = await fetch('https://sitetrace-api.onrender.com/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
+      if (!url) {
+        resultBox.innerHTML = "❌ Please enter a URL";
+        return;
+      }
 
-      const data = await response.json();
+      // UI state
+      loading.style.display = "block";
+      btn.disabled = true;
+      resultBox.innerHTML = "";
 
-      document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+      try {
+        const response = await fetch('https://sitetrace-api.onrender.com/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        const data = await response.json();
+
+        if (data.status === "error") {
+          resultBox.innerHTML = "❌ Error: " + data.message;
+        } else {
+          resultBox.innerHTML = `
+            <h3 style="margin-top:0;">📊 Results</h3>
+            <p><strong>Title:</strong> ${data.title}</p>
+            <p><strong>Description:</strong> ${data.meta_description}</p>
+            <p><strong>H1 Count:</strong> ${data.h1_count}</p>
+            <p><strong>Response Time:</strong> ${data.response_time}</p>
+          `;
+        }
+
+      } catch (err) {
+        resultBox.innerHTML = "❌ Failed to fetch API";
+      }
+
+      // Reset UI
+      loading.style.display = "none";
+      btn.disabled = false;
     }
   </script>
 
