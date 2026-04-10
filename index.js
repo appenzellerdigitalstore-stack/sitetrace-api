@@ -32,21 +32,38 @@ app.post('/analyze', async (req, res) => {
 
     const responseTime = Date.now() - startTime;
 
-    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
-    const metaMatch = html.match(/<meta name="description" content="(.*?)"/i);
-    const h1Matches = html.match(/<h1/g);
+  const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+const metaMatch = html.match(/<meta name="description" content="(.*?)"/i);
+const h1Matches = html.match(/<h1/g);
+const imgMatches = html.match(/<img/g);
+const altMatches = html.match(/alt="/g);
 
-    const title = titleMatch ? titleMatch[1] : "No title found";
-    const metaDescription = metaMatch ? metaMatch[1] : "No description found";
-    const h1Count = h1Matches ? h1Matches.length : 0;
+// valores base
+const title = titleMatch ? titleMatch[1] : "";
+const metaDescription = metaMatch ? metaMatch[1] : "";
+const h1Count = h1Matches ? h1Matches.length : 0;
+const imgCount = imgMatches ? imgMatches.length : 0;
+const altCount = altMatches ? altMatches.length : 0;
 
-    res.json({
-      status: 'success',
-      response_time: responseTime + "ms",
-      title,
-      meta_description: metaDescription,
-      h1_count: h1Count
-    });
+// 🔥 SEO SCORE SIMPLE
+let score = 0;
+
+if (title.length > 10) score += 20;
+if (metaDescription.length > 50) score += 20;
+if (h1Count >= 1) score += 20;
+if (imgCount > 0 && altCount / imgCount > 0.5) score += 20;
+if (responseTime < 1000) score += 20;
+
+res.json({
+  status: 'success',
+  response_time: responseTime + "ms",
+  title: title || "No title",
+  meta_description: metaDescription || "No description",
+  h1_count: h1Count,
+  images: imgCount,
+  images_with_alt: altCount,
+  seo_score: score
+});
 
   } catch (error) {
     console.log("ERROR REAL:", error.message);
