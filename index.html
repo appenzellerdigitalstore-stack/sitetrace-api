@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>SiteTrace</title>
+</head>
+
+<body style="font-family: Arial; text-align: center; margin-top: 80px; background:#0f172a; color:white;">
+
+  <h1>SiteTrace 🔎</h1>
+
+<input id="urlInput" type="text" placeholder="https://example.com"
+ style="width:350px; padding:12px; border-radius:8px; border:none; margin-top:10px;" />
+
+<br><br>
+
+<button onclick="analyze()"
+ style="padding:12px 20px; border:none; border-radius:8px; background:#22c55e; color:black; font-weight:bold; cursor:pointer;">
+Analyze </button>
+
+  <pre id="result"
+    style="margin-top:30px; text-align:left; display:inline-block; background:#020617; padding:20px; border-radius:10px;"></pre>
+
+  <script>
+    async function analyze() {
+      const url = document.getElementById('urlInput').value;
+
+      const response = await fetch('http://localhost:3000/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      const data = await response.json();
+
+      document.getElementById('result').innerText = JSON.stringify(data, null, 2);
+    }
+  </script>
+
+</body>
+</html>
