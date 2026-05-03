@@ -4,6 +4,9 @@
   "description": "Website monitoring and SEO health check API for SiteTrace.",
   "main": "index.js",
   "license": "ISC",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node index.js",
     "check": "node --check index.js"
