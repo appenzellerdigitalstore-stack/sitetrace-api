@@ -1,10 +1,12 @@
 {
-  "name": "minimal-seo-api",
+  "name": "sitetrace",
   "version": "1.0.0",
+  "description": "Website monitoring and SEO health check API for SiteTrace.",
   "main": "index.js",
   "license": "ISC",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "check": "node --check index.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
