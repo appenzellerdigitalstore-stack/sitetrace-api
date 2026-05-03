@@ -4,6 +4,8 @@ const cheerio = require('cheerio');
 const cors = require('cors');
 const tls = require('tls');
 const path = require('path');
+const Stripe = require('stripe');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,10 +13,71 @@ const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 12000);
 const RATE_LIMIT = Number(process.env.RATE_LIMIT || 20);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 2 * 1024 * 1024);
+const APP_URL = process.env.APP_URL || 'https://www.sitetrace.it.com';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID || '';
+const STRIPE_AGENCY_PRICE_ID = process.env.STRIPE_AGENCY_PRICE_ID || '';
+const CRON_SECRET = process.env.CRON_SECRET || '';
 
 const requestCounts = new Map();
+const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
+const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+  : null;
 
 app.use(cors());
+
+app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !supabaseAdmin || !STRIPE_WEBHOOK_SECRET) {
+    return res.status(503).json({ error: 'Billing webhook is not configured' });
+  }
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], STRIPE_WEBHOOK_SECRET);
+  } catch (error) {
+    return res.status(400).send(`Webhook error: ${error.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.client_reference_id;
+      const plan = session.metadata && session.metadata.plan ? session.metadata.plan : 'starter';
+
+      if (userId) {
+        await supabaseAdmin.from('profiles').upsert({
+          id: userId,
+          plan,
+          stripe_customer_id: session.customer,
+          subscription_status: 'active',
+          updated_at: new Date().toISOString()
+        });
+      }
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      const customerId = subscription.customer;
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({ plan: 'free', subscription_status: 'canceled', updated_at: new Date().toISOString() })
+        .eq('stripe_customer_id', customerId);
+    }
+  } catch (error) {
+    console.error('Stripe webhook handling error:', error.message);
+    return res.status(500).json({ error: 'Webhook handling failed' });
+  }
+
+  res.json({ received: true });
+});
+
 app.use(express.json({ limit: '20kb' }));
 app.use(express.static(__dirname));
 
@@ -259,6 +322,132 @@ function responseText(data) {
   return buffer.toString('utf8');
 }
 
+async function requireUser(req, res, next) {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
+  }
+
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+
+  if (!token) {
+    return res.status(401).json({ status: 'error', message: 'Missing auth token' });
+  }
+
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data.user) {
+    return res.status(401).json({ status: 'error', message: 'Invalid auth token' });
+  }
+
+  req.user = data.user;
+  next();
+}
+
+async function analyzeWebsite(rawUrl, locale) {
+  const urlObj = normalizeUrl(rawUrl);
+  const startedAt = Date.now();
+  const sslPromise = getSslInfo(urlObj);
+
+  const response = await axios.get(urlObj.toString(), {
+    timeout: API_TIMEOUT_MS,
+    maxRedirects: 5,
+    maxContentLength: MAX_BODY_BYTES,
+    proxy: false,
+    responseType: 'arraybuffer',
+    validateStatus: () => true,
+    headers: {
+      'User-Agent': 'SiteTraceBot/1.0 (+https://www.sitetrace.it.com/)'
+    }
+  });
+
+  const responseTime = Date.now() - startedAt;
+  const finalUrl = response.request && response.request.res && response.request.res.responseUrl
+    ? response.request.res.responseUrl
+    : urlObj.toString();
+  const html = responseText(response.data);
+  const $ = cheerio.load(html);
+  const headers = response.headers || {};
+  const ssl = await sslPromise;
+  const checks = [];
+
+  const title = ($('title').first().text() || '').trim().replace(/\s+/g, ' ');
+  const metaDescription = ($('meta[name="description" i]').attr('content') || '').trim().replace(/\s+/g, ' ');
+  const h1Count = $('h1').length;
+  const images = $('img').length;
+  const imagesWithAlt = $('img').filter((_, img) => Boolean(($(img).attr('alt') || '').trim())).length;
+  const altRatio = images === 0 ? 1 : imagesWithAlt / images;
+  const canonical = $('link[rel="canonical" i]').attr('href') || '';
+  const viewport = $('meta[name="viewport" i]').attr('content') || '';
+  const htmlLang = $('html').attr('lang') || '';
+  const robots = ($('meta[name="robots" i]').attr('content') || '').toLowerCase();
+  const ogCount = $('meta[property^="og:" i]').length;
+  const hasFrameProtection = Boolean(headers['x-frame-options'] || (headers['content-security-policy'] || '').includes('frame-ancestors'));
+  const pageContext = getPageContext(urlObj, title, metaDescription);
+
+  if (response.status >= 500) addCheck(checks, locale, 'uptime', 'status_code', 'fail', 12, response.status, 'statusFail');
+  else if (response.status >= 400) addCheck(checks, locale, 'uptime', 'status_code', 'warning', 12, response.status, 'statusWarning');
+  else addCheck(checks, locale, 'uptime', 'status_code', 'pass', 12, response.status, 'status');
+
+  if (responseTime < 1000) addCheck(checks, locale, 'uptime', 'response_time', 'pass', 12, `${responseTime}ms`, 'speed');
+  else if (responseTime < 3000) addCheck(checks, locale, 'uptime', 'response_time', 'warning', 12, `${responseTime}ms`, 'speedWarning');
+  else addCheck(checks, locale, 'uptime', 'response_time', 'fail', 12, `${responseTime}ms`, 'speedFail');
+
+  if (urlObj.protocol === 'https:') addCheck(checks, locale, 'uptime', 'https', 'pass', 8, 'https', 'https');
+  else addCheck(checks, locale, 'uptime', 'https', 'warning', 8, 'http', 'httpsWarning');
+
+  if (ssl && ssl.days_remaining > 30) addCheck(checks, locale, 'uptime', 'ssl', 'pass', 8, `${ssl.days_remaining} days`, 'ssl');
+  else addCheck(checks, locale, 'uptime', 'ssl', 'warning', 8, ssl ? `${ssl.days_remaining} days` : 'Unavailable', 'sslWarning');
+
+  if (!title) addCheck(checks, locale, 'seo', 'title', 'fail', 10, 'Missing', 'titleFail');
+  else if (title.length < 30 || title.length > 60) addCheck(checks, locale, 'seo', 'title', 'warning', 10, `${title.length} chars`, 'titleWarning');
+  else addCheck(checks, locale, 'seo', 'title', 'pass', 10, `${title.length} chars`, 'title');
+
+  if (!metaDescription) addCheck(checks, locale, 'seo', 'meta_description', 'fail', 10, 'Missing', 'metaFail');
+  else if (metaDescription.length < 70 || metaDescription.length > 160) addCheck(checks, locale, 'seo', 'meta_description', 'warning', 10, `${metaDescription.length} chars`, 'metaWarning');
+  else addCheck(checks, locale, 'seo', 'meta_description', 'pass', 10, `${metaDescription.length} chars`, 'meta');
+
+  if (h1Count === 0 && pageContext !== 'standard') addCheck(checks, locale, 'seo', 'h1', 'pass', 4, h1Count, 'h1Platform');
+  else if (h1Count === 0) addCheck(checks, locale, 'seo', 'h1', 'fail', 8, h1Count, 'h1Fail');
+  else if (h1Count > 1) addCheck(checks, locale, 'seo', 'h1', 'warning', 8, h1Count, 'h1Warning');
+  else addCheck(checks, locale, 'seo', 'h1', 'pass', 8, h1Count, 'h1');
+
+  if (altRatio >= 0.8) addCheck(checks, locale, 'seo', 'image_alt', 'pass', 7, `${imagesWithAlt}/${images}`, 'alt');
+  else if (altRatio >= 0.5) addCheck(checks, locale, 'seo', 'image_alt', 'warning', 7, `${imagesWithAlt}/${images}`, 'altWarning');
+  else addCheck(checks, locale, 'seo', 'image_alt', 'fail', 7, `${imagesWithAlt}/${images}`, 'altFail');
+
+  addCheck(checks, locale, 'seo', 'canonical', canonical ? 'pass' : 'warning', 4, canonical || 'Missing', canonical ? 'canonical' : 'canonicalWarning');
+  addCheck(checks, locale, 'seo', 'viewport', viewport ? 'pass' : 'fail', 4, viewport || 'Missing', viewport ? 'viewport' : 'viewportFail');
+  addCheck(checks, locale, 'seo', 'lang', htmlLang ? 'pass' : 'warning', 3, htmlLang || 'Missing', htmlLang ? 'lang' : 'langWarning');
+  addCheck(checks, locale, 'seo', 'open_graph', ogCount >= 3 ? 'pass' : 'warning', 3, ogCount, ogCount >= 3 ? 'og' : 'ogWarning');
+  addCheck(checks, locale, 'seo', 'robots_indexing', robots.includes('noindex') ? 'fail' : 'pass', 3, robots || 'indexable', robots.includes('noindex') ? 'robotsFail' : 'robots');
+
+  addCheck(checks, locale, 'security', 'hsts', headers['strict-transport-security'] ? 'pass' : 'warning', 3, headers['strict-transport-security'] ? 'Present' : 'Missing', headers['strict-transport-security'] ? 'hsts' : 'hstsWarning');
+  addCheck(checks, locale, 'security', 'csp', headers['content-security-policy'] ? 'pass' : 'warning', 3, headers['content-security-policy'] ? 'Present' : 'Missing', headers['content-security-policy'] ? 'csp' : 'cspWarning');
+  addCheck(checks, locale, 'security', 'frame', hasFrameProtection ? 'pass' : 'warning', 2, headers['x-frame-options'] || 'Missing', hasFrameProtection ? 'frame' : 'frameWarning');
+
+  const score = calculateScore(checks);
+
+  return {
+    status: 'success',
+    analyzed_url: urlObj.toString(),
+    final_url: finalUrl,
+    status_code: response.status,
+    page_context: pageContext,
+    response_time_ms: responseTime,
+    response_time: `${responseTime}ms`,
+    title: title || 'No title',
+    meta_description: metaDescription || 'No description',
+    h1_count: h1Count,
+    images,
+    images_with_alt: imagesWithAlt,
+    seo_score: score,
+    score,
+    summary: summarize(checks),
+    ssl,
+    checks
+  };
+}
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sitetrace-api' });
 });
@@ -276,115 +465,9 @@ app.post('/analyze', async (req, res) => {
     });
   }
 
-  let urlObj;
-
   try {
-    urlObj = normalizeUrl(req.body.url);
-  } catch (error) {
-    return res.status(400).json({ status: 'error', code: 'invalid_url', message: messages[locale].invalid, detail: error.message });
-  }
-
-  try {
-    const startedAt = Date.now();
-    const sslPromise = getSslInfo(urlObj);
-
-    const response = await axios.get(urlObj.toString(), {
-      timeout: API_TIMEOUT_MS,
-      maxRedirects: 5,
-      maxContentLength: MAX_BODY_BYTES,
-      proxy: false,
-      responseType: 'arraybuffer',
-      validateStatus: () => true,
-      headers: {
-        'User-Agent': 'SiteTraceBot/1.0 (+https://www.sitetrace.it.com/)'
-      }
-    });
-
-    const responseTime = Date.now() - startedAt;
-    const finalUrl = response.request && response.request.res && response.request.res.responseUrl
-      ? response.request.res.responseUrl
-      : urlObj.toString();
-    const html = responseText(response.data);
-    const $ = cheerio.load(html);
-    const headers = response.headers || {};
-    const ssl = await sslPromise;
-    const checks = [];
-
-    const title = ($('title').first().text() || '').trim().replace(/\s+/g, ' ');
-    const metaDescription = ($('meta[name="description" i]').attr('content') || '').trim().replace(/\s+/g, ' ');
-    const h1Count = $('h1').length;
-    const images = $('img').length;
-    const imagesWithAlt = $('img').filter((_, img) => Boolean(($(img).attr('alt') || '').trim())).length;
-    const altRatio = images === 0 ? 1 : imagesWithAlt / images;
-    const canonical = $('link[rel="canonical" i]').attr('href') || '';
-    const viewport = $('meta[name="viewport" i]').attr('content') || '';
-    const htmlLang = $('html').attr('lang') || '';
-    const robots = ($('meta[name="robots" i]').attr('content') || '').toLowerCase();
-    const ogCount = $('meta[property^="og:" i]').length;
-    const hasFrameProtection = Boolean(headers['x-frame-options'] || (headers['content-security-policy'] || '').includes('frame-ancestors'));
-    const pageContext = getPageContext(urlObj, title, metaDescription);
-
-    if (response.status >= 500) addCheck(checks, locale, 'uptime', 'status_code', 'fail', 12, response.status, 'statusFail');
-    else if (response.status >= 400) addCheck(checks, locale, 'uptime', 'status_code', 'warning', 12, response.status, 'statusWarning');
-    else addCheck(checks, locale, 'uptime', 'status_code', 'pass', 12, response.status, 'status');
-
-    if (responseTime < 1000) addCheck(checks, locale, 'uptime', 'response_time', 'pass', 12, `${responseTime}ms`, 'speed');
-    else if (responseTime < 3000) addCheck(checks, locale, 'uptime', 'response_time', 'warning', 12, `${responseTime}ms`, 'speedWarning');
-    else addCheck(checks, locale, 'uptime', 'response_time', 'fail', 12, `${responseTime}ms`, 'speedFail');
-
-    if (urlObj.protocol === 'https:') addCheck(checks, locale, 'uptime', 'https', 'pass', 8, 'https', 'https');
-    else addCheck(checks, locale, 'uptime', 'https', 'warning', 8, 'http', 'httpsWarning');
-
-    if (ssl && ssl.days_remaining > 30) addCheck(checks, locale, 'uptime', 'ssl', 'pass', 8, `${ssl.days_remaining} days`, 'ssl');
-    else addCheck(checks, locale, 'uptime', 'ssl', 'warning', 8, ssl ? `${ssl.days_remaining} days` : 'Unavailable', 'sslWarning');
-
-    if (!title) addCheck(checks, locale, 'seo', 'title', 'fail', 10, 'Missing', 'titleFail');
-    else if (title.length < 30 || title.length > 60) addCheck(checks, locale, 'seo', 'title', 'warning', 10, `${title.length} chars`, 'titleWarning');
-    else addCheck(checks, locale, 'seo', 'title', 'pass', 10, `${title.length} chars`, 'title');
-
-    if (!metaDescription) addCheck(checks, locale, 'seo', 'meta_description', 'fail', 10, 'Missing', 'metaFail');
-    else if (metaDescription.length < 70 || metaDescription.length > 160) addCheck(checks, locale, 'seo', 'meta_description', 'warning', 10, `${metaDescription.length} chars`, 'metaWarning');
-    else addCheck(checks, locale, 'seo', 'meta_description', 'pass', 10, `${metaDescription.length} chars`, 'meta');
-
-    if (h1Count === 0 && pageContext !== 'standard') addCheck(checks, locale, 'seo', 'h1', 'pass', 4, h1Count, 'h1Platform');
-    else if (h1Count === 0) addCheck(checks, locale, 'seo', 'h1', 'fail', 8, h1Count, 'h1Fail');
-    else if (h1Count > 1) addCheck(checks, locale, 'seo', 'h1', 'warning', 8, h1Count, 'h1Warning');
-    else addCheck(checks, locale, 'seo', 'h1', 'pass', 8, h1Count, 'h1');
-
-    if (altRatio >= 0.8) addCheck(checks, locale, 'seo', 'image_alt', 'pass', 7, `${imagesWithAlt}/${images}`, 'alt');
-    else if (altRatio >= 0.5) addCheck(checks, locale, 'seo', 'image_alt', 'warning', 7, `${imagesWithAlt}/${images}`, 'altWarning');
-    else addCheck(checks, locale, 'seo', 'image_alt', 'fail', 7, `${imagesWithAlt}/${images}`, 'altFail');
-
-    addCheck(checks, locale, 'seo', 'canonical', canonical ? 'pass' : 'warning', 4, canonical || 'Missing', canonical ? 'canonical' : 'canonicalWarning');
-    addCheck(checks, locale, 'seo', 'viewport', viewport ? 'pass' : 'fail', 4, viewport || 'Missing', viewport ? 'viewport' : 'viewportFail');
-    addCheck(checks, locale, 'seo', 'lang', htmlLang ? 'pass' : 'warning', 3, htmlLang || 'Missing', htmlLang ? 'lang' : 'langWarning');
-    addCheck(checks, locale, 'seo', 'open_graph', ogCount >= 3 ? 'pass' : 'warning', 3, ogCount, ogCount >= 3 ? 'og' : 'ogWarning');
-    addCheck(checks, locale, 'seo', 'robots_indexing', robots.includes('noindex') ? 'fail' : 'pass', 3, robots || 'indexable', robots.includes('noindex') ? 'robotsFail' : 'robots');
-
-    addCheck(checks, locale, 'security', 'hsts', headers['strict-transport-security'] ? 'pass' : 'warning', 3, headers['strict-transport-security'] ? 'Present' : 'Missing', headers['strict-transport-security'] ? 'hsts' : 'hstsWarning');
-    addCheck(checks, locale, 'security', 'csp', headers['content-security-policy'] ? 'pass' : 'warning', 3, headers['content-security-policy'] ? 'Present' : 'Missing', headers['content-security-policy'] ? 'csp' : 'cspWarning');
-    addCheck(checks, locale, 'security', 'frame', hasFrameProtection ? 'pass' : 'warning', 2, headers['x-frame-options'] || 'Missing', hasFrameProtection ? 'frame' : 'frameWarning');
-
-    const score = calculateScore(checks);
-
     res.json({
-      status: 'success',
-      analyzed_url: urlObj.toString(),
-      final_url: finalUrl,
-      status_code: response.status,
-      page_context: pageContext,
-      response_time_ms: responseTime,
-      response_time: `${responseTime}ms`,
-      title: title || 'No title',
-      meta_description: metaDescription || 'No description',
-      h1_count: h1Count,
-      images,
-      images_with_alt: imagesWithAlt,
-      seo_score: score,
-      score,
-      summary: summarize(checks),
-      ssl,
-      checks,
+      ...(await analyzeWebsite(req.body.url, locale)),
       rate_limit: {
         remaining: limit.remaining,
         reset_at: new Date(limit.resetAt).toISOString()
@@ -392,13 +475,177 @@ app.post('/analyze', async (req, res) => {
     });
   } catch (error) {
     console.error('Analyze error:', error.message);
-    res.status(502).json({
+    const statusCode = error.message.includes('URL') || error.message.includes('protocol') || error.message.includes('Private') ? 400 : 502;
+    res.status(statusCode).json({
       status: 'error',
-      code: 'fetch_failed',
-      message: messages[locale].fetch,
+      code: statusCode === 400 ? 'invalid_url' : 'fetch_failed',
+      message: statusCode === 400 ? messages[locale].invalid : messages[locale].fetch,
       detail: error.message
     });
   }
+});
+
+app.get('/config', (req, res) => {
+  res.json({
+    supabase_url: SUPABASE_URL,
+    supabase_anon_key: SUPABASE_ANON_KEY,
+    billing_enabled: Boolean(stripe && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
+    plans: {
+      free: { sites: 1, interval_minutes: 60, history_days: 1 },
+      starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
+      agency: { sites: 50, interval_minutes: 1, history_days: 90, price_id: STRIPE_AGENCY_PRICE_ID || null }
+    }
+  });
+});
+
+app.get('/api/me', requireUser, async (req, res) => {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('id', req.user.id)
+    .single();
+
+  res.json({
+    user: { id: req.user.id, email: req.user.email },
+    profile: profile || { id: req.user.id, plan: 'free', subscription_status: 'inactive' }
+  });
+});
+
+app.post('/api/run-site-check', requireUser, async (req, res) => {
+  const locale = language(req.body.locale);
+  const siteId = req.body.site_id;
+
+  if (!siteId) {
+    return res.status(400).json({ status: 'error', message: 'site_id is required' });
+  }
+
+  const { data: site, error: siteError } = await supabaseAdmin
+    .from('sites')
+    .select('*')
+    .eq('id', siteId)
+    .eq('user_id', req.user.id)
+    .single();
+
+  if (siteError || !site) {
+    return res.status(404).json({ status: 'error', message: 'Site not found' });
+  }
+
+  try {
+    const analysis = await analyzeWebsite(site.url, locale);
+    const level = analysis.summary.fail > 0 ? 'down' : analysis.summary.warning > 0 ? 'warning' : 'online';
+
+    const { data: check, error: checkError } = await supabaseAdmin
+      .from('checks')
+      .insert({
+        site_id: site.id,
+        user_id: req.user.id,
+        status: level,
+        score: analysis.score,
+        status_code: analysis.status_code,
+        response_time_ms: analysis.response_time_ms,
+        result: analysis
+      })
+      .select('*')
+      .single();
+
+    if (checkError) throw checkError;
+
+    await supabaseAdmin
+      .from('sites')
+      .update({
+        last_status: level,
+        last_score: analysis.score,
+        last_response_time_ms: analysis.response_time_ms,
+        last_checked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', site.id);
+
+    res.json({ status: 'success', analysis, check });
+  } catch (error) {
+    res.status(502).json({ status: 'error', message: messages[locale].fetch, detail: error.message });
+  }
+});
+
+app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ status: 'error', message: 'Stripe is not configured' });
+  }
+
+  const plan = req.body.plan === 'agency' ? 'agency' : 'starter';
+  const priceId = plan === 'agency' ? STRIPE_AGENCY_PRICE_ID : STRIPE_STARTER_PRICE_ID;
+
+  if (!priceId) {
+    return res.status(503).json({ status: 'error', message: `Stripe price id for ${plan} is not configured` });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    customer_email: req.user.email,
+    client_reference_id: req.user.id,
+    line_items: [{ price: priceId, quantity: 1 }],
+    metadata: { plan },
+    success_url: `${APP_URL}/?billing=success#dashboard`,
+    cancel_url: `${APP_URL}/?billing=cancel#pricing`
+  });
+
+  res.json({ url: session.url });
+});
+
+app.post('/jobs/run-checks', async (req, res) => {
+  if (!CRON_SECRET || req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
+
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
+  }
+
+  const { data: sites, error } = await supabaseAdmin
+    .from('sites')
+    .select('*')
+    .eq('monitoring_enabled', true)
+    .limit(25);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  const results = [];
+
+  for (const site of sites || []) {
+    try {
+      const analysis = await analyzeWebsite(site.url, 'en');
+      const level = analysis.summary.fail > 0 ? 'down' : analysis.summary.warning > 0 ? 'warning' : 'online';
+
+      await supabaseAdmin.from('checks').insert({
+        site_id: site.id,
+        user_id: site.user_id,
+        status: level,
+        score: analysis.score,
+        status_code: analysis.status_code,
+        response_time_ms: analysis.response_time_ms,
+        result: analysis
+      });
+
+      await supabaseAdmin
+        .from('sites')
+        .update({
+          last_status: level,
+          last_score: analysis.score,
+          last_response_time_ms: analysis.response_time_ms,
+          last_checked_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', site.id);
+
+      results.push({ site_id: site.id, status: level, score: analysis.score });
+    } catch (error) {
+      results.push({ site_id: site.id, status: 'error', error: error.message });
+    }
+  }
+
+  res.json({ status: 'success', checked: results.length, results });
 });
 
 app.get('*', (req, res) => {

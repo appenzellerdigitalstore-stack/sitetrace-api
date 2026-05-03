@@ -72,6 +72,72 @@ Suggested paid tiers:
 - Starter: monitored sites, 5-minute checks, email alerts, 30-day history
 - Agency: more sites, client reports, webhooks, API access
 
+## Dashboard, Login, And Billing
+
+The app now includes a lightweight dashboard on the same `index.html` page.
+
+It supports:
+
+- Supabase email/password auth
+- Saved monitored sites
+- Manual checks from the dashboard
+- Check history
+- Stripe Checkout buttons for Starter and Agency
+- Cron endpoint for scheduled checks
+
+### Required Supabase Setup
+
+1. Create a Supabase project.
+2. Open the SQL editor.
+3. Run `supabase-schema.sql`.
+4. Add these environment variables in Render:
+
+```bash
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+APP_URL=https://www.sitetrace.it.com
+```
+
+The anon key is safe for the browser. The service role key must stay private in Render.
+
+### Required Stripe Setup
+
+Create two recurring Stripe prices, then add:
+
+```bash
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+STRIPE_STARTER_PRICE_ID=...
+STRIPE_AGENCY_PRICE_ID=...
+```
+
+Stripe webhook endpoint:
+
+```txt
+https://sitetrace-api.onrender.com/billing/webhook
+```
+
+Recommended events:
+
+- `checkout.session.completed`
+- `customer.subscription.deleted`
+
+### Cron Setup
+
+Add:
+
+```bash
+CRON_SECRET=long-random-secret
+```
+
+Then create a Render Cron Job or external cron that sends:
+
+```bash
+POST https://sitetrace-api.onrender.com/jobs/run-checks
+Authorization: Bearer long-random-secret
+```
+
 ## Local Development
 
 ```bash
