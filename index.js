@@ -43,6 +43,7 @@ const messages = {
       h1: ['H1 structure looks good', 'The page has one main heading.', 'Use one clear H1 that matches the page purpose.'],
       h1Warning: ['Multiple H1 headings found', 'More than one H1 can make page structure less clear.', 'Use one primary H1 and convert secondary headings to H2 or H3.'],
       h1Fail: ['Missing H1 heading', 'The page does not have a main visible heading.', 'Add one H1 that explains the page clearly.'],
+      h1Platform: ['H1 is optional for this type of page', 'Large app-style platforms often use dynamic layouts where a traditional landing-page H1 is not the main signal.', 'Do not force an H1 unless this page is meant to rank as a public landing page.'],
       alt: ['Images have good ALT coverage', 'Most images include accessible ALT text.', 'Keep ALT text descriptive and useful.'],
       altWarning: ['Some images are missing ALT text', 'Accessibility and image SEO can improve.', 'Add ALT text to meaningful images.'],
       altFail: ['Many images are missing ALT text', 'Search engines and assistive tools may not understand the images.', 'Add ALT text to important images.'],
@@ -88,6 +89,7 @@ const messages = {
       h1: ['La estructura H1 se ve bien', 'La pagina tiene un encabezado principal.', 'Usa un H1 claro que coincida con el proposito de la pagina.'],
       h1Warning: ['Hay multiples H1', 'Mas de un H1 puede hacer menos clara la estructura.', 'Usa un H1 principal y cambia otros encabezados a H2 o H3.'],
       h1Fail: ['Falta el encabezado H1', 'La pagina no tiene un encabezado visible principal.', 'Agrega un H1 que explique claramente la pagina.'],
+      h1Platform: ['El H1 es opcional para este tipo de pagina', 'Las plataformas grandes tipo app suelen usar layouts dinamicos donde un H1 tradicional no es la senal principal.', 'No fuerces un H1 a menos que esta pagina busque posicionar como landing publica.'],
       alt: ['Buena cobertura de ALT en imagenes', 'La mayoria de imagenes tiene texto ALT accesible.', 'Manten el ALT descriptivo y util.'],
       altWarning: ['Algunas imagenes no tienen ALT', 'Puede mejorar la accesibilidad y el SEO de imagenes.', 'Agrega ALT a las imagenes importantes.'],
       altFail: ['Muchas imagenes no tienen ALT', 'Buscadores y lectores de pantalla podrian no entender las imagenes.', 'Agrega ALT a las imagenes importantes.'],
@@ -141,6 +143,37 @@ function normalizeUrl(rawUrl) {
   }
 
   return parsed;
+}
+
+function getPageContext(urlObj, title, metaDescription) {
+  const hostname = urlObj.hostname.replace(/^www\./, '').toLowerCase();
+  const appLikeHosts = [
+    'youtube.com',
+    'youtu.be',
+    'netflix.com',
+    'spotify.com',
+    'tiktok.com',
+    'instagram.com',
+    'facebook.com',
+    'x.com',
+    'twitter.com',
+    'linkedin.com',
+    'github.com',
+    'figma.com',
+    'notion.so'
+  ];
+  const text = `${title} ${metaDescription}`.toLowerCase();
+  const appLikeWords = ['watch', 'video', 'stream', 'playlist', 'dashboard', 'sign in', 'login', 'app'];
+
+  if (appLikeHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`))) {
+    return 'platform';
+  }
+
+  if (appLikeWords.some((word) => text.includes(word))) {
+    return 'app';
+  }
+
+  return 'standard';
 }
 
 function getClientIp(req) {
@@ -289,6 +322,7 @@ app.post('/analyze', async (req, res) => {
     const robots = ($('meta[name="robots" i]').attr('content') || '').toLowerCase();
     const ogCount = $('meta[property^="og:" i]').length;
     const hasFrameProtection = Boolean(headers['x-frame-options'] || (headers['content-security-policy'] || '').includes('frame-ancestors'));
+    const pageContext = getPageContext(urlObj, title, metaDescription);
 
     if (response.status >= 500) addCheck(checks, locale, 'uptime', 'status_code', 'fail', 12, response.status, 'statusFail');
     else if (response.status >= 400) addCheck(checks, locale, 'uptime', 'status_code', 'warning', 12, response.status, 'statusWarning');
@@ -312,7 +346,8 @@ app.post('/analyze', async (req, res) => {
     else if (metaDescription.length < 70 || metaDescription.length > 160) addCheck(checks, locale, 'seo', 'meta_description', 'warning', 10, `${metaDescription.length} chars`, 'metaWarning');
     else addCheck(checks, locale, 'seo', 'meta_description', 'pass', 10, `${metaDescription.length} chars`, 'meta');
 
-    if (h1Count === 0) addCheck(checks, locale, 'seo', 'h1', 'fail', 8, h1Count, 'h1Fail');
+    if (h1Count === 0 && pageContext !== 'standard') addCheck(checks, locale, 'seo', 'h1', 'pass', 4, h1Count, 'h1Platform');
+    else if (h1Count === 0) addCheck(checks, locale, 'seo', 'h1', 'fail', 8, h1Count, 'h1Fail');
     else if (h1Count > 1) addCheck(checks, locale, 'seo', 'h1', 'warning', 8, h1Count, 'h1Warning');
     else addCheck(checks, locale, 'seo', 'h1', 'pass', 8, h1Count, 'h1');
 
@@ -337,6 +372,7 @@ app.post('/analyze', async (req, res) => {
       analyzed_url: urlObj.toString(),
       final_url: finalUrl,
       status_code: response.status,
+      page_context: pageContext,
       response_time_ms: responseTime,
       response_time: `${responseTime}ms`,
       title: title || 'No title',

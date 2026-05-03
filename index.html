@@ -302,6 +302,24 @@
     .check-copy { color: var(--muted); margin: 3px 0 0; font-size: 0.92rem; }
     .check-value { color: var(--muted); font-size: 0.82rem; white-space: nowrap; }
 
+    .level-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      margin-left: 6px;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 850;
+      vertical-align: 2px;
+    }
+
+    .level-badge.pass { color: var(--green); }
+    .level-badge.warning { color: var(--amber); }
+    .level-badge.fail { color: var(--red); }
+
     section {
       padding: 72px 0;
       border-top: 1px solid rgba(255, 255, 255, 0.07);
@@ -580,7 +598,7 @@
         footer: 'Website monitoring and SEO health checks.',
         loading: 'Analyzing your website...', invalid: 'Enter a website URL first.', errorTitle: 'Analysis failed',
         resultTitle: 'Site health report', score: 'Score', responseTime: 'Response time', statusCode: 'Status code', issues: 'Issues',
-        pass: 'Passed', warning: 'Warnings', fail: 'Failed', recommendation: 'Recommendation'
+        pass: 'Passed', warning: 'Warning', fail: 'Failed', recommendation: 'Recommendation'
       },
       es: {
         navFeatures: 'Funciones', navPricing: 'Precios', navApi: 'API',
@@ -607,7 +625,7 @@
         footer: 'Monitoreo web y diagnostico SEO.',
         loading: 'Analizando tu sitio...', invalid: 'Ingresa primero una URL.', errorTitle: 'No se pudo analizar',
         resultTitle: 'Reporte de salud del sitio', score: 'Score', responseTime: 'Tiempo de respuesta', statusCode: 'Codigo HTTP', issues: 'Problemas',
-        pass: 'Correctos', warning: 'Advertencias', fail: 'Fallidos', recommendation: 'Recomendacion'
+        pass: 'Correcto', warning: 'Advertencia', fail: 'Fallo', recommendation: 'Recomendacion'
       }
     };
 
@@ -675,7 +693,7 @@
           <div class="check">
             <span class="dot ${check.level === 'pass' ? '' : check.level}"></span>
             <div>
-              <p class="check-title">${escapeHtml(check.title)} <span style="color: var(--muted); font-weight: 700;">${levelLabel(check.level)}</span></p>
+              <p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${levelLabel(check.level)}</span></p>
               <p class="check-copy">${escapeHtml(check.description)}</p>
               <p class="check-copy"><strong>${t('recommendation')}:</strong> ${escapeHtml(check.recommendation)}</p>
             </div>
