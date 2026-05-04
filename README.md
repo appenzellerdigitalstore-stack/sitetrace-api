@@ -84,6 +84,9 @@ It supports:
 - Check history
 - Stripe Checkout buttons for Starter and Agency
 - Cron endpoint for scheduled checks
+- Incident records and optional email alerts through Resend
+
+For the full activation sequence, see `SETUP.md`.
 
 ### Required Supabase Setup
 
@@ -136,6 +139,15 @@ Then create a Render Cron Job or external cron that sends:
 ```bash
 POST https://sitetrace-api.onrender.com/jobs/run-checks
 Authorization: Bearer long-random-secret
+```
+
+### Optional Email Alerts
+
+Add these if you want SiteTrace to send email alerts when a monitored site changes into `down` or `warning`:
+
+```bash
+RESEND_API_KEY=...
+ALERT_FROM_EMAIL=SiteTrace <alerts@sitetrace.it.com>
 ```
 
 ## Local Development

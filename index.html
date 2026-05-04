@@ -138,6 +138,9 @@
     .history { margin-top: 18px; }
     .empty { padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); }
     .setup-warning { border-color: rgba(245,184,75,.48); background: rgba(245,184,75,.08); }
+    .setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+    .setup-step { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: rgba(255,255,255,.045); }
+    .setup-step span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: var(--ink); background: var(--amber); font-weight: 950; margin-bottom: 10px; }
     .footer { padding: 36px 0 48px; color: var(--muted); border-top: 1px solid var(--line); }
 
     @media (max-width: 900px) {
@@ -145,7 +148,7 @@
       .hero { min-height: auto; }
       .hero-grid, .features, .pricing, .dashboard-grid, .auth-layout { grid-template-columns: 1fr; }
       .metric-grid { grid-template-columns: 1fr; }
-      .site-form, .site-row { grid-template-columns: 1fr; }
+      .site-form, .site-row, .setup-steps { grid-template-columns: 1fr; }
     }
     @media (max-width: 620px) {
       .container { width: min(100% - 22px, 1120px); }
@@ -251,6 +254,11 @@
         <div id="setupWarning" class="feature setup-warning hidden">
           <h3 data-i18n="setupTitle">Supabase is not configured yet</h3>
           <p data-i18n="setupCopy">Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
+          <div class="setup-steps">
+            <div class="setup-step"><span>1</span><strong data-i18n="setupStepOneTitle">Create Supabase</strong><p class="muted" data-i18n="setupStepOneCopy">Create a project and run supabase-schema.sql.</p></div>
+            <div class="setup-step"><span>2</span><strong data-i18n="setupStepTwoTitle">Add Render env vars</strong><p class="muted" data-i18n="setupStepTwoCopy">Set SUPABASE_URL, anon key, and service role key.</p></div>
+            <div class="setup-step"><span>3</span><strong data-i18n="setupStepThreeTitle">Enable billing</strong><p class="muted" data-i18n="setupStepThreeCopy">Add Stripe prices and webhook secret when ready.</p></div>
+          </div>
         </div>
 
         <div id="authView" class="auth-layout">
@@ -307,6 +315,9 @@
         apiTitle: 'A useful API from day one.', apiLead: 'The analyzer returns a score, technical metrics, grouped checks, and recommendations that the UI or future customers can consume.',
         dashboardEyebrow: 'Customer dashboard', dashboardTitle: 'Monitor sites after the first scan.', dashboardLead: 'Create an account, save sites, run checks, and prepare billing for paid plans.', refresh: 'Refresh',
         setupTitle: 'Supabase is not configured yet', setupCopy: 'Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.',
+        setupStepOneTitle: 'Create Supabase', setupStepOneCopy: 'Create a project and run supabase-schema.sql.',
+        setupStepTwoTitle: 'Add Render env vars', setupStepTwoCopy: 'Set SUPABASE_URL, anon key, and service role key.',
+        setupStepThreeTitle: 'Enable billing', setupStepThreeCopy: 'Add Stripe prices and webhook secret when ready.',
         authTitle: 'Sign in or create account', signIn: 'Sign in', createAccount: 'Create account', authWhyTitle: 'Why create an account?', authWhyCopy: 'The free scan is instant, but accounts unlock saved sites, check history, monitoring jobs, and plan limits.',
         planLabel: 'Plan', sitesLabel: 'Sites', lastCheckLabel: 'Last check', addSite: 'Add site', footer: 'Website monitoring and SEO health checks.',
         loading: 'Analyzing your website...', invalid: 'Enter a website URL first.', errorTitle: 'Analysis failed', resultTitle: 'Site health report', score: 'Score', responseTime: 'Response time', statusCode: 'Status code', issues: 'Issues',
@@ -327,6 +338,9 @@
         apiTitle: 'Una API util desde el primer dia.', apiLead: 'El analizador devuelve score, metricas tecnicas, checks agrupados y recomendaciones que la UI o futuros clientes pueden consumir.',
         dashboardEyebrow: 'Dashboard de cliente', dashboardTitle: 'Monitorea sitios despues del primer scan.', dashboardLead: 'Crea una cuenta, guarda sitios, ejecuta checks y prepara cobros para planes pagados.', refresh: 'Actualizar',
         setupTitle: 'Supabase aun no esta configurado', setupCopy: 'Agrega las variables de Supabase en Render, ejecuta el SQL y el dashboard quedara activo.',
+        setupStepOneTitle: 'Crea Supabase', setupStepOneCopy: 'Crea un proyecto y ejecuta supabase-schema.sql.',
+        setupStepTwoTitle: 'Agrega variables en Render', setupStepTwoCopy: 'Configura SUPABASE_URL, anon key y service role key.',
+        setupStepThreeTitle: 'Activa cobros', setupStepThreeCopy: 'Agrega precios de Stripe y webhook secret cuando este listo.',
         authTitle: 'Inicia sesion o crea cuenta', signIn: 'Iniciar sesion', createAccount: 'Crear cuenta', authWhyTitle: 'Por que crear cuenta?', authWhyCopy: 'El scan gratis es instantaneo, pero las cuentas habilitan sitios guardados, historial, monitoreo y limites por plan.',
         planLabel: 'Plan', sitesLabel: 'Sitios', lastCheckLabel: 'Ultimo check', addSite: 'Agregar sitio', footer: 'Monitoreo web y diagnostico SEO.',
         loading: 'Analizando tu sitio...', invalid: 'Ingresa primero una URL.', errorTitle: 'No se pudo analizar', resultTitle: 'Reporte de salud del sitio', score: 'Score', responseTime: 'Tiempo de respuesta', statusCode: 'Codigo HTTP', issues: 'Problemas',

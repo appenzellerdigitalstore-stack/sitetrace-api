@@ -37,9 +37,21 @@ create table if not exists public.checks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.incidents (
+  id uuid primary key default gen_random_uuid(),
+  site_id uuid not null references public.sites(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  status text not null check (status in ('down', 'warning', 'resolved')),
+  title text not null,
+  details jsonb,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.sites enable row level security;
 alter table public.checks enable row level security;
+alter table public.incidents enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -78,6 +90,11 @@ create policy "checks_select_own"
 on public.checks for select
 using (auth.uid() = user_id);
 
+drop policy if exists "incidents_select_own" on public.incidents;
+create policy "incidents_select_own"
+on public.incidents for select
+using (auth.uid() = user_id);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -100,3 +117,5 @@ for each row execute procedure public.handle_new_user();
 create index if not exists sites_user_id_idx on public.sites(user_id);
 create index if not exists checks_site_id_created_at_idx on public.checks(site_id, created_at desc);
 create index if not exists checks_user_id_created_at_idx on public.checks(user_id, created_at desc);
+create index if not exists incidents_site_id_created_at_idx on public.incidents(site_id, created_at desc);
+create index if not exists incidents_user_id_created_at_idx on public.incidents(user_id, created_at desc);

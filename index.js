@@ -22,6 +22,8 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID || '';
 const STRIPE_AGENCY_PRICE_ID = process.env.STRIPE_AGENCY_PRICE_ID || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@sitetrace.it.com>';
 
 const requestCounts = new Map();
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -322,6 +324,80 @@ function responseText(data) {
   return buffer.toString('utf8');
 }
 
+async function sendAlertEmail({ to, site, status, analysis }) {
+  if (!RESEND_API_KEY || !to) {
+    return { sent: false, reason: 'email_not_configured' };
+  }
+
+  const subject = `SiteTrace alert: ${site.name} is ${status}`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
+      <h2>SiteTrace alert</h2>
+      <p><strong>${site.name}</strong> is currently <strong>${status}</strong>.</p>
+      <ul>
+        <li>URL: ${site.url}</li>
+        <li>Score: ${analysis.score}/100</li>
+        <li>Status code: ${analysis.status_code}</li>
+        <li>Response time: ${analysis.response_time}</li>
+      </ul>
+      <p>Open your dashboard to review the full check history.</p>
+    </div>
+  `;
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ from: ALERT_FROM_EMAIL, to, subject, html })
+  });
+
+  if (!response.ok) {
+    return { sent: false, reason: await response.text() };
+  }
+
+  return { sent: true };
+}
+
+async function recordIncidentIfNeeded({ site, level, analysis }) {
+  if (!supabaseAdmin || !['down', 'warning'].includes(level)) {
+    return null;
+  }
+
+  const previousStatus = site.last_status || 'pending';
+
+  if (previousStatus === level) {
+    return null;
+  }
+
+  const { data: incident, error } = await supabaseAdmin
+    .from('incidents')
+    .insert({
+      site_id: site.id,
+      user_id: site.user_id,
+      status: level,
+      title: `${site.name} is ${level}`,
+      details: analysis
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('Incident insert error:', error.message);
+    return null;
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('email')
+    .eq('id', site.user_id)
+    .single();
+
+  const email = await sendAlertEmail({ to: profile && profile.email, site, status: level, analysis });
+  return { incident, email };
+}
+
 async function requireUser(req, res, next) {
   if (!supabaseAdmin) {
     return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
@@ -490,6 +566,7 @@ app.get('/config', (req, res) => {
     supabase_url: SUPABASE_URL,
     supabase_anon_key: SUPABASE_ANON_KEY,
     billing_enabled: Boolean(stripe && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
+    alerts_enabled: Boolean(RESEND_API_KEY),
     plans: {
       free: { sites: 1, interval_minutes: 60, history_days: 1 },
       starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
@@ -550,6 +627,8 @@ app.post('/api/run-site-check', requireUser, async (req, res) => {
 
     if (checkError) throw checkError;
 
+    const incident = await recordIncidentIfNeeded({ site, level, analysis });
+
     await supabaseAdmin
       .from('sites')
       .update({
@@ -561,7 +640,7 @@ app.post('/api/run-site-check', requireUser, async (req, res) => {
       })
       .eq('id', site.id);
 
-    res.json({ status: 'success', analysis, check });
+    res.json({ status: 'success', analysis, check, incident });
   } catch (error) {
     res.status(502).json({ status: 'error', message: messages[locale].fetch, detail: error.message });
   }
@@ -628,6 +707,8 @@ app.post('/jobs/run-checks', async (req, res) => {
         result: analysis
       });
 
+      const incident = await recordIncidentIfNeeded({ site, level, analysis });
+
       await supabaseAdmin
         .from('sites')
         .update({
@@ -639,7 +720,7 @@ app.post('/jobs/run-checks', async (req, res) => {
         })
         .eq('id', site.id);
 
-      results.push({ site_id: site.id, status: level, score: analysis.score });
+      results.push({ site_id: site.id, status: level, score: analysis.score, incident: Boolean(incident && incident.incident) });
     } catch (error) {
       results.push({ site_id: site.id, status: 'error', error: error.message });
     }
