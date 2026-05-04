@@ -21,18 +21,76 @@
   <main class="page-shell">
     <div class="container narrow">
       <p class="eyebrow">API</p>
-      <h1>A useful API from day one.</h1>
-      <p class="lead">The analyzer returns a score, technical metrics, grouped checks, and recommendations that the UI or future customers can consume.</p>
+      <h1>Use the same analyzer behind SiteTrace.</h1>
+      <p class="lead">The public endpoint accepts a website URL and returns uptime, speed, SSL, SEO, security header checks, a score, and actionable recommendations.</p>
+
+      <div class="api-meta">
+        <div><span>Base URL</span><strong>https://sitetrace-api.onrender.com</strong></div>
+        <div><span>Public endpoint</span><strong>POST /analyze</strong></div>
+        <div><span>Auth</span><strong>Not required for manual scans</strong></div>
+      </div>
+
       <div class="code-card">
-        <pre><code>POST /analyze
-{
-  "url": "https://example.com",
-  "locale": "en"
+        <pre><code>curl -X POST https://sitetrace-api.onrender.com/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com",
+    "locale": "en"
+  }'</code></pre>
+      </div>
+
+      <div class="code-card">
+        <pre><code>{
+  "status": "success",
+  "analyzed_url": "https://example.com/",
+  "final_url": "https://example.com/",
+  "status_code": 200,
+  "response_time_ms": 243,
+  "response_time": "243ms",
+  "score": 89,
+  "page_context": "standard",
+  "summary": {
+    "pass": 10,
+    "warning": 3,
+    "fail": 0,
+    "uptime": 4,
+    "seo": 8,
+    "security": 3
+  },
+  "ssl": {
+    "issuer": "Google Trust Services",
+    "expires_at": "2026-08-20T12:00:00.000Z",
+    "days_remaining": 108
+  },
+  "checks": [
+    {
+      "category": "uptime",
+      "id": "status_code",
+      "level": "pass",
+      "value": 200,
+      "title": "Site is reachable",
+      "recommendation": "Keep monitoring status changes so you catch outages quickly."
+    }
+  ],
+  "rate_limit": {
+    "remaining": 19,
+    "reset_at": "2026-05-04T23:00:00.000Z"
+  }
 }</code></pre>
       </div>
+
       <div class="features two">
-        <article class="feature"><h3>Health metrics</h3><p>Status code, response time, final URL, SSL status, and availability checks.</p></article>
-        <article class="feature"><h3>Audit details</h3><p>SEO, accessibility, security headers, score, grouped checks, and recommendations.</p></article>
+        <article class="feature">
+          <h3>Request body</h3>
+          <div class="mini-table">
+            <div><strong>url</strong><span>Required. Public http or https URL.</span></div>
+            <div><strong>locale</strong><span>Optional. Use <code>en</code> or <code>es</code> for recommendations.</span></div>
+          </div>
+        </article>
+        <article class="feature">
+          <h3>Notes</h3>
+          <p>The dashboard endpoints are session-based app endpoints. Public customer API keys, webhooks, and usage dashboards can be added after billing is enabled.</p>
+        </article>
       </div>
     </div>
   </main>
