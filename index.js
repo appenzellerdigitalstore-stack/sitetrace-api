@@ -100,6 +100,7 @@ const messages = {
       ssl: ['SSL certificate looks healthy', 'The certificate is valid and not close to expiration.', 'Use automatic renewal so it does not expire unexpectedly.'],
       sslWarning: ['SSL certificate needs attention', 'The certificate is missing, unavailable, or close to expiration.', 'Check certificate configuration and renewal settings.'],
       title: ['Title tag is healthy', 'The page has a useful title for search engines and browser tabs.', 'Keep titles specific and close to 30-60 characters.'],
+      titlePlatform: ['Title is acceptable for a platform page', 'Direct app, store, and platform pages often use short brand-led titles.', 'Only expand the title if this page is meant to compete as a public SEO landing page.'],
       titleWarning: ['Title tag could be improved', 'The title exists but its length is not ideal.', 'Write a clear title with the page topic and brand.'],
       titleFail: ['Missing title tag', 'Search engines and users need a page title to understand the page.', 'Add a unique title tag to this page.'],
       meta: ['Meta description is healthy', 'The page has a useful search snippet description.', 'Keep descriptions around 70-160 characters.'],
@@ -146,6 +147,7 @@ const messages = {
       ssl: ['El certificado SSL se ve saludable', 'El certificado es valido y no esta cerca de vencer.', 'Usa renovacion automatica para evitar vencimientos inesperados.'],
       sslWarning: ['El certificado SSL necesita atencion', 'El certificado falta, no esta disponible o esta cerca de vencer.', 'Revisa la configuracion y renovacion del certificado.'],
       title: ['La etiqueta title esta saludable', 'La pagina tiene un titulo util para buscadores y pestanas del navegador.', 'Manten titulos especificos de 30 a 60 caracteres.'],
+      titlePlatform: ['El title es aceptable para una pagina de plataforma', 'Paginas directas de apps, tiendas y plataformas suelen usar titulos cortos centrados en la marca.', 'Solo amplia el title si esta pagina busca competir como landing SEO publica.'],
       titleWarning: ['El title puede mejorar', 'El titulo existe pero su longitud no es ideal.', 'Escribe un titulo claro con el tema de la pagina y la marca.'],
       titleFail: ['Falta la etiqueta title', 'Buscadores y usuarios necesitan un titulo para entender la pagina.', 'Agrega un title unico a esta pagina.'],
       meta: ['La meta description esta saludable', 'La pagina tiene una descripcion util para resultados de busqueda.', 'Manten descripciones de 70 a 160 caracteres.'],
@@ -494,6 +496,7 @@ async function analyzeWebsite(rawUrl, locale) {
   else addCheck(checks, locale, 'uptime', 'ssl', 'warning', 8, ssl ? `${ssl.days_remaining} days` : 'Unavailable', 'sslWarning');
 
   if (!title) addCheck(checks, locale, 'seo', 'title', 'fail', 10, 'Missing', 'titleFail');
+  else if (title.length < 30 && pageContext !== 'standard') addCheck(checks, locale, 'seo', 'title', 'pass', 6, `${title.length} chars`, 'titlePlatform');
   else if (title.length < 30 || title.length > 60) addCheck(checks, locale, 'seo', 'title', 'warning', 10, `${title.length} chars`, 'titleWarning');
   else addCheck(checks, locale, 'seo', 'title', 'pass', 10, `${title.length} chars`, 'title');
 
