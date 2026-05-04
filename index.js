@@ -683,8 +683,8 @@ app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
     client_reference_id: req.user.id,
     line_items: [{ price: priceId, quantity: 1 }],
     metadata: { plan },
-    success_url: `${APP_URL}/?billing=success#dashboard`,
-    cancel_url: `${APP_URL}/?billing=cancel#pricing`
+    success_url: `${APP_URL}/dashboard?billing=success`,
+    cancel_url: `${APP_URL}/pricing?billing=cancel`
   });
 
   res.json({ url: session.url });
@@ -746,6 +746,22 @@ app.post('/jobs/run-checks', async (req, res) => {
   }
 
   res.json({ status: 'success', checked: results.length, results });
+});
+
+app.get('/pricing', (req, res) => {
+  res.sendFile(path.join(__dirname, 'pricing.html'));
+});
+
+app.get('/api', (req, res) => {
+  res.sendFile(path.join(__dirname, 'api.html'));
+});
+
+app.get('/signin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'signin.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
 app.get('*', (req, res) => {

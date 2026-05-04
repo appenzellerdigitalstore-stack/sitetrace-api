@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - SiteTrace</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body data-page="dashboard">
+  <nav class="nav app-nav">
+    <div class="container nav-inner">
+      <a class="brand" href="/"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
+      <div class="nav-links">
+        <a href="/pricing">Pricing</a>
+        <a href="/api">API</a>
+        <a class="active" href="/dashboard">Dashboard</a>
+        <button class="link-button hidden" id="signOutBtn" type="button">Sign out</button>
+      </div>
+    </div>
+  </nav>
+  <main class="dashboard-shell">
+    <aside class="sidebar">
+      <a class="side-link active" href="/dashboard">Overview</a>
+      <a class="side-link" href="/pricing">Billing</a>
+      <a class="side-link" href="/api">API</a>
+    </aside>
+    <section class="dashboard-main">
+      <div id="setupWarning" class="feature setup-warning hidden">
+        <h3>Supabase is not configured yet</h3>
+        <p>Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
+      </div>
+
+      <div id="authRequired" class="empty hidden">
+        <h2>Sign in required</h2>
+        <p>Use your SiteTrace account to manage monitored sites and check history.</p>
+        <a class="button small" href="/signin">Sign in</a>
+      </div>
+
+      <div id="dashboardView" class="hidden">
+        <div class="dashboard-head">
+          <div>
+            <p class="eyebrow">Customer dashboard</p>
+            <h1>Monitoring overview</h1>
+            <p class="muted">Save sites, run checks manually, and review recent status history.</p>
+          </div>
+          <button class="button secondary" id="refreshDashboardBtn" type="button">Refresh</button>
+        </div>
+        <div class="dashboard-grid">
+          <div class="dash-card"><span class="muted">Plan</span><h3 id="planValue">Free</h3></div>
+          <div class="dash-card"><span class="muted">Sites</span><h3 id="siteCount">0</h3></div>
+          <div class="dash-card"><span class="muted">Last check</span><h3 id="lastCheckValue">-</h3></div>
+        </div>
+        <form id="siteForm" class="site-form">
+          <input id="siteName" type="text" placeholder="Site name" required>
+          <input id="siteUrl" type="url" placeholder="https://example.com" required>
+          <button class="button" type="submit">Add site</button>
+        </form>
+        <div class="panel">
+          <div class="panel-top"><strong>Monitored sites</strong></div>
+          <div id="sitesList" class="table-list"></div>
+        </div>
+        <div id="historyPanel" class="history"></div>
+      </div>
+    </section>
+  </main>
+  <section id="results" class="container result-area" aria-live="polite"></section>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

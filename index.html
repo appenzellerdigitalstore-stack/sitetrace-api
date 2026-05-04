@@ -5,212 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="SiteTrace monitors uptime, speed, SEO health, SSL, and security basics for websites.">
   <title>SiteTrace - Website monitoring and SEO health checks</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    :root {
-      color-scheme: dark;
-      --bg: #08111f;
-      --surface: #101b2e;
-      --surface-2: #142238;
-      --line: rgba(255, 255, 255, 0.12);
-      --text: #eef4ff;
-      --muted: #aab7c9;
-      --green: #2dd47f;
-      --blue: #5ab8ff;
-      --amber: #f5b84b;
-      --red: #ff6b72;
-      --ink: #05101d;
-      --radius: 8px;
-      --shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
-    }
-
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: linear-gradient(180deg, #08111f 0%, #0b1424 48%, #08111f 100%);
-      color: var(--text);
-      line-height: 1.5;
-    }
-    a { color: inherit; text-decoration: none; }
-    button, input { font: inherit; }
-    .container { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
-    .hidden { display: none !important; }
-
-    .nav {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      border-bottom: 1px solid var(--line);
-      background: rgba(8, 17, 31, 0.86);
-      backdrop-filter: blur(18px);
-    }
-    .nav-inner { height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 900; }
-    .brand-mark {
-      width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center;
-      color: var(--ink); background: linear-gradient(135deg, var(--green), var(--blue)); font-weight: 950;
-    }
-    .nav-links { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 0.94rem; }
-    .nav-links a, .link-button { color: var(--muted); }
-    .link-button { border: 0; background: transparent; cursor: pointer; }
-    .lang-switch { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.05); }
-    .lang-switch button { border: 0; border-radius: 6px; padding: 7px 10px; color: var(--muted); background: transparent; cursor: pointer; font-weight: 750; }
-    .lang-switch button.active { color: var(--ink); background: var(--text); }
-
-    .hero { min-height: calc(100vh - 72px); display: grid; align-items: center; padding: 56px 0; }
-    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr); gap: 44px; align-items: center; }
-    .eyebrow { color: var(--green); font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: .78rem; margin: 0 0 14px; }
-    h1 { font-size: clamp(2.45rem, 7vw, 4.9rem); line-height: .96; margin: 0; letter-spacing: 0; max-width: 780px; }
-    h2 { font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.05; margin: 0; letter-spacing: 0; }
-    h3, p { margin-top: 0; }
-    .lead { color: var(--muted); font-size: 1.12rem; max-width: 680px; margin: 22px 0 0; }
-
-    .analyzer, .auth-form, .site-form {
-      display: grid; gap: 10px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius);
-      background: rgba(255,255,255,.07); box-shadow: var(--shadow);
-    }
-    .analyzer { grid-template-columns: minmax(0,1fr) auto; max-width: 720px; margin-top: 30px; }
-    input {
-      min-width: 0; border: 0; border-radius: 6px; background: rgba(255,255,255,.08);
-      color: var(--text); padding: 15px 16px; outline: none;
-    }
-    input::placeholder { color: #7f8fa5; }
-    .button {
-      border: 0; border-radius: 6px; min-height: 52px; padding: 0 18px; cursor: pointer;
-      color: var(--ink); background: linear-gradient(135deg, var(--green), var(--blue)); font-weight: 900;
-    }
-    .button.secondary { color: var(--text); background: rgba(255,255,255,.08); border: 1px solid var(--line); }
-    .button.danger { color: var(--text); background: rgba(255, 107, 114, .14); border: 1px solid rgba(255,107,114,.4); }
-    .button:disabled { opacity: .64; cursor: wait; }
-    .trust-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; color: var(--muted); font-size: .92rem; }
-    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; background: rgba(255,255,255,.04); }
-
-    .panel, .card, .result-shell {
-      border: 1px solid var(--line); border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.035));
-      box-shadow: var(--shadow); overflow: hidden;
-    }
-    .panel-top { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px; border-bottom: 1px solid var(--line); background: rgba(5,16,29,.64); }
-    .score-ring {
-      width: 112px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
-      background: conic-gradient(var(--green) 0 82%, rgba(255,255,255,.14) 82% 100%); position: relative; font-size: 1.8rem; font-weight: 950;
-    }
-    .score-ring::before { content: ""; position: absolute; inset: 10px; border-radius: inherit; background: var(--surface); }
-    .score-ring span { position: relative; color: var(--text); }
-    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); }
-    .metric { min-height: 92px; padding: 16px; background: rgba(16,27,46,.94); }
-    .metric strong { display: block; font-size: 1.28rem; margin-bottom: 3px; }
-    .metric span, .muted { color: var(--muted); }
-
-    .check-list { padding: 18px; display: grid; gap: 10px; }
-    .check { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 12px; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.04); }
-    .dot { width: 10px; height: 10px; border-radius: 999px; margin-top: 7px; background: var(--green); }
-    .dot.warning { background: var(--amber); }
-    .dot.fail, .dot.down { background: var(--red); }
-    .check-title { font-weight: 850; margin: 0; }
-    .check-copy { color: var(--muted); margin: 3px 0 0; font-size: .92rem; }
-    .check-value { color: var(--muted); font-size: .82rem; white-space: nowrap; }
-    .level-badge { display: inline-flex; margin-left: 6px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: .72rem; font-weight: 900; vertical-align: 2px; }
-    .level-badge.pass, .level-badge.online { color: var(--green); }
-    .level-badge.warning { color: var(--amber); }
-    .level-badge.fail, .level-badge.down { color: var(--red); }
-
-    section { padding: 72px 0; border-top: 1px solid rgba(255,255,255,.07); }
-    .section-head { max-width: 760px; margin-bottom: 30px; }
-    .section-head p { color: var(--muted); margin: 14px 0 0; font-size: 1rem; }
-    .features, .pricing, .dashboard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    .feature, .price, .dash-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; background: rgba(255,255,255,.045); }
-    .price strong { display: block; margin: 14px 0; font-size: 2rem; }
-    .price ul { padding: 0; margin: 16px 0 0; list-style: none; display: grid; gap: 8px; color: var(--muted); }
-    .price.highlight { border-color: rgba(45,212,127,.58); background: rgba(45,212,127,.08); }
-    .result-area { margin-top: 24px; padding-top: 0; border-top: 0; }
-
-    .app-shell { padding: 42px 0 72px; }
-    .dashboard-head { display: flex; justify-content: space-between; align-items: end; gap: 18px; margin-bottom: 22px; }
-    .auth-layout { display: grid; grid-template-columns: minmax(320px,.85fr) minmax(0,1.15fr); gap: 18px; align-items: start; }
-    .auth-form { box-shadow: none; }
-    .site-form { grid-template-columns: minmax(0,.7fr) minmax(0,1fr) auto; box-shadow: none; margin: 18px 0; }
-    .table-list { display: grid; gap: 10px; }
-    .site-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255,255,255,.04); }
-    .site-row strong { display: block; }
-    .history { margin-top: 18px; }
-    .empty { padding: 22px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); }
-    .setup-warning { border-color: rgba(245,184,75,.48); background: rgba(245,184,75,.08); }
-    .setup-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
-    .setup-step { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; background: rgba(255,255,255,.045); }
-    .setup-step span { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: var(--ink); background: var(--amber); font-weight: 950; margin-bottom: 10px; }
-    .footer { padding: 36px 0 48px; color: var(--muted); border-top: 1px solid var(--line); }
-
-    @media (max-width: 900px) {
-      .nav-links a.hide-mobile { display: none; }
-      .hero { min-height: auto; }
-      .hero-grid, .features, .pricing, .dashboard-grid, .auth-layout { grid-template-columns: 1fr; }
-      .metric-grid { grid-template-columns: 1fr; }
-      .site-form, .site-row, .setup-steps { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 620px) {
-      .container { width: min(100% - 22px, 1120px); }
-      .nav-inner { height: auto; min-height: 64px; padding: 10px 0; align-items: flex-start; }
-      .nav-links { flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
-      .hero { padding: 38px 0; }
-      .analyzer { grid-template-columns: 1fr; }
-      .button { width: 100%; }
-      .check { grid-template-columns: auto 1fr; }
-      .check-value { grid-column: 2; }
-    }
-  </style>
+  <link rel="stylesheet" href="/assets/styles.css">
 </head>
-<body>
+<body data-page="home">
   <nav class="nav">
     <div class="container nav-inner">
-      <a class="brand" href="#top" aria-label="SiteTrace"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
+      <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
       <div class="nav-links">
-        <a class="hide-mobile" href="#features" data-i18n="navFeatures">Features</a>
-        <a class="hide-mobile" href="#pricing" data-i18n="navPricing">Pricing</a>
-        <a class="hide-mobile" href="#api" data-i18n="navApi">API</a>
-        <a href="#dashboard" data-i18n="navDashboard">Dashboard</a>
-        <button class="link-button hidden" id="signOutBtn" type="button" data-i18n="signOut">Sign out</button>
-        <div class="lang-switch" aria-label="Language selector">
-          <button type="button" data-lang="en" class="active">EN</button>
-          <button type="button" data-lang="es">ES</button>
-        </div>
+        <a href="/pricing">Pricing</a>
+        <a href="/api">API</a>
+        <a href="/dashboard">Dashboard</a>
+        <a class="button small secondary" href="/signin">Sign in</a>
       </div>
     </div>
   </nav>
 
-  <main id="top">
-    <header class="hero" id="landing">
+  <main>
+    <header class="hero">
       <div class="container hero-grid">
         <div>
-          <p class="eyebrow" data-i18n="eyebrow">Website monitoring plus instant SEO diagnostics</p>
-          <h1 data-i18n="heroTitle">Know when your site is down, slow, insecure, or hurting search visibility.</h1>
-          <p class="lead" data-i18n="heroLead">SiteTrace checks uptime, response speed, SSL, SEO basics, accessibility signals, and security headers in one clear report.</p>
+          <p class="eyebrow">Website monitoring plus instant SEO diagnostics</p>
+          <h1>Know when your site is down, slow, insecure, or hurting search visibility.</h1>
+          <p class="lead">SiteTrace checks uptime, response speed, SSL, SEO basics, accessibility signals, and security headers in one clear report.</p>
           <form class="analyzer" id="analyzeForm">
             <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
-            <button class="button" id="analyzeBtn" type="submit" data-i18n="analyzeButton">Run free check</button>
+            <button class="button" id="analyzeBtn" type="submit">Run free check</button>
           </form>
           <div class="trust-row">
-            <span class="pill" data-i18n="pillOne">No login required</span>
-            <span class="pill" data-i18n="pillTwo">Uptime + SEO + SSL</span>
-            <span class="pill" data-i18n="pillThree">Actionable recommendations</span>
+            <span class="pill">No login required</span>
+            <span class="pill">Uptime + SEO + SSL</span>
+            <span class="pill">Actionable recommendations</span>
           </div>
         </div>
-        <aside class="panel" aria-label="SiteTrace dashboard preview">
+        <aside class="panel" aria-label="SiteTrace report preview">
           <div class="panel-top">
-            <div><p class="eyebrow" style="margin-bottom:6px;" data-i18n="previewLabel">Live report preview</p><strong>sitetrace.it.com</strong></div>
+            <div><p class="eyebrow compact">Live report preview</p><strong>sitetrace.it.com</strong></div>
             <div class="score-ring"><span>89</span></div>
           </div>
           <div class="metric-grid">
-            <div class="metric"><strong>243ms</strong><span data-i18n="metricSpeed">Response time</span></div>
-            <div class="metric"><strong>Valid</strong><span data-i18n="metricSsl">SSL certificate</span></div>
-            <div class="metric"><strong>3</strong><span data-i18n="metricIssues">Issues found</span></div>
+            <div class="metric"><strong>243ms</strong><span>Response time</span></div>
+            <div class="metric"><strong>Valid</strong><span>SSL certificate</span></div>
+            <div class="metric"><strong>3</strong><span>Issues found</span></div>
           </div>
           <div class="check-list">
-            <div class="check"><span class="dot"></span><div><p class="check-title" data-i18n="samplePass">Site is reachable</p><p class="check-copy" data-i18n="samplePassCopy">Your server is responding normally.</p></div><span class="check-value">200</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title" data-i18n="sampleWarn">Meta description could improve</p><p class="check-copy" data-i18n="sampleWarnCopy">Better snippets can help people understand the page before they click.</p></div><span class="check-value">42 chars</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title" data-i18n="sampleSecurity">Security headers missing</p><p class="check-copy" data-i18n="sampleSecurityCopy">Add CSP and HSTS for stronger baseline protection.</p></div><span class="check-value">2</span></div>
+            <div class="check"><span class="dot"></span><div><p class="check-title">Site is reachable</p><p class="check-copy">Your server is responding normally.</p></div><span class="check-value">200</span></div>
+            <div class="check"><span class="dot warning"></span><div><p class="check-title">Meta description could improve</p><p class="check-copy">Better snippets help people understand the page before they click.</p></div><span class="check-value">42 chars</span></div>
+            <div class="check"><span class="dot warning"></span><div><p class="check-title">Security headers missing</p><p class="check-copy">Add CSP and HSTS for stronger baseline protection.</p></div><span class="check-value">2</span></div>
           </div>
         </aside>
       </div>
@@ -218,347 +58,22 @@
 
     <section id="results" class="container result-area" aria-live="polite"></section>
 
-    <section id="features">
+    <section>
       <div class="container">
-        <div class="section-head"><h2 data-i18n="featuresTitle">Built for owners, freelancers, and small agencies.</h2><p data-i18n="featuresLead">Instead of overwhelming dashboards, SiteTrace explains what is broken, why it matters, and what to fix next.</p></div>
+        <div class="section-head">
+          <h2>Built for owners, freelancers, and small agencies.</h2>
+          <p>Instead of overwhelming dashboards, SiteTrace explains what is broken, why it matters, and what to fix next.</p>
+        </div>
         <div class="features">
-          <article class="feature"><h3 data-i18n="featureOneTitle">Uptime and speed</h3><p data-i18n="featureOneCopy">Track HTTP status, response time, redirects, and hosting reliability from one report.</p></article>
-          <article class="feature"><h3 data-i18n="featureTwoTitle">SEO health</h3><p data-i18n="featureTwoCopy">Check title, meta description, H1, image ALT text, canonical tags, mobile viewport, and indexing.</p></article>
-          <article class="feature"><h3 data-i18n="featureThreeTitle">Security basics</h3><p data-i18n="featureThreeCopy">Spot SSL expiration risk and missing headers like HSTS, CSP, and frame protection.</p></article>
-        </div>
-      </div>
-    </section>
-
-    <section id="pricing">
-      <div class="container">
-        <div class="section-head"><h2 data-i18n="pricingTitle">Simple pricing for a product that can grow.</h2><p data-i18n="pricingLead">Start free. Add paid monitoring, alerts, reports, and API access as the product matures.</p></div>
-        <div class="pricing">
-          <article class="price"><h3 data-i18n="freePlan">Free</h3><strong>$0</strong><p data-i18n="freeCopy">For quick manual checks.</p><ul><li data-i18n="freeOne">1 monitored site</li><li data-i18n="freeTwo">Hourly checks</li><li data-i18n="freeThree">Manual scans</li></ul></article>
-          <article class="price highlight"><h3 data-i18n="starterPlan">Starter</h3><strong>$9/mo</strong><p data-i18n="starterCopy">For small businesses and freelancers.</p><ul><li data-i18n="starterOne">10 monitored sites</li><li data-i18n="starterTwo">5-minute checks</li><li data-i18n="starterThree">Email alerts and 30-day history</li></ul><button class="button" data-upgrade="starter" data-i18n="upgradeStarter">Upgrade to Starter</button></article>
-          <article class="price"><h3 data-i18n="agencyPlan">Agency</h3><strong>$29/mo</strong><p data-i18n="agencyCopy">For client reporting and API usage.</p><ul><li data-i18n="agencyOne">50 monitored sites</li><li data-i18n="agencyTwo">Reports and webhooks</li><li data-i18n="agencyThree">API access</li></ul><button class="button secondary" data-upgrade="agency" data-i18n="upgradeAgency">Upgrade to Agency</button></article>
-        </div>
-      </div>
-    </section>
-
-    <section id="api">
-      <div class="container"><div class="section-head"><h2 data-i18n="apiTitle">A useful API from day one.</h2><p data-i18n="apiLead">The analyzer returns a score, technical metrics, grouped checks, and recommendations that the UI or future customers can consume.</p></div></div>
-    </section>
-
-    <section id="dashboard" class="app-shell">
-      <div class="container">
-        <div class="dashboard-head">
-          <div><p class="eyebrow" data-i18n="dashboardEyebrow">Customer dashboard</p><h2 data-i18n="dashboardTitle">Monitor sites after the first scan.</h2><p class="muted" data-i18n="dashboardLead">Create an account, save sites, run checks, and prepare billing for paid plans.</p></div>
-          <button class="button secondary hidden" id="refreshDashboardBtn" type="button" data-i18n="refresh">Refresh</button>
-        </div>
-
-        <div id="setupWarning" class="feature setup-warning hidden">
-          <h3 data-i18n="setupTitle">Supabase is not configured yet</h3>
-          <p data-i18n="setupCopy">Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
-          <div class="setup-steps">
-            <div class="setup-step"><span>1</span><strong data-i18n="setupStepOneTitle">Create Supabase</strong><p class="muted" data-i18n="setupStepOneCopy">Create a project and run supabase-schema.sql.</p></div>
-            <div class="setup-step"><span>2</span><strong data-i18n="setupStepTwoTitle">Add Render env vars</strong><p class="muted" data-i18n="setupStepTwoCopy">Set SUPABASE_URL, anon key, and service role key.</p></div>
-            <div class="setup-step"><span>3</span><strong data-i18n="setupStepThreeTitle">Enable billing</strong><p class="muted" data-i18n="setupStepThreeCopy">Add Stripe prices and webhook secret when ready.</p></div>
-          </div>
-        </div>
-
-        <div id="authView" class="auth-layout">
-          <form id="authForm" class="feature auth-form">
-            <h3 data-i18n="authTitle">Sign in or create account</h3>
-            <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" required>
-            <input id="authPassword" type="password" autocomplete="current-password" placeholder="Password" required>
-            <button class="button" type="submit" data-i18n="signIn">Sign in</button>
-            <button class="button secondary" id="signUpBtn" type="button" data-i18n="createAccount">Create account</button>
-            <p class="muted" id="authMessage"></p>
-          </form>
-          <div class="feature">
-            <h3 data-i18n="authWhyTitle">Why create an account?</h3>
-            <p data-i18n="authWhyCopy">The free scan is instant, but accounts unlock saved sites, check history, monitoring jobs, and plan limits.</p>
-          </div>
-        </div>
-
-        <div id="dashboardView" class="hidden">
-          <div class="dashboard-grid">
-            <div class="dash-card"><span class="muted" data-i18n="planLabel">Plan</span><h3 id="planValue">Free</h3></div>
-            <div class="dash-card"><span class="muted" data-i18n="sitesLabel">Sites</span><h3 id="siteCount">0</h3></div>
-            <div class="dash-card"><span class="muted" data-i18n="lastCheckLabel">Last check</span><h3 id="lastCheckValue">-</h3></div>
-          </div>
-
-          <form id="siteForm" class="site-form">
-            <input id="siteName" type="text" placeholder="Client site" required>
-            <input id="siteUrl" type="text" inputmode="url" placeholder="https://example.com" required>
-            <button class="button" type="submit" data-i18n="addSite">Add site</button>
-          </form>
-
-          <div id="sitesList" class="table-list"></div>
-          <div id="historyPanel" class="history"></div>
+          <article class="feature"><h3>Uptime and speed</h3><p>Track HTTP status, response time, redirects, and hosting reliability from one report.</p></article>
+          <article class="feature"><h3>SEO health</h3><p>Check title, meta description, H1, image ALT text, canonical tags, mobile viewport, and indexing.</p></article>
+          <article class="feature"><h3>Security basics</h3><p>Spot SSL expiration risk and missing headers like HSTS, CSP, and frame protection.</p></article>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="footer"><div class="container">SiteTrace - <span data-i18n="footer">Website monitoring and SEO health checks.</span></div></footer>
-
-  <script>
-    const translations = {
-      en: {
-        navFeatures: 'Features', navPricing: 'Pricing', navApi: 'API', navDashboard: 'Dashboard', signOut: 'Sign out',
-        eyebrow: 'Website monitoring plus instant SEO diagnostics', heroTitle: 'Know when your site is down, slow, insecure, or hurting search visibility.', heroLead: 'SiteTrace checks uptime, response speed, SSL, SEO basics, accessibility signals, and security headers in one clear report.',
-        analyzeButton: 'Run free check', pillOne: 'No login required', pillTwo: 'Uptime + SEO + SSL', pillThree: 'Actionable recommendations',
-        previewLabel: 'Live report preview', metricSpeed: 'Response time', metricSsl: 'SSL certificate', metricIssues: 'Issues found',
-        samplePass: 'Site is reachable', samplePassCopy: 'Your server is responding normally.', sampleWarn: 'Meta description could improve', sampleWarnCopy: 'Better snippets can help people understand the page before they click.', sampleSecurity: 'Security headers missing', sampleSecurityCopy: 'Add CSP and HSTS for stronger baseline protection.',
-        featuresTitle: 'Built for owners, freelancers, and small agencies.', featuresLead: 'Instead of overwhelming dashboards, SiteTrace explains what is broken, why it matters, and what to fix next.',
-        featureOneTitle: 'Uptime and speed', featureOneCopy: 'Track HTTP status, response time, redirects, and hosting reliability from one report.', featureTwoTitle: 'SEO health', featureTwoCopy: 'Check title, meta description, H1, image ALT text, canonical tags, mobile viewport, and indexing.', featureThreeTitle: 'Security basics', featureThreeCopy: 'Spot SSL expiration risk and missing headers like HSTS, CSP, and frame protection.',
-        pricingTitle: 'Simple pricing for a product that can grow.', pricingLead: 'Start free. Add paid monitoring, alerts, reports, and API access as the product matures.',
-        freePlan: 'Free', freeCopy: 'For quick manual checks.', freeOne: '1 monitored site', freeTwo: 'Hourly checks', freeThree: 'Manual scans',
-        starterPlan: 'Starter', starterCopy: 'For small businesses and freelancers.', starterOne: '10 monitored sites', starterTwo: '5-minute checks', starterThree: 'Email alerts and 30-day history', upgradeStarter: 'Upgrade to Starter',
-        agencyPlan: 'Agency', agencyCopy: 'For client reporting and API usage.', agencyOne: '50 monitored sites', agencyTwo: 'Reports and webhooks', agencyThree: 'API access', upgradeAgency: 'Upgrade to Agency',
-        apiTitle: 'A useful API from day one.', apiLead: 'The analyzer returns a score, technical metrics, grouped checks, and recommendations that the UI or future customers can consume.',
-        dashboardEyebrow: 'Customer dashboard', dashboardTitle: 'Monitor sites after the first scan.', dashboardLead: 'Create an account, save sites, run checks, and prepare billing for paid plans.', refresh: 'Refresh',
-        setupTitle: 'Supabase is not configured yet', setupCopy: 'Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.',
-        setupStepOneTitle: 'Create Supabase', setupStepOneCopy: 'Create a project and run supabase-schema.sql.',
-        setupStepTwoTitle: 'Add Render env vars', setupStepTwoCopy: 'Set SUPABASE_URL, anon key, and service role key.',
-        setupStepThreeTitle: 'Enable billing', setupStepThreeCopy: 'Add Stripe prices and webhook secret when ready.',
-        authTitle: 'Sign in or create account', signIn: 'Sign in', createAccount: 'Create account', authWhyTitle: 'Why create an account?', authWhyCopy: 'The free scan is instant, but accounts unlock saved sites, check history, monitoring jobs, and plan limits.',
-        planLabel: 'Plan', sitesLabel: 'Sites', lastCheckLabel: 'Last check', addSite: 'Add site', footer: 'Website monitoring and SEO health checks.',
-        loading: 'Analyzing your website...', invalid: 'Enter a website URL first.', errorTitle: 'Analysis failed', resultTitle: 'Site health report', score: 'Score', responseTime: 'Response time', statusCode: 'Status code', issues: 'Issues',
-        pass: 'Passed', warning: 'Warning', fail: 'Failed', recommendation: 'Recommendation', runCheck: 'Run check', viewHistory: 'History', deleteSite: 'Delete', noSites: 'No monitored sites yet.', noHistory: 'No check history yet.', saved: 'Saved.', accountCreated: 'Account created. You can sign in now.', billingLogin: 'Sign in before upgrading.'
-      },
-      es: {
-        navFeatures: 'Funciones', navPricing: 'Precios', navApi: 'API', navDashboard: 'Dashboard', signOut: 'Salir',
-        eyebrow: 'Monitoreo web mas diagnostico SEO instantaneo', heroTitle: 'Sabe cuando tu sitio esta caido, lento, inseguro o perdiendo visibilidad en buscadores.', heroLead: 'SiteTrace revisa uptime, velocidad, SSL, SEO basico, accesibilidad y headers de seguridad en un reporte claro.',
-        analyzeButton: 'Analizar gratis', pillOne: 'Sin login', pillTwo: 'Uptime + SEO + SSL', pillThree: 'Recomendaciones accionables',
-        previewLabel: 'Vista previa del reporte', metricSpeed: 'Tiempo de respuesta', metricSsl: 'Certificado SSL', metricIssues: 'Problemas encontrados',
-        samplePass: 'El sitio responde', samplePassCopy: 'Tu servidor esta respondiendo normalmente.', sampleWarn: 'La meta description puede mejorar', sampleWarnCopy: 'Mejores snippets ayudan a entender la pagina antes del clic.', sampleSecurity: 'Faltan headers de seguridad', sampleSecurityCopy: 'Agrega CSP y HSTS para una base de proteccion mas fuerte.',
-        featuresTitle: 'Creado para duenos de sitios, freelancers y pequenas agencias.', featuresLead: 'En vez de dashboards complicados, SiteTrace explica que esta mal, por que importa y que arreglar despues.',
-        featureOneTitle: 'Uptime y velocidad', featureOneCopy: 'Revisa estado HTTP, tiempo de respuesta, redirecciones y confiabilidad del hosting en un reporte.', featureTwoTitle: 'Salud SEO', featureTwoCopy: 'Revisa title, meta description, H1, ALT en imagenes, canonical, viewport movil e indexacion.', featureThreeTitle: 'Seguridad basica', featureThreeCopy: 'Detecta riesgo de vencimiento SSL y headers faltantes como HSTS, CSP y proteccion de frames.',
-        pricingTitle: 'Precios simples para un producto que puede crecer.', pricingLead: 'Empieza gratis. Agrega monitoreo pagado, alertas, reportes y API cuando el producto madure.',
-        freePlan: 'Gratis', freeCopy: 'Para analisis manuales rapidos.', freeOne: '1 sitio monitoreado', freeTwo: 'Revisiones cada hora', freeThree: 'Analisis manuales',
-        starterPlan: 'Starter', starterCopy: 'Para negocios pequenos y freelancers.', starterOne: '10 sitios monitoreados', starterTwo: 'Revisiones cada 5 minutos', starterThree: 'Alertas por email e historial de 30 dias', upgradeStarter: 'Mejorar a Starter',
-        agencyPlan: 'Agency', agencyCopy: 'Para reportes de clientes y uso de API.', agencyOne: '50 sitios monitoreados', agencyTwo: 'Reportes y webhooks', agencyThree: 'Acceso API', upgradeAgency: 'Mejorar a Agency',
-        apiTitle: 'Una API util desde el primer dia.', apiLead: 'El analizador devuelve score, metricas tecnicas, checks agrupados y recomendaciones que la UI o futuros clientes pueden consumir.',
-        dashboardEyebrow: 'Dashboard de cliente', dashboardTitle: 'Monitorea sitios despues del primer scan.', dashboardLead: 'Crea una cuenta, guarda sitios, ejecuta checks y prepara cobros para planes pagados.', refresh: 'Actualizar',
-        setupTitle: 'Supabase aun no esta configurado', setupCopy: 'Agrega las variables de Supabase en Render, ejecuta el SQL y el dashboard quedara activo.',
-        setupStepOneTitle: 'Crea Supabase', setupStepOneCopy: 'Crea un proyecto y ejecuta supabase-schema.sql.',
-        setupStepTwoTitle: 'Agrega variables en Render', setupStepTwoCopy: 'Configura SUPABASE_URL, anon key y service role key.',
-        setupStepThreeTitle: 'Activa cobros', setupStepThreeCopy: 'Agrega precios de Stripe y webhook secret cuando este listo.',
-        authTitle: 'Inicia sesion o crea cuenta', signIn: 'Iniciar sesion', createAccount: 'Crear cuenta', authWhyTitle: 'Por que crear cuenta?', authWhyCopy: 'El scan gratis es instantaneo, pero las cuentas habilitan sitios guardados, historial, monitoreo y limites por plan.',
-        planLabel: 'Plan', sitesLabel: 'Sitios', lastCheckLabel: 'Ultimo check', addSite: 'Agregar sitio', footer: 'Monitoreo web y diagnostico SEO.',
-        loading: 'Analizando tu sitio...', invalid: 'Ingresa primero una URL.', errorTitle: 'No se pudo analizar', resultTitle: 'Reporte de salud del sitio', score: 'Score', responseTime: 'Tiempo de respuesta', statusCode: 'Codigo HTTP', issues: 'Problemas',
-        pass: 'Correcto', warning: 'Advertencia', fail: 'Fallo', recommendation: 'Recomendacion', runCheck: 'Revisar', viewHistory: 'Historial', deleteSite: 'Eliminar', noSites: 'Aun no hay sitios monitoreados.', noHistory: 'Aun no hay historial.', saved: 'Guardado.', accountCreated: 'Cuenta creada. Ahora puedes iniciar sesion.', billingLogin: 'Inicia sesion antes de mejorar plan.'
-      }
-    };
-
-    const state = { config: null, supabase: null, session: null, profile: null, sites: [], checks: [] };
-    const els = {
-      form: document.getElementById('analyzeForm'), input: document.getElementById('urlInput'), button: document.getElementById('analyzeBtn'), results: document.getElementById('results'),
-      setupWarning: document.getElementById('setupWarning'), authView: document.getElementById('authView'), dashboardView: document.getElementById('dashboardView'), authForm: document.getElementById('authForm'), signUpBtn: document.getElementById('signUpBtn'), authMessage: document.getElementById('authMessage'), signOutBtn: document.getElementById('signOutBtn'), refreshDashboardBtn: document.getElementById('refreshDashboardBtn'),
-      siteForm: document.getElementById('siteForm'), sitesList: document.getElementById('sitesList'), historyPanel: document.getElementById('historyPanel'), planValue: document.getElementById('planValue'), siteCount: document.getElementById('siteCount'), lastCheckValue: document.getElementById('lastCheckValue')
-    };
-    let currentLang = localStorage.getItem('sitetrace_lang') || 'en';
-
-    const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-      ? ''
-      : 'https://sitetrace-api.onrender.com';
-    const apiPath = (path) => `${apiBase}${path}`;
-    const scanUrl = apiPath('/analyze');
-    const t = (key) => translations[currentLang][key] || translations.en[key] || key;
-    const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
-
-    function setLanguage(lang) {
-      currentLang = lang === 'es' ? 'es' : 'en';
-      localStorage.setItem('sitetrace_lang', currentLang);
-      document.documentElement.lang = currentLang;
-      document.querySelectorAll('[data-i18n]').forEach((node) => { node.textContent = t(node.dataset.i18n); });
-      document.querySelectorAll('[data-lang]').forEach((node) => { node.classList.toggle('active', node.dataset.lang === currentLang); });
-    }
-
-    function authHeaders() {
-      return state.session ? { Authorization: `Bearer ${state.session.access_token}` } : {};
-    }
-
-    function levelLabel(level) {
-      if (level === 'pass') return t('pass');
-      if (level === 'fail') return t('fail');
-      return t('warning');
-    }
-
-    function renderLoading() {
-      els.results.innerHTML = `<div class="result-shell"><div class="panel-top"><strong>${t('loading')}</strong></div></div>`;
-      els.results.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function renderError(message) {
-      els.results.innerHTML = `<div class="result-shell"><div class="panel-top"><div><p class="eyebrow" style="margin-bottom:6px;">${t('errorTitle')}</p><strong>${escapeHtml(message)}</strong></div></div></div>`;
-    }
-
-    function renderResults(data) {
-      const checks = Array.isArray(data.checks) ? data.checks : [];
-      const failCount = checks.filter((check) => check.level === 'fail').length;
-      const warningCount = checks.filter((check) => check.level === 'warning').length;
-      const sorted = [...checks].sort((a, b) => ({ fail: 0, warning: 1, pass: 2 }[a.level] - { fail: 0, warning: 1, pass: 2 }[b.level]));
-      const checkHtml = sorted.map((check) => `<div class="check"><span class="dot ${check.level === 'pass' ? '' : check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${levelLabel(check.level)}</span></p><p class="check-copy">${escapeHtml(check.description)}</p><p class="check-copy"><strong>${t('recommendation')}:</strong> ${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('');
-      const score = Number(data.score || data.seo_score || 0);
-
-      els.results.innerHTML = `<div class="result-shell"><div class="panel-top"><div><p class="eyebrow" style="margin-bottom:6px;">${t('resultTitle')}</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div><div class="metric-grid"><div class="metric"><strong>${score}/100</strong><span>${t('score')}</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>${t('responseTime')}</span></div><div class="metric"><strong>${escapeHtml(data.status_code)}</strong><span>${t('statusCode')}</span></div><div class="metric"><strong>${failCount}</strong><span>${t('fail')}</span></div><div class="metric"><strong>${warningCount}</strong><span>${t('warning')}</span></div><div class="metric"><strong>${checks.length}</strong><span>${t('issues')}</span></div></div><div class="check-list">${checkHtml}</div></div>`;
-    }
-
-    function renderDashboard() {
-      const configured = Boolean(state.supabase);
-      els.setupWarning.classList.toggle('hidden', configured);
-      els.authView.classList.toggle('hidden', !configured || Boolean(state.session));
-      els.dashboardView.classList.toggle('hidden', !configured || !state.session);
-      els.signOutBtn.classList.toggle('hidden', !state.session);
-      els.refreshDashboardBtn.classList.toggle('hidden', !state.session);
-
-      if (!state.session) return;
-
-      els.planValue.textContent = state.profile ? state.profile.plan : 'free';
-      els.siteCount.textContent = state.sites.length;
-      const lastSite = state.sites.find((site) => site.last_checked_at);
-      els.lastCheckValue.textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
-
-      if (!state.sites.length) {
-        els.sitesList.innerHTML = `<div class="empty">${t('noSites')}</div>`;
-      } else {
-        els.sitesList.innerHTML = state.sites.map((site) => `<div class="site-row"><div><strong>${escapeHtml(site.name)}</strong><span class="muted">${escapeHtml(site.url)}</span></div><span class="level-badge ${site.last_status || 'pending'}">${escapeHtml(site.last_status || 'pending')}</span><span class="muted">${site.last_score ? `${site.last_score}/100` : '-'}</span><div><button class="button secondary" data-run="${site.id}">${t('runCheck')}</button> <button class="button secondary" data-history="${site.id}">${t('viewHistory')}</button> <button class="button danger" data-delete="${site.id}">${t('deleteSite')}</button></div></div>`).join('');
-      }
-    }
-
-    async function loadDashboard() {
-      if (!state.supabase || !state.session) return;
-      const me = await fetch(apiPath('/api/me'), { headers: authHeaders() }).then((res) => res.json());
-      state.profile = me.profile;
-
-      const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      state.sites = sites || [];
-      renderDashboard();
-    }
-
-    async function runSiteCheck(siteId) {
-      els.historyPanel.innerHTML = `<div class="empty">${t('loading')}</div>`;
-      const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: currentLang }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Check failed');
-      renderResults(data.analysis);
-      await loadDashboard();
-    }
-
-    async function showHistory(siteId) {
-      const { data, error } = await state.supabase.from('checks').select('*').eq('site_id', siteId).order('created_at', { ascending: false }).limit(10);
-      if (error) throw error;
-
-      if (!data.length) {
-        els.historyPanel.innerHTML = `<div class="empty">${t('noHistory')}</div>`;
-        return;
-      }
-
-      els.historyPanel.innerHTML = `<div class="check-list">${data.map((check) => `<div class="check"><span class="dot ${check.status}"></span><div><p class="check-title">${new Date(check.created_at).toLocaleString()} <span class="level-badge ${check.status}">${escapeHtml(check.status)}</span></p><p class="check-copy">${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || '-'}</p></div><span class="check-value">${escapeHtml(check.result && check.result.page_context)}</span></div>`).join('')}</div>`;
-    }
-
-    async function upgrade(plan) {
-      if (!state.session) {
-        location.hash = '#dashboard';
-        els.authMessage.textContent = t('billingLogin');
-        return;
-      }
-
-      const response = await fetch(apiPath('/billing/create-checkout-session'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Billing is not configured');
-      window.location.href = data.url;
-    }
-
-    els.form.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const url = els.input.value.trim();
-      if (!url) return renderError(t('invalid'));
-      els.button.disabled = true;
-      renderLoading();
-      try {
-        const response = await fetch(scanUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, locale: currentLang }) });
-        const data = await response.json();
-        if (!response.ok || data.status === 'error') renderError(data.message || t('errorTitle'));
-        else renderResults(data);
-      } catch (error) {
-        renderError(error.message || t('errorTitle'));
-      } finally {
-        els.button.disabled = false;
-      }
-    });
-
-    els.authForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const email = document.getElementById('authEmail').value;
-      const password = document.getElementById('authPassword').value;
-      const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
-      if (error) { els.authMessage.textContent = error.message; return; }
-      state.session = data.session;
-      await loadDashboard();
-    });
-
-    els.signUpBtn.addEventListener('click', async () => {
-      const email = document.getElementById('authEmail').value;
-      const password = document.getElementById('authPassword').value;
-      const { error } = await state.supabase.auth.signUp({ email, password });
-      els.authMessage.textContent = error ? error.message : t('accountCreated');
-    });
-
-    els.signOutBtn.addEventListener('click', async () => {
-      if (state.supabase) await state.supabase.auth.signOut();
-      state.session = null; state.profile = null; state.sites = [];
-      renderDashboard();
-    });
-
-    els.refreshDashboardBtn.addEventListener('click', loadDashboard);
-
-    els.siteForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const user = state.session.user;
-      const payload = { user_id: user.id, name: document.getElementById('siteName').value, url: document.getElementById('siteUrl').value, monitoring_enabled: true };
-      const { error } = await state.supabase.from('sites').insert(payload);
-      if (error) { els.historyPanel.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; return; }
-      els.siteForm.reset();
-      await loadDashboard();
-      els.historyPanel.innerHTML = `<div class="empty">${t('saved')}</div>`;
-    });
-
-    els.sitesList.addEventListener('click', async (event) => {
-      const runId = event.target.dataset.run;
-      const historyId = event.target.dataset.history;
-      const deleteId = event.target.dataset.delete;
-      try {
-        if (runId) await runSiteCheck(runId);
-        if (historyId) await showHistory(historyId);
-        if (deleteId) {
-          await state.supabase.from('sites').delete().eq('id', deleteId);
-          await loadDashboard();
-        }
-      } catch (error) {
-        els.historyPanel.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
-      }
-    });
-
-    document.querySelectorAll('[data-upgrade]').forEach((button) => button.addEventListener('click', () => upgrade(button.dataset.upgrade).catch((error) => { els.historyPanel.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`; })));
-    document.querySelectorAll('[data-lang]').forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.lang)));
-
-    async function init() {
-      setLanguage(currentLang);
-      state.config = await fetch(apiPath('/config')).then((res) => res.json());
-      if (state.config.supabase_url && state.config.supabase_anon_key && window.supabase) {
-        state.supabase = window.supabase.createClient(state.config.supabase_url, state.config.supabase_anon_key);
-        const { data } = await state.supabase.auth.getSession();
-        state.session = data.session;
-        state.supabase.auth.onAuthStateChange((event, session) => { state.session = session; renderDashboard(); if (session) loadDashboard(); });
-        if (state.session) await loadDashboard();
-      }
-      renderDashboard();
-    }
-
-    init().catch((error) => {
-      console.error(error);
-      renderDashboard();
-    });
-  </script>
+  <footer class="footer"><div class="container">SiteTrace - Website monitoring and SEO health checks.</div></footer>
+  <script src="/assets/app.js"></script>
 </body>
 </html>

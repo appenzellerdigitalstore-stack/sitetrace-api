@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API - SiteTrace</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body data-page="api">
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a class="brand" href="/"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
+      <div class="nav-links">
+        <a href="/pricing">Pricing</a>
+        <a class="active" href="/api">API</a>
+        <a href="/dashboard">Dashboard</a>
+        <a class="button small secondary" href="/signin">Sign in</a>
+      </div>
+    </div>
+  </nav>
+  <main class="page-shell">
+    <div class="container narrow">
+      <p class="eyebrow">API</p>
+      <h1>A useful API from day one.</h1>
+      <p class="lead">The analyzer returns a score, technical metrics, grouped checks, and recommendations that the UI or future customers can consume.</p>
+      <div class="code-card">
+        <pre><code>POST /analyze
+{
+  "url": "https://example.com",
+  "locale": "en"
+}</code></pre>
+      </div>
+      <div class="features two">
+        <article class="feature"><h3>Health metrics</h3><p>Status code, response time, final URL, SSL status, and availability checks.</p></article>
+        <article class="feature"><h3>Audit details</h3><p>SEO, accessibility, security headers, score, grouped checks, and recommendations.</p></article>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
