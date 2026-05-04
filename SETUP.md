@@ -6,7 +6,7 @@ This is the activation checklist for login, dashboard, billing, scheduled checks
 
 1. Create a Supabase project.
 2. Go to SQL Editor.
-3. Run `supabase-schema.sql`.
+3. Run `supabase-schema.sql`. Re-run it after product updates; it uses safe `if not exists` migrations for new columns.
 4. Go to Project Settings > API.
 5. Copy:
    - Project URL
@@ -82,7 +82,23 @@ ALERT_FROM_EMAIL=SiteTrace <alerts@sitetrace.it.com>
 
 If Resend is not configured, SiteTrace still records incidents but skips email delivery.
 
-## 5. Render
+Alerts are intentionally conservative:
+
+- a down or warning incident opens only after two matching checks
+- resolved emails are sent when a monitor returns to online
+- maintenance windows skip incident creation
+
+## 5. Public Status Pages
+
+Public status pages use the site's generated slug:
+
+```txt
+https://www.sitetrace.it.com/status/PUBLIC_SLUG
+```
+
+Enable the status page from the dashboard monitor settings.
+
+## 6. Render
 
 Render should use:
 

@@ -7,6 +7,7 @@ SiteTrace is a lightweight website monitoring and SEO health check product. It s
 ## What It Checks
 
 - HTTP status and response time
+- Keyword presence checks for monitored sites
 - HTTPS usage and SSL certificate expiration
 - Title and meta description health
 - H1 structure
@@ -18,52 +19,6 @@ SiteTrace is a lightweight website monitoring and SEO health check product. It s
 - Robots noindex detection
 - Security headers: HSTS, CSP, and frame protection
 
-## API
-
-### `POST /analyze`
-
-Request:
-
-```json
-{
-  "url": "https://example.com",
-  "locale": "en"
-}
-```
-
-`locale` can be `en` or `es`.
-
-Response:
-
-```json
-{
-  "status": "success",
-  "score": 82,
-  "response_time": "243ms",
-  "status_code": 200,
-  "checks": [
-    {
-      "category": "seo",
-      "id": "title",
-      "level": "pass",
-      "title": "Title tag is healthy",
-      "recommendation": "Keep titles specific and close to 30-60 characters."
-    }
-  ]
-}
-```
-
-### `GET /health`
-
-Returns API health:
-
-```json
-{
-  "status": "ok",
-  "service": "sitetrace-api"
-}
-```
-
 ## Product Direction
 
 Suggested paid tiers:
@@ -74,7 +29,7 @@ Suggested paid tiers:
 
 ## Dashboard, Login, And Billing
 
-The app now includes a lightweight dashboard on the same `index.html` page.
+The app includes dedicated landing, pricing, sign-in, dashboard, and public status pages.
 
 It supports:
 
@@ -82,9 +37,12 @@ It supports:
 - Saved monitored sites
 - Manual checks from the dashboard
 - Check history
+- Public status pages
+- Keyword monitoring
+- Maintenance windows
 - Stripe Checkout buttons for Starter and Agency
 - Cron endpoint for scheduled checks
-- Incident records and optional email alerts through Resend
+- Incident lifecycle records and optional email alerts through Resend
 
 For the full activation sequence, see `SETUP.md`.
 

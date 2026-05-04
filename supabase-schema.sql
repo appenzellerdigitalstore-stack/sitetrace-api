@@ -25,6 +25,13 @@ create table if not exists public.sites (
   updated_at timestamptz not null default now()
 );
 
+alter table public.sites add column if not exists keyword text;
+alter table public.sites add column if not exists keyword_should_exist boolean not null default true;
+alter table public.sites add column if not exists maintenance_starts_at timestamptz;
+alter table public.sites add column if not exists maintenance_ends_at timestamptz;
+alter table public.sites add column if not exists status_page_enabled boolean not null default false;
+alter table public.sites add column if not exists public_slug text unique default encode(gen_random_bytes(6), 'hex');
+
 create table if not exists public.checks (
   id uuid primary key default gen_random_uuid(),
   site_id uuid not null references public.sites(id) on delete cascade,
@@ -47,6 +54,10 @@ create table if not exists public.incidents (
   resolved_at timestamptz,
   created_at timestamptz not null default now()
 );
+
+alter table public.incidents add column if not exists duration_seconds integer;
+alter table public.incidents add column if not exists resolved_details jsonb;
+alter table public.incidents add column if not exists confirmed_after_checks integer not null default 1;
 
 alter table public.profiles enable row level security;
 alter table public.sites enable row level security;
@@ -115,6 +126,7 @@ after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
 create index if not exists sites_user_id_idx on public.sites(user_id);
+create index if not exists sites_public_slug_idx on public.sites(public_slug);
 create index if not exists checks_site_id_created_at_idx on public.checks(site_id, created_at desc);
 create index if not exists checks_user_id_created_at_idx on public.checks(user_id, created_at desc);
 create index if not exists incidents_site_id_created_at_idx on public.incidents(site_id, created_at desc);

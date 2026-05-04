@@ -31,7 +31,26 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   : null;
 
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    const allowedOrigins = [
+      APP_URL,
+      'https://www.sitetrace.it.com',
+      'https://sitetrace.it.com',
+      'http://localhost:3000',
+      'http://localhost:3010',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:3010'
+    ];
+
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  }
+}));
 
 app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !supabaseAdmin || !STRIPE_WEBHOOK_SECRET) {
@@ -95,6 +114,8 @@ const messages = {
       speed: ['Fast response time', 'The server responded quickly.', 'Keep pages lightweight and monitor speed over time.'],
       speedWarning: ['Response time could be better', 'The page is online, but visitors may feel the delay.', 'Compress assets, cache pages, and review hosting performance.'],
       speedFail: ['Slow response time', 'The page took too long to respond.', 'Investigate hosting, database queries, scripts, and heavy assets.'],
+      keyword: ['Keyword found', 'The expected content is present in the page response.', 'Keep this keyword stable if customers rely on it.'],
+      keywordFail: ['Keyword missing', 'The page responded, but the expected keyword was not found.', 'Check whether the page content changed, the app failed to render, or the keyword rule is outdated.'],
       https: ['HTTPS is active', 'The page is served over a secure connection.', 'Keep HTTPS enabled on every public page.'],
       httpsWarning: ['HTTPS is not being used', 'The URL uses HTTP instead of HTTPS.', 'Redirect traffic to HTTPS and install a valid SSL certificate.'],
       ssl: ['SSL certificate looks healthy', 'The certificate is valid and not close to expiration.', 'Use automatic renewal so it does not expire unexpectedly.'],
@@ -144,6 +165,8 @@ const messages = {
       speed: ['Tiempo de respuesta rapido', 'El servidor respondio rapidamente.', 'Manten las paginas ligeras y monitorea la velocidad con el tiempo.'],
       speedWarning: ['El tiempo de respuesta puede mejorar', 'La pagina esta online, pero el visitante podria notar demora.', 'Comprime assets, usa cache y revisa el rendimiento del hosting.'],
       speedFail: ['Tiempo de respuesta lento', 'La pagina tardo demasiado en responder.', 'Investiga hosting, consultas a base de datos, scripts y assets pesados.'],
+      keyword: ['Keyword encontrado', 'El contenido esperado esta presente en la respuesta de la pagina.', 'Manten este keyword estable si tus clientes dependen de el.'],
+      keywordFail: ['Keyword faltante', 'La pagina respondio, pero no encontramos el keyword esperado.', 'Revisa si cambio el contenido, si la app no renderizo o si la regla ya no aplica.'],
       https: ['HTTPS esta activo', 'La pagina usa una conexion segura.', 'Manten HTTPS activo en todas las paginas publicas.'],
       httpsWarning: ['HTTPS no esta en uso', 'La URL usa HTTP en vez de HTTPS.', 'Redirige el trafico a HTTPS e instala un certificado SSL valido.'],
       ssl: ['El certificado SSL se ve saludable', 'El certificado es valido y no esta cerca de vencer.', 'Usa renovacion automatica para evitar vencimientos inesperados.'],
@@ -304,8 +327,15 @@ function monitoringStatus(analysis) {
     ? analysis.checks.filter((check) => check.category === 'uptime')
     : [];
   const responseTimeCheck = uptimeChecks.find((check) => check.id === 'response_time');
+  const keywordCheck = Array.isArray(analysis.checks)
+    ? analysis.checks.find((check) => check.id === 'keyword')
+    : null;
 
   if (!statusCode || statusCode >= 500) {
+    return 'down';
+  }
+
+  if (keywordCheck && keywordCheck.level === 'fail') {
     return 'down';
   }
 
@@ -314,6 +344,13 @@ function monitoringStatus(analysis) {
   }
 
   return 'online';
+}
+
+function isInMaintenance(site, now = new Date()) {
+  if (!site.maintenance_starts_at || !site.maintenance_ends_at) return false;
+  const startsAt = new Date(site.maintenance_starts_at);
+  const endsAt = new Date(site.maintenance_ends_at);
+  return startsAt <= now && now <= endsAt;
 }
 
 function getSslInfo(urlObj) {
@@ -349,12 +386,14 @@ function responseText(data) {
   return buffer.toString('utf8');
 }
 
-async function sendAlertEmail({ to, site, status, analysis }) {
+async function sendAlertEmail({ to, site, status, analysis, incident }) {
   if (!RESEND_API_KEY || !to) {
     return { sent: false, reason: 'email_not_configured' };
   }
 
-  const subject = `SiteTrace alert: ${site.name} is ${status}`;
+  const subject = status === 'resolved'
+    ? `SiteTrace resolved: ${site.name} is back online`
+    : `SiteTrace alert: ${site.name} is ${status}`;
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
       <h2>SiteTrace alert</h2>
@@ -364,6 +403,7 @@ async function sendAlertEmail({ to, site, status, analysis }) {
         <li>Score: ${analysis.score}/100</li>
         <li>Status code: ${analysis.status_code}</li>
         <li>Response time: ${analysis.response_time}</li>
+        ${incident && incident.duration_seconds ? `<li>Incident duration: ${Math.round(incident.duration_seconds / 60)} minutes</li>` : ''}
       </ul>
       <p>Open your dashboard to review the full check history.</p>
     </div>
@@ -385,16 +425,89 @@ async function sendAlertEmail({ to, site, status, analysis }) {
   return { sent: true };
 }
 
+async function loadProfileEmail(userId) {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('email')
+    .eq('id', userId)
+    .single();
+  return profile && profile.email;
+}
+
+async function resolveOpenIncidents({ site, analysis }) {
+  const { data: openIncidents } = await supabaseAdmin
+    .from('incidents')
+    .select('*')
+    .eq('site_id', site.id)
+    .in('status', ['down', 'warning'])
+    .is('resolved_at', null);
+
+  const resolved = [];
+
+  for (const incident of openIncidents || []) {
+    const resolvedAt = new Date();
+    const durationSeconds = Math.max(0, Math.round((resolvedAt.getTime() - new Date(incident.created_at).getTime()) / 1000));
+    const { data: updated, error } = await supabaseAdmin
+      .from('incidents')
+      .update({
+        status: 'resolved',
+        resolved_at: resolvedAt.toISOString(),
+        duration_seconds: durationSeconds,
+        resolved_details: analysis
+      })
+      .eq('id', incident.id)
+      .select('*')
+      .single();
+
+    if (!error && updated) {
+      const email = await sendAlertEmail({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
+      resolved.push({ incident: updated, email });
+    }
+  }
+
+  return resolved;
+}
+
 async function recordIncidentIfNeeded({ site, level, analysis }) {
-  if (!supabaseAdmin || !['down', 'warning'].includes(level)) {
+  if (!supabaseAdmin) {
     return null;
   }
 
-  const previousStatus = site.last_status || 'pending';
+  if (level === 'maintenance') {
+    return { skipped: 'maintenance' };
+  }
 
-  if (previousStatus === level) {
+  if (level === 'online') {
+    return resolveOpenIncidents({ site, analysis });
+  }
+
+  if (!['down', 'warning'].includes(level)) {
     return null;
   }
+
+  const { data: recentChecks } = await supabaseAdmin
+    .from('checks')
+    .select('status, created_at')
+    .eq('site_id', site.id)
+    .order('created_at', { ascending: false })
+    .limit(2);
+
+  const previousCheck = recentChecks && recentChecks[1];
+  const confirmed = previousCheck && previousCheck.status === level;
+  if (!confirmed) {
+    return { pending_confirmation: true };
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from('incidents')
+    .select('*')
+    .eq('site_id', site.id)
+    .eq('status', level)
+    .is('resolved_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return { incident: existing, existing: true };
 
   const { data: incident, error } = await supabaseAdmin
     .from('incidents')
@@ -403,7 +516,8 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
       user_id: site.user_id,
       status: level,
       title: `${site.name} is ${level}`,
-      details: analysis
+      details: analysis,
+      confirmed_after_checks: 2
     })
     .select('*')
     .single();
@@ -413,13 +527,7 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
     return null;
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('email')
-    .eq('id', site.user_id)
-    .single();
-
-  const email = await sendAlertEmail({ to: profile && profile.email, site, status: level, analysis });
+  const email = await sendAlertEmail({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident });
   return { incident, email };
 }
 
@@ -444,7 +552,7 @@ async function requireUser(req, res, next) {
   next();
 }
 
-async function analyzeWebsite(rawUrl, locale) {
+async function analyzeWebsite(rawUrl, locale, options = {}) {
   const urlObj = normalizeUrl(rawUrl);
   const startedAt = Date.now();
   const sslPromise = getSslInfo(urlObj);
@@ -492,6 +600,14 @@ async function analyzeWebsite(rawUrl, locale) {
   if (responseTime < 1000) addCheck(checks, locale, 'uptime', 'response_time', 'pass', 12, `${responseTime}ms`, 'speed');
   else if (responseTime < 3000) addCheck(checks, locale, 'uptime', 'response_time', 'warning', 12, `${responseTime}ms`, 'speedWarning');
   else addCheck(checks, locale, 'uptime', 'response_time', 'fail', 12, `${responseTime}ms`, 'speedFail');
+
+  const keyword = typeof options.keyword === 'string' ? options.keyword.trim() : '';
+  if (keyword) {
+    const found = html.toLowerCase().includes(keyword.toLowerCase());
+    const shouldExist = options.keyword_should_exist !== false;
+    const passed = shouldExist ? found : !found;
+    addCheck(checks, locale, 'uptime', 'keyword', passed ? 'pass' : 'fail', 10, keyword, passed ? 'keyword' : 'keywordFail');
+  }
 
   if (urlObj.protocol === 'https:') addCheck(checks, locale, 'uptime', 'https', 'pass', 8, 'https', 'https');
   else addCheck(checks, locale, 'uptime', 'https', 'warning', 8, 'http', 'httpsWarning');
@@ -555,6 +671,94 @@ async function analyzeWebsite(rawUrl, locale) {
     ssl,
     checks
   };
+}
+
+async function runMonitorCheck(site, locale, userId) {
+  if (isInMaintenance(site)) {
+    const analysis = {
+      status: 'success',
+      analyzed_url: site.url,
+      final_url: site.url,
+      status_code: null,
+      page_context: 'maintenance',
+      response_time_ms: null,
+      response_time: 'maintenance',
+      title: 'Maintenance window',
+      meta_description: 'Monitoring paused during scheduled maintenance.',
+      h1_count: 0,
+      images: 0,
+      images_with_alt: 0,
+      seo_score: site.last_score || 0,
+      score: site.last_score || 0,
+      summary: { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0 },
+      ssl: null,
+      checks: []
+    };
+
+    const { data: check, error: checkError } = await supabaseAdmin
+      .from('checks')
+      .insert({
+        site_id: site.id,
+        user_id: userId || site.user_id,
+        status: 'maintenance',
+        score: analysis.score,
+        status_code: null,
+        response_time_ms: null,
+        result: analysis
+      })
+      .select('*')
+      .single();
+
+    if (checkError) throw checkError;
+
+    await supabaseAdmin
+      .from('sites')
+      .update({
+        last_status: 'maintenance',
+        last_checked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', site.id);
+
+    return { analysis, check, level: 'maintenance', incident: { skipped: 'maintenance' } };
+  }
+
+  const analysis = await analyzeWebsite(site.url, locale, {
+    keyword: site.keyword,
+    keyword_should_exist: site.keyword_should_exist
+  });
+  const level = monitoringStatus(analysis);
+
+  const { data: check, error: checkError } = await supabaseAdmin
+    .from('checks')
+    .insert({
+      site_id: site.id,
+      user_id: userId || site.user_id,
+      status: level,
+      score: analysis.score,
+      status_code: analysis.status_code,
+      response_time_ms: analysis.response_time_ms,
+      result: analysis
+    })
+    .select('*')
+    .single();
+
+  if (checkError) throw checkError;
+
+  const incident = await recordIncidentIfNeeded({ site, level, analysis });
+
+  await supabaseAdmin
+    .from('sites')
+    .update({
+      last_status: level,
+      last_score: analysis.score,
+      last_response_time_ms: analysis.response_time_ms,
+      last_checked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', site.id);
+
+  return { analysis, check, level, incident };
 }
 
 app.get('/health', (req, res) => {
@@ -641,42 +845,80 @@ app.post('/api/run-site-check', requireUser, async (req, res) => {
   }
 
   try {
-    const analysis = await analyzeWebsite(site.url, locale);
-    const level = monitoringStatus(analysis);
-
-    const { data: check, error: checkError } = await supabaseAdmin
-      .from('checks')
-      .insert({
-        site_id: site.id,
-        user_id: req.user.id,
-        status: level,
-        score: analysis.score,
-        status_code: analysis.status_code,
-        response_time_ms: analysis.response_time_ms,
-        result: analysis
-      })
-      .select('*')
-      .single();
-
-    if (checkError) throw checkError;
-
-    const incident = await recordIncidentIfNeeded({ site, level, analysis });
-
-    await supabaseAdmin
-      .from('sites')
-      .update({
-        last_status: level,
-        last_score: analysis.score,
-        last_response_time_ms: analysis.response_time_ms,
-        last_checked_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', site.id);
-
-    res.json({ status: 'success', analysis, check, incident });
+    const result = await runMonitorCheck(site, locale, req.user.id);
+    res.json({ status: 'success', ...result });
   } catch (error) {
     res.status(502).json({ status: 'error', message: messages[locale].fetch, detail: error.message });
   }
+});
+
+app.patch('/api/sites/:id', requireUser, async (req, res) => {
+  const updates = {};
+  const allowed = [
+    'name',
+    'url',
+    'monitoring_enabled',
+    'keyword',
+    'keyword_should_exist',
+    'maintenance_starts_at',
+    'maintenance_ends_at',
+    'status_page_enabled'
+  ];
+
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+      updates[key] = req.body[key] === '' ? null : req.body[key];
+    }
+  }
+
+  updates.updated_at = new Date().toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from('sites')
+    .update(updates)
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', site: data });
+});
+
+app.get('/public/status/:slug', async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Status pages are not configured' });
+  }
+
+  const { data: site, error } = await supabaseAdmin
+    .from('sites')
+    .select('id, name, url, last_status, last_score, last_response_time_ms, last_checked_at, status_page_enabled, public_slug')
+    .eq('public_slug', req.params.slug)
+    .eq('status_page_enabled', true)
+    .single();
+
+  if (error || !site) {
+    return res.status(404).json({ status: 'error', message: 'Status page not found' });
+  }
+
+  const { data: checks } = await supabaseAdmin
+    .from('checks')
+    .select('status, score, status_code, response_time_ms, created_at')
+    .eq('site_id', site.id)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const { data: incidents } = await supabaseAdmin
+    .from('incidents')
+    .select('status, title, created_at, resolved_at, duration_seconds')
+    .eq('site_id', site.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  res.json({ status: 'success', site, checks: checks || [], incidents: incidents || [] });
 });
 
 app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
@@ -727,32 +969,7 @@ app.post('/jobs/run-checks', async (req, res) => {
 
   for (const site of sites || []) {
     try {
-      const analysis = await analyzeWebsite(site.url, 'en');
-      const level = monitoringStatus(analysis);
-
-      await supabaseAdmin.from('checks').insert({
-        site_id: site.id,
-        user_id: site.user_id,
-        status: level,
-        score: analysis.score,
-        status_code: analysis.status_code,
-        response_time_ms: analysis.response_time_ms,
-        result: analysis
-      });
-
-      const incident = await recordIncidentIfNeeded({ site, level, analysis });
-
-      await supabaseAdmin
-        .from('sites')
-        .update({
-          last_status: level,
-          last_score: analysis.score,
-          last_response_time_ms: analysis.response_time_ms,
-          last_checked_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', site.id);
-
+      const { analysis, level, incident } = await runMonitorCheck(site, 'en', site.user_id);
       results.push({ site_id: site.id, status: level, score: analysis.score, incident: Boolean(incident && incident.incident) });
     } catch (error) {
       results.push({ site_id: site.id, status: 'error', error: error.message });
@@ -776,6 +993,10 @@ app.get('/signin', (req, res) => {
 
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+app.get('/status/:slug', (req, res) => {
+  res.sendFile(path.join(__dirname, 'status.html'));
 });
 
 app.get('*', (req, res) => {

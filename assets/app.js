@@ -41,7 +41,15 @@ function statusCopy(status) {
   if (status === 'online') return 'Responding normally';
   if (status === 'warning') return 'Needs attention';
   if (status === 'down') return 'Currently down';
+  if (status === 'maintenance') return 'Maintenance window';
   return 'Waiting for first check';
+}
+
+function uptimePercent(checks) {
+  const counted = checks.filter((check) => ['online', 'warning', 'down'].includes(check.status));
+  if (!counted.length) return '-';
+  const up = counted.filter((check) => check.status === 'online' || check.status === 'warning').length;
+  return `${((up / counted.length) * 100).toFixed(1)}%`;
 }
 
 async function initSupabase() {
@@ -229,6 +237,10 @@ function renderSiteDetail(site) {
   const lastDown = checks.find((check) => check.status === 'down');
   const incidents = checks.filter((check) => check.status === 'down').length;
   const warnings = checks.filter((check) => check.status === 'warning').length;
+  const averageResponse = checks.filter((check) => Number(check.response_time_ms) > 0);
+  const avgMs = averageResponse.length
+    ? `${Math.round(averageResponse.reduce((sum, check) => sum + Number(check.response_time_ms || 0), 0) / averageResponse.length)}ms`
+    : '-';
   const status = statusLabel(site.last_status);
   const latestResult = latest && latest.result ? latest.result : null;
   const importantChecks = latestResult && Array.isArray(latestResult.checks)
@@ -240,8 +252,10 @@ function renderSiteDetail(site) {
     : '<div class="empty subtle">No open recommendations from the latest check.</div>';
 
   const historyHtml = checks.length
-    ? checks.map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} · ${check.score || '-'} / 100 · ${check.response_time_ms || '-'}ms · HTTP ${check.status_code || '-'}</small></div></div>`).join('')
+    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || '-'}</small></div></div>`).join('')
     : '<div class="empty subtle">Run the first check to start history.</div>';
+  const bars = checks.slice(0, 24).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
+  const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
 
   detail.innerHTML = `
     <div class="detail-hero">
@@ -259,12 +273,24 @@ function renderSiteDetail(site) {
     </div>
     <div class="detail-metrics">
       <div class="dash-card"><span class="muted">Current status</span><h3>${escapeHtml(status)}</h3></div>
+      <div class="dash-card"><span class="muted">Uptime sample</span><h3>${uptimePercent(checks)}</h3></div>
       <div class="dash-card"><span class="muted">Score</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
       <div class="dash-card"><span class="muted">Response</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">Avg response</span><h3>${avgMs}</h3></div>
       <div class="dash-card"><span class="muted">Last check</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
       <div class="dash-card"><span class="muted">Since last down</span><h3>${formatDurationSince(lastDown && lastDown.created_at)}</h3></div>
-      <div class="dash-card"><span class="muted">Recent incidents</span><h3>${incidents} down · ${warnings} warn</h3></div>
+      <div class="dash-card"><span class="muted">Recent incidents</span><h3>${incidents} down - ${warnings} warn</h3></div>
     </div>
+    <div class="uptime-strip">${bars || '<span class="muted">No uptime samples yet.</span>'}</div>
+    <form class="monitor-settings" id="monitorSettingsForm">
+      <div class="settings-head"><strong>Monitor settings</strong><span class="muted">Keyword checks, maintenance, public status.</span></div>
+      <label><span>Keyword must appear</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="optional text to monitor"></label>
+      <label><span>Maintenance starts</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
+      <label><span>Maintenance ends</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
+      <label class="toggle-row"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''}><span>Enable public status page</span></label>
+      ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
+      <button class="button secondary" type="submit">Save settings</button>
+    </form>
     <div class="detail-grid">
       <div class="panel flat-panel"><div class="panel-top"><strong>Latest recommendations</strong></div><div class="check-list">${issueHtml}</div></div>
       <div class="panel flat-panel"><div class="panel-top"><strong>Recent checks</strong></div><div class="timeline">${historyHtml}</div></div>
@@ -291,7 +317,7 @@ async function initDashboard() {
     if (error) throw error;
     event.target.reset();
     await loadDashboard();
-    document.getElementById('historyPanel').innerHTML = '<div class="empty">Saved.</div>';
+    document.getElementById('siteDetail').insertAdjacentHTML('afterbegin', '<div class="empty subtle">Saved.</div>');
   });
   document.getElementById('sitesList').addEventListener('click', async (event) => {
     const selectId = event.target.closest('[data-select]') && event.target.closest('[data-select]').dataset.select;
@@ -329,6 +355,53 @@ async function initDashboard() {
       detail.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
     }
   });
+  document.getElementById('siteDetail').addEventListener('submit', async (event) => {
+    if (event.target.id !== 'monitorSettingsForm') return;
+    event.preventDefault();
+    const siteId = state.selectedSiteId;
+    const payload = {
+      keyword: document.getElementById('keywordInput').value.trim() || null,
+      keyword_should_exist: true,
+      maintenance_starts_at: document.getElementById('maintenanceStartInput').value ? new Date(document.getElementById('maintenanceStartInput').value).toISOString() : null,
+      maintenance_ends_at: document.getElementById('maintenanceEndInput').value ? new Date(document.getElementById('maintenanceEndInput').value).toISOString() : null,
+      status_page_enabled: document.getElementById('statusPageInput').checked
+    };
+    const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Could not save settings');
+    await loadDashboard();
+  });
+}
+
+async function initStatusPage() {
+  if (page !== 'status') return;
+  const slug = window.location.pathname.split('/').filter(Boolean).pop();
+  const target = document.getElementById('publicStatusRoot');
+  const response = await fetch(apiPath(`/public/status/${slug}`));
+  const data = await response.json();
+  if (!response.ok) {
+    target.innerHTML = '<div class="empty">Status page not found.</div>';
+    return;
+  }
+  const checks = data.checks || [];
+  const incidents = data.incidents || [];
+  const site = data.site;
+  const status = statusLabel(site.last_status);
+  const bars = checks.slice(0, 50).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
+  target.innerHTML = `
+    <div class="public-status-card">
+      <div class="detail-hero">
+        <div><p class="eyebrow compact">Public status</p><h1>${escapeHtml(site.name)}</h1><p class="muted">${escapeHtml(site.url)}</p></div>
+        <span class="status-pill ${status}"><span class="dot ${status === 'online' ? '' : status}"></span>${escapeHtml(statusCopy(status))}</span>
+      </div>
+      <div class="detail-metrics">
+        <div class="dash-card"><span class="muted">Uptime sample</span><h3>${uptimePercent(checks)}</h3></div>
+        <div class="dash-card"><span class="muted">Response</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
+        <div class="dash-card"><span class="muted">Last check</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
+      </div>
+      <div class="uptime-strip">${bars}</div>
+      <div class="panel flat-panel"><div class="panel-top"><strong>Incident history</strong></div><div class="timeline">${incidents.length ? incidents.map((incident) => `<div class="timeline-row"><span class="dot ${incident.status === 'resolved' ? '' : incident.status}"></span><div><strong>${escapeHtml(incident.title)}</strong><small>${formatDateTime(incident.created_at)}${incident.resolved_at ? ` - resolved ${formatDateTime(incident.resolved_at)}` : ''}</small></div></div>`).join('') : '<div class="empty subtle">No incidents reported.</div>'}</div></div>
+    </div>`;
 }
 
 async function initBilling() {
@@ -356,3 +429,4 @@ initAnalyzer();
 initAuth().catch(renderError);
 initDashboard().catch(renderError);
 initBilling().catch(renderError);
+initStatusPage().catch(renderError);
