@@ -225,7 +225,8 @@ function getPageContext(urlObj, title, metaDescription) {
     'linkedin.com',
     'github.com',
     'figma.com',
-    'notion.so'
+    'notion.so',
+    'steampowered.com'
   ];
   const text = `${title} ${metaDescription}`.toLowerCase();
   const appLikeWords = ['watch', 'video', 'stream', 'playlist', 'dashboard', 'sign in', 'login', 'app'];
@@ -289,6 +290,24 @@ function summarize(checks) {
     summary[check.category] = (summary[check.category] || 0) + 1;
     return summary;
   }, { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0 });
+}
+
+function monitoringStatus(analysis) {
+  const statusCode = Number(analysis.status_code || 0);
+  const uptimeChecks = Array.isArray(analysis.checks)
+    ? analysis.checks.filter((check) => check.category === 'uptime')
+    : [];
+  const responseTimeCheck = uptimeChecks.find((check) => check.id === 'response_time');
+
+  if (!statusCode || statusCode >= 500) {
+    return 'down';
+  }
+
+  if (statusCode >= 400 || (responseTimeCheck && responseTimeCheck.level === 'fail')) {
+    return 'warning';
+  }
+
+  return 'online';
 }
 
 function getSslInfo(urlObj) {
@@ -609,7 +628,7 @@ app.post('/api/run-site-check', requireUser, async (req, res) => {
 
   try {
     const analysis = await analyzeWebsite(site.url, locale);
-    const level = analysis.summary.fail > 0 ? 'down' : analysis.summary.warning > 0 ? 'warning' : 'online';
+    const level = monitoringStatus(analysis);
 
     const { data: check, error: checkError } = await supabaseAdmin
       .from('checks')
@@ -695,7 +714,7 @@ app.post('/jobs/run-checks', async (req, res) => {
   for (const site of sites || []) {
     try {
       const analysis = await analyzeWebsite(site.url, 'en');
-      const level = analysis.summary.fail > 0 ? 'down' : analysis.summary.warning > 0 ? 'warning' : 'online';
+      const level = monitoringStatus(analysis);
 
       await supabaseAdmin.from('checks').insert({
         site_id: site.id,
