@@ -116,10 +116,12 @@ const messages = {
       canonical: ['Canonical tag found', 'The page declares its preferred URL.', 'Keep canonical URLs consistent.'],
       canonicalWarning: ['Canonical tag missing', 'Duplicate URL versions may compete in search.', 'Add a canonical link tag.'],
       viewport: ['Mobile viewport configured', 'The page is prepared for responsive layouts.', 'Test important pages on mobile sizes.'],
+      viewportPlatform: ['Viewport is platform-managed', 'Large app and media platforms can serve different markup to bots, regions, or devices.', 'Treat this as informational unless you own the platform template.'],
       viewportFail: ['Mobile viewport missing', 'Mobile rendering may be unreliable.', 'Add a viewport meta tag.'],
       lang: ['Language attribute found', 'The document declares a language.', 'Keep the html lang attribute accurate.'],
       langWarning: ['Language attribute missing', 'Browsers and accessibility tools may not know the page language.', 'Add the correct lang attribute to the html tag.'],
       og: ['Social preview tags found', 'The page has Open Graph metadata for sharing.', 'Add image, title, and description tags for richer previews.'],
+      ogPlatform: ['Social preview is platform-managed', 'Large platforms often control previews with app-specific metadata or dynamic rendering.', 'Only audit Open Graph manually if you manage this page or campaign landing.'],
       ogWarning: ['Social preview tags are incomplete', 'Shared links may look plain or inconsistent.', 'Add og:title, og:description, and og:image.'],
       robots: ['Page is indexable', 'No obvious noindex directive was found.', 'Use noindex only for pages you want excluded from search.'],
       robotsFail: ['Page may be blocked from indexing', 'A noindex directive was found.', 'Remove noindex if this page should appear in search.'],
@@ -163,10 +165,12 @@ const messages = {
       canonical: ['Canonical encontrado', 'La pagina declara su URL preferida.', 'Manten las URLs canonical consistentes.'],
       canonicalWarning: ['Falta canonical', 'Versiones duplicadas de una URL podrian competir en buscadores.', 'Agrega una etiqueta canonical.'],
       viewport: ['Viewport movil configurado', 'La pagina esta preparada para layouts responsivos.', 'Prueba las paginas importantes en tamanos moviles.'],
+      viewportPlatform: ['El viewport depende de la plataforma', 'Plataformas grandes de app o media pueden entregar HTML distinto segun bot, region o dispositivo.', 'Tomalo como informativo a menos que controles el template de la plataforma.'],
       viewportFail: ['Falta viewport movil', 'La vista movil podria renderizar de forma incorrecta.', 'Agrega una etiqueta meta viewport.'],
       lang: ['Atributo de idioma encontrado', 'El documento declara un idioma.', 'Manten el atributo lang correcto.'],
       langWarning: ['Falta atributo de idioma', 'Navegadores y herramientas de accesibilidad podrian no saber el idioma.', 'Agrega el atributo lang correcto en html.'],
       og: ['Tags de vista social encontrados', 'La pagina tiene metadata Open Graph para compartir.', 'Agrega imagen, titulo y descripcion para mejores previews.'],
+      ogPlatform: ['La vista social depende de la plataforma', 'Plataformas grandes suelen controlar previews con metadata propia o render dinamico.', 'Audita Open Graph manualmente solo si administras esta pagina o landing de campana.'],
       ogWarning: ['La vista social esta incompleta', 'Los enlaces compartidos podrian verse simples o inconsistentes.', 'Agrega og:title, og:description y og:image.'],
       robots: ['La pagina parece indexable', 'No encontramos una directiva noindex evidente.', 'Usa noindex solo en paginas que quieras excluir de busqueda.'],
       robotsFail: ['La pagina podria estar bloqueada para indexacion', 'Encontramos una directiva noindex.', 'Quita noindex si esta pagina debe aparecer en buscadores.'],
@@ -514,9 +518,16 @@ async function analyzeWebsite(rawUrl, locale) {
   else addCheck(checks, locale, 'seo', 'image_alt', 'fail', 7, `${imagesWithAlt}/${images}`, 'altFail');
 
   addCheck(checks, locale, 'seo', 'canonical', canonical ? 'pass' : 'warning', 4, canonical || 'Missing', canonical ? 'canonical' : 'canonicalWarning');
-  addCheck(checks, locale, 'seo', 'viewport', viewport ? 'pass' : 'fail', 4, viewport || 'Missing', viewport ? 'viewport' : 'viewportFail');
+  if (viewport) addCheck(checks, locale, 'seo', 'viewport', 'pass', 4, viewport, 'viewport');
+  else if (pageContext !== 'standard') addCheck(checks, locale, 'seo', 'viewport', 'pass', 1, 'Platform-managed', 'viewportPlatform');
+  else addCheck(checks, locale, 'seo', 'viewport', 'fail', 4, 'Missing', 'viewportFail');
+
   addCheck(checks, locale, 'seo', 'lang', htmlLang ? 'pass' : 'warning', 3, htmlLang || 'Missing', htmlLang ? 'lang' : 'langWarning');
-  addCheck(checks, locale, 'seo', 'open_graph', ogCount >= 3 ? 'pass' : 'warning', 3, ogCount, ogCount >= 3 ? 'og' : 'ogWarning');
+
+  if (ogCount >= 3) addCheck(checks, locale, 'seo', 'open_graph', 'pass', 3, ogCount, 'og');
+  else if (pageContext !== 'standard') addCheck(checks, locale, 'seo', 'open_graph', 'pass', 1, ogCount, 'ogPlatform');
+  else addCheck(checks, locale, 'seo', 'open_graph', 'warning', 3, ogCount, 'ogWarning');
+
   addCheck(checks, locale, 'seo', 'robots_indexing', robots.includes('noindex') ? 'fail' : 'pass', 3, robots || 'indexable', robots.includes('noindex') ? 'robotsFail' : 'robots');
 
   addCheck(checks, locale, 'security', 'hsts', headers['strict-transport-security'] ? 'pass' : 'warning', 3, headers['strict-transport-security'] ? 'Present' : 'Missing', headers['strict-transport-security'] ? 'hsts' : 'hstsWarning');
