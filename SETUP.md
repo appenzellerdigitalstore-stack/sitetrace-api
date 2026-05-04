@@ -69,7 +69,7 @@ Recommended interval:
 - MVP: every 5 minutes
 - Later: plan-aware scheduling
 
-## 4. Email Alerts
+## 4. Alerts
 
 Create a Resend account and verify your sending domain.
 
@@ -80,12 +80,19 @@ RESEND_API_KEY=
 ALERT_FROM_EMAIL=SiteTrace <alerts@sitetrace.it.com>
 ```
 
-If Resend is not configured, SiteTrace still records incidents but skips email delivery.
+For Slack and Microsoft Teams, create incoming webhook URLs and add either or both:
+
+```bash
+SLACK_WEBHOOK_URL=
+TEAMS_WEBHOOK_URL=
+```
+
+If no alert provider is configured, SiteTrace still records incidents but skips external delivery.
 
 Alerts are intentionally conservative:
 
 - a down or warning incident opens only after two matching checks
-- resolved emails are sent when a monitor returns to online
+- resolved alerts are sent when a monitor returns to online
 - maintenance windows skip incident creation
 
 ## 5. Public Status Pages

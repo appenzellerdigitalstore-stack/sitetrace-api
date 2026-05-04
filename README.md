@@ -42,7 +42,7 @@ It supports:
 - Maintenance windows
 - Stripe Checkout buttons for Starter and Agency
 - Cron endpoint for scheduled checks
-- Incident lifecycle records and optional email alerts through Resend
+- Incident lifecycle records and optional alerts through Resend, Slack, or Microsoft Teams webhooks
 
 For the full activation sequence, see `SETUP.md`.
 
@@ -99,13 +99,15 @@ POST https://sitetrace-api.onrender.com/jobs/run-checks
 Authorization: Bearer long-random-secret
 ```
 
-### Optional Email Alerts
+### Optional Alerts
 
-Add these if you want SiteTrace to send email alerts when a monitored site changes into `down` or `warning`:
+Add these if you want SiteTrace to send alerts when a monitored site changes into `down` or `warning`, and again when it resolves:
 
 ```bash
 RESEND_API_KEY=...
 ALERT_FROM_EMAIL=SiteTrace <alerts@sitetrace.it.com>
+SLACK_WEBHOOK_URL=...
+TEAMS_WEBHOOK_URL=...
 ```
 
 ## Local Development

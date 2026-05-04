@@ -24,6 +24,8 @@ const STRIPE_AGENCY_PRICE_ID = process.env.STRIPE_AGENCY_PRICE_ID || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@sitetrace.it.com>';
+const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
+const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
 
 const requestCounts = new Map();
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -425,6 +427,75 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
   return { sent: true };
 }
 
+function incidentText({ site, status, analysis, incident }) {
+  const statusLabel = status === 'resolved' ? 'back online' : status;
+  const lines = [
+    `SiteTrace: ${site.name} is ${statusLabel}`,
+    `URL: ${site.url}`,
+    `Status code: ${analysis.status_code || '-'}`,
+    `Response time: ${analysis.response_time || '-'}`,
+    `Score: ${analysis.score || '-'}/100`
+  ];
+
+  if (incident && incident.duration_seconds) {
+    lines.push(`Duration: ${Math.round(incident.duration_seconds / 60)} minutes`);
+  }
+
+  if (site.public_slug) {
+    lines.push(`Status page: ${APP_URL}/status/${site.public_slug}`);
+  }
+
+  return lines.join('\n');
+}
+
+async function postJsonWebhook(url, payload) {
+  if (!url) return { sent: false, reason: 'not_configured' };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    return { sent: false, reason: await response.text() };
+  }
+
+  return { sent: true };
+}
+
+async function sendSlackNotification(context) {
+  if (!SLACK_WEBHOOK_URL) return { sent: false, reason: 'slack_not_configured' };
+  const text = incidentText(context);
+  return postJsonWebhook(SLACK_WEBHOOK_URL, {
+    text,
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text: `*${context.site.name}* is *${context.status === 'resolved' ? 'back online' : context.status}*` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `URL: ${context.site.url}\nHTTP: ${context.analysis.status_code || '-'} | Response: ${context.analysis.response_time || '-'} | Score: ${context.analysis.score || '-'}/100` } },
+      ...(context.site.public_slug ? [{ type: 'section', text: { type: 'mrkdwn', text: `<${APP_URL}/status/${context.site.public_slug}|Open public status page>` } }] : [])
+    ]
+  });
+}
+
+async function sendTeamsNotification(context) {
+  if (!TEAMS_WEBHOOK_URL) return { sent: false, reason: 'teams_not_configured' };
+  const text = incidentText(context).replace(/\n/g, '\n\n');
+  return postJsonWebhook(TEAMS_WEBHOOK_URL, {
+    type: 'message',
+    text
+  });
+}
+
+async function sendIncidentNotifications({ to, site, status, analysis, incident }) {
+  const [email, slack, teams] = await Promise.all([
+    sendAlertEmail({ to, site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
+    sendSlackNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
+    sendTeamsNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
+  ]);
+
+  return { email, slack, teams };
+}
+
 async function loadProfileEmail(userId) {
   const { data: profile } = await supabaseAdmin
     .from('profiles')
@@ -460,8 +531,8 @@ async function resolveOpenIncidents({ site, analysis }) {
       .single();
 
     if (!error && updated) {
-      const email = await sendAlertEmail({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
-      resolved.push({ incident: updated, email });
+      const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
+      resolved.push({ incident: updated, notifications });
     }
   }
 
@@ -527,8 +598,8 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
     return null;
   }
 
-  const email = await sendAlertEmail({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident });
-  return { incident, email };
+  const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident });
+  return { incident, notifications };
 }
 
 async function requireUser(req, res, next) {
@@ -803,7 +874,7 @@ app.get('/config', (req, res) => {
     supabase_url: SUPABASE_URL,
     supabase_anon_key: SUPABASE_ANON_KEY,
     billing_enabled: Boolean(stripe && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
-    alerts_enabled: Boolean(RESEND_API_KEY),
+    alerts_enabled: Boolean(RESEND_API_KEY || SLACK_WEBHOOK_URL || TEAMS_WEBHOOK_URL),
     plans: {
       free: { sites: 1, interval_minutes: 60, history_days: 1 },
       starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
