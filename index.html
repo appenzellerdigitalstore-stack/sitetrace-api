@@ -356,8 +356,11 @@
     };
     let currentLang = localStorage.getItem('sitetrace_lang') || 'en';
 
-    const apiBase = '';
-    const scanUrl = '/analyze';
+    const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+      ? ''
+      : 'https://sitetrace-api.onrender.com';
+    const apiPath = (path) => `${apiBase}${path}`;
+    const scanUrl = apiPath('/analyze');
     const t = (key) => translations[currentLang][key] || translations.en[key] || key;
     const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 
@@ -423,7 +426,7 @@
 
     async function loadDashboard() {
       if (!state.supabase || !state.session) return;
-      const me = await fetch('/api/me', { headers: authHeaders() }).then((res) => res.json());
+      const me = await fetch(apiPath('/api/me'), { headers: authHeaders() }).then((res) => res.json());
       state.profile = me.profile;
 
       const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
@@ -434,7 +437,7 @@
 
     async function runSiteCheck(siteId) {
       els.historyPanel.innerHTML = `<div class="empty">${t('loading')}</div>`;
-      const response = await fetch('/api/run-site-check', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: currentLang }) });
+      const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: currentLang }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Check failed');
       renderResults(data.analysis);
@@ -460,7 +463,7 @@
         return;
       }
 
-      const response = await fetch('/billing/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan }) });
+      const response = await fetch(apiPath('/billing/create-checkout-session'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Billing is not configured');
       window.location.href = data.url;
@@ -541,7 +544,7 @@
 
     async function init() {
       setLanguage(currentLang);
-      state.config = await fetch('/config').then((res) => res.json());
+      state.config = await fetch(apiPath('/config')).then((res) => res.json());
       if (state.config.supabase_url && state.config.supabase_anon_key && window.supabase) {
         state.supabase = window.supabase.createClient(state.config.supabase_url, state.config.supabase_anon_key);
         const { data } = await state.supabase.auth.getSession();
