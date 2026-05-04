@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>API - SiteTrace</title>
+  <title>How SiteTrace Works</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body data-page="api">
@@ -12,7 +12,7 @@
       <a class="brand" href="/"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
       <div class="nav-links">
         <a href="/pricing">Pricing</a>
-        <a class="active" href="/api">API</a>
+        <a class="active" href="/api">How it works</a>
         <a href="/dashboard">Dashboard</a>
         <a class="button small secondary" href="/signin">Sign in</a>
       </div>
@@ -20,77 +20,15 @@
   </nav>
   <main class="page-shell">
     <div class="container narrow">
-      <p class="eyebrow">API</p>
-      <h1>Use the same analyzer behind SiteTrace.</h1>
-      <p class="lead">The public endpoint accepts a website URL and returns uptime, speed, SSL, SEO, security header checks, a score, and actionable recommendations.</p>
-
-      <div class="api-meta">
-        <div><span>Base URL</span><strong>https://sitetrace-api.onrender.com</strong></div>
-        <div><span>Public endpoint</span><strong>POST /analyze</strong></div>
-        <div><span>Auth</span><strong>Not required for manual scans</strong></div>
-      </div>
-
-      <div class="code-card">
-        <pre><code>curl -X POST https://sitetrace-api.onrender.com/analyze \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com",
-    "locale": "en"
-  }'</code></pre>
-      </div>
-
-      <div class="code-card">
-        <pre><code>{
-  "status": "success",
-  "analyzed_url": "https://example.com/",
-  "final_url": "https://example.com/",
-  "status_code": 200,
-  "response_time_ms": 243,
-  "response_time": "243ms",
-  "score": 89,
-  "page_context": "standard",
-  "summary": {
-    "pass": 10,
-    "warning": 3,
-    "fail": 0,
-    "uptime": 4,
-    "seo": 8,
-    "security": 3
-  },
-  "ssl": {
-    "issuer": "Google Trust Services",
-    "expires_at": "2026-08-20T12:00:00.000Z",
-    "days_remaining": 108
-  },
-  "checks": [
-    {
-      "category": "uptime",
-      "id": "status_code",
-      "level": "pass",
-      "value": 200,
-      "title": "Site is reachable",
-      "recommendation": "Keep monitoring status changes so you catch outages quickly."
-    }
-  ],
-  "rate_limit": {
-    "remaining": 19,
-    "reset_at": "2026-05-04T23:00:00.000Z"
-  }
-}</code></pre>
-      </div>
+      <p class="eyebrow">How it works</p>
+      <h1>SiteTrace watches the signals that tell you whether a site is healthy.</h1>
+      <p class="lead">Each check combines availability, speed, SSL, SEO basics, and security headers into a clear status so owners can react before small issues become expensive.</p>
 
       <div class="features two">
-        <article class="feature">
-          <h3>Request body</h3>
-          <div class="mini-table">
-            <div><strong>url</strong><span>Required. Public http or https URL.</span></div>
-            <div><strong>locale</strong><span>Optional. Use <code>en</code> or <code>es</code> for recommendations.</span></div>
-          </div>
-        </article>
-        <article class="feature">
-          <h3>Notes</h3>
-          <p>The dashboard endpoints are session-based app endpoints. Public customer API keys, webhooks, and usage dashboards can be added after billing is enabled.</p>
-        </article>
+        <article class="feature"><h3>Availability</h3><p>SiteTrace checks whether the site returns a usable HTTP response and separates real downtime from SEO or content recommendations.</p></article>
+        <article class="feature"><h3>Performance</h3><p>Response time is tracked on every run so slowdowns are visible before customers start complaining.</p></article>
+        <article class="feature"><h3>SSL and security</h3><p>The monitor checks HTTPS, certificate health, HSTS, CSP, and frame protection for a stronger baseline.</p></article>
+        <article class="feature"><h3>SEO hygiene</h3><p>Title, meta description, H1 structure, image ALT text, canonical tags, viewport, language, Open Graph, and indexing signals are reviewed.</p></article>
       </div>
     </div>
   </main>

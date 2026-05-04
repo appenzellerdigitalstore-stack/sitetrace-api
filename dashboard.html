@@ -13,7 +13,7 @@
       <a class="brand" href="/"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
       <div class="nav-links">
         <a href="/pricing">Pricing</a>
-        <a href="/api">API</a>
+        <a href="/api">How it works</a>
         <a class="active" href="/dashboard">Dashboard</a>
         <button class="link-button hidden" id="signOutBtn" type="button">Sign out</button>
       </div>
@@ -23,7 +23,7 @@
     <aside class="sidebar">
       <a class="side-link active" href="/dashboard">Overview</a>
       <a class="side-link" href="/pricing">Billing</a>
-      <a class="side-link" href="/api">API</a>
+      <a class="side-link" href="/api">How it works</a>
     </aside>
     <section class="dashboard-main">
       <div id="setupWarning" class="feature setup-warning hidden">
@@ -42,7 +42,7 @@
           <div>
             <p class="eyebrow">Customer dashboard</p>
             <h1>Monitoring overview</h1>
-            <p class="muted">Save sites, run checks manually, and review recent status history.</p>
+            <p class="muted">Select a site to review uptime, last incident, technical score, and recent checks.</p>
           </div>
           <button class="button secondary" id="refreshDashboardBtn" type="button">Refresh</button>
         </div>
@@ -56,15 +56,23 @@
           <input id="siteUrl" type="url" placeholder="https://example.com" required>
           <button class="button" type="submit">Add site</button>
         </form>
-        <div class="panel">
-          <div class="panel-top"><strong>Monitored sites</strong></div>
-          <div id="sitesList" class="table-list"></div>
+
+        <div class="monitor-layout">
+          <aside class="site-list-panel">
+            <div class="panel-top compact-panel"><strong>Monitored sites</strong><span id="siteListCount" class="muted">0</span></div>
+            <div id="sitesList" class="site-list"></div>
+          </aside>
+
+          <section class="site-detail-panel">
+            <div id="siteDetail" class="site-detail empty-state">
+              <h2>No site selected</h2>
+              <p>Choose a monitored site from the left to see status, uptime context, and recent checks.</p>
+            </div>
+          </section>
         </div>
-        <div id="historyPanel" class="history"></div>
       </div>
     </section>
   </main>
-  <section id="results" class="container result-area" aria-live="polite"></section>
   <script src="/assets/app.js"></script>
 </body>
 </html>

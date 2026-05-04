@@ -3,7 +3,7 @@ const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   : 'https://sitetrace-api.onrender.com';
 const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
-const state = { config: null, supabase: null, session: null, profile: null, sites: [] };
+const state = { config: null, supabase: null, session: null, profile: null, sites: [], selectedSiteId: null, selectedChecks: [] };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 
 if (page === 'home' && ['#pricing', '#api', '#dashboard'].includes(window.location.hash)) {
@@ -19,6 +19,29 @@ function statusLabel(level) {
   if (level === 'warning') return 'warning';
   if (level === 'down') return 'down';
   return level || 'pending';
+}
+
+function formatDateTime(value) {
+  return value ? new Date(value).toLocaleString() : '-';
+}
+
+function formatDurationSince(value) {
+  if (!value) return 'No downtime recorded';
+  const diff = Math.max(0, Date.now() - new Date(value).getTime());
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h`;
+}
+
+function statusCopy(status) {
+  if (status === 'online') return 'Responding normally';
+  if (status === 'warning') return 'Needs attention';
+  if (status === 'down') return 'Currently down';
+  return 'Waiting for first check';
 }
 
 async function initSupabase() {
@@ -51,7 +74,7 @@ function renderResults(data) {
 }
 
 function renderError(message) {
-  const target = document.getElementById('results') || document.getElementById('pageMessage');
+  const target = document.getElementById('results') || document.getElementById('pageMessage') || document.getElementById('siteDetail');
   if (target) target.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
 }
 
@@ -132,6 +155,11 @@ async function loadDashboard() {
   const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
   if (error) throw error;
   state.sites = sites || [];
+  if (!state.selectedSiteId && state.sites.length) state.selectedSiteId = state.sites[0].id;
+  if (state.selectedSiteId && !state.sites.some((site) => site.id === state.selectedSiteId)) {
+    state.selectedSiteId = state.sites.length ? state.sites[0].id : null;
+  }
+  if (state.selectedSiteId) await loadSelectedChecks();
   renderDashboard();
 }
 
@@ -141,31 +169,106 @@ function renderDashboard() {
   const lastSite = state.sites.find((site) => site.last_checked_at);
   document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
   const list = document.getElementById('sitesList');
+  const listCount = document.getElementById('siteListCount');
+  if (listCount) listCount.textContent = state.sites.length;
   if (!state.sites.length) {
     list.innerHTML = '<div class="empty">No monitored sites yet.</div>';
+    renderSiteDetail(null);
     return;
   }
-  list.innerHTML = state.sites.map((site) => `<div class="site-row"><div><strong>${escapeHtml(site.name)}</strong><span class="muted">${escapeHtml(site.url)}</span></div><span class="level-badge ${statusLabel(site.last_status)}">${escapeHtml(statusLabel(site.last_status))}</span><span class="muted">${site.last_score ? `${site.last_score}/100` : '-'}</span><div><button class="button secondary" data-run="${site.id}">Run check</button> <button class="button secondary" data-history="${site.id}">History</button> <button class="button danger" data-delete="${site.id}">Delete</button></div></div>`).join('');
+  list.innerHTML = state.sites.map((site) => {
+    const active = site.id === state.selectedSiteId ? ' active' : '';
+    const status = statusLabel(site.last_status);
+    return `<button class="site-list-item${active}" type="button" data-select="${site.id}"><span class="dot ${status === 'online' ? '' : status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${status}">${escapeHtml(status)}</em></button>`;
+  }).join('');
+  renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
 }
 
 async function runSiteCheck(siteId) {
-  document.getElementById('historyPanel').innerHTML = '<div class="empty">Analyzing your website...</div>';
+  const detail = document.getElementById('siteDetail');
+  if (detail) detail.classList.add('is-loading');
   const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: 'en' }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Check failed');
-  renderResults(data.analysis);
   await loadDashboard();
+}
+
+async function loadSelectedChecks() {
+  if (!state.selectedSiteId) {
+    state.selectedChecks = [];
+    return;
+  }
+  const { data, error } = await state.supabase.from('checks').select('*').eq('site_id', state.selectedSiteId).order('created_at', { ascending: false }).limit(50);
+  if (error) throw error;
+  state.selectedChecks = data || [];
 }
 
 async function showHistory(siteId) {
   const { data, error } = await state.supabase.from('checks').select('*').eq('site_id', siteId).order('created_at', { ascending: false }).limit(10);
   if (error) throw error;
-  const history = document.getElementById('historyPanel');
+  const history = document.getElementById('siteDetail');
   if (!data.length) {
     history.innerHTML = '<div class="empty">No check history yet.</div>';
     return;
   }
   history.innerHTML = `<div class="check-list">${data.map((check) => `<div class="check"><span class="dot ${check.status}"></span><div><p class="check-title">${new Date(check.created_at).toLocaleString()} <span class="level-badge ${check.status}">${escapeHtml(check.status)}</span></p><p class="check-copy">${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || '-'}</p></div><span class="check-value">${escapeHtml(check.result && check.result.page_context)}</span></div>`).join('')}</div>`;
+}
+
+function renderSiteDetail(site) {
+  const detail = document.getElementById('siteDetail');
+  if (!detail) return;
+  detail.classList.remove('empty-state', 'is-loading');
+  if (!site) {
+    detail.classList.add('empty-state');
+    detail.innerHTML = '<h2>No site selected</h2><p>Choose a monitored site from the left to see status, uptime context, and recent checks.</p>';
+    return;
+  }
+
+  const checks = state.selectedChecks || [];
+  const latest = checks[0];
+  const lastDown = checks.find((check) => check.status === 'down');
+  const incidents = checks.filter((check) => check.status === 'down').length;
+  const warnings = checks.filter((check) => check.status === 'warning').length;
+  const status = statusLabel(site.last_status);
+  const latestResult = latest && latest.result ? latest.result : null;
+  const importantChecks = latestResult && Array.isArray(latestResult.checks)
+    ? latestResult.checks.filter((check) => check.level !== 'pass').slice(0, 5)
+    : [];
+
+  const issueHtml = importantChecks.length
+    ? importantChecks.map((check) => `<div class="check compact-check"><span class="dot ${check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('')
+    : '<div class="empty subtle">No open recommendations from the latest check.</div>';
+
+  const historyHtml = checks.length
+    ? checks.map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} · ${check.score || '-'} / 100 · ${check.response_time_ms || '-'}ms · HTTP ${check.status_code || '-'}</small></div></div>`).join('')
+    : '<div class="empty subtle">Run the first check to start history.</div>';
+
+  detail.innerHTML = `
+    <div class="detail-hero">
+      <div>
+        <p class="eyebrow compact">Selected monitor</p>
+        <h2>${escapeHtml(site.name)}</h2>
+        <p class="muted">${escapeHtml(site.url)}</p>
+      </div>
+      <span class="status-pill ${status}"><span class="dot ${status === 'online' ? '' : status}"></span>${escapeHtml(statusCopy(status))}</span>
+    </div>
+    <div class="detail-actions">
+      <button class="button" type="button" data-run="${site.id}">Run check</button>
+      <button class="button secondary" type="button" data-refresh-detail="${site.id}">Refresh history</button>
+      <button class="button danger" type="button" data-delete="${site.id}">Delete</button>
+    </div>
+    <div class="detail-metrics">
+      <div class="dash-card"><span class="muted">Current status</span><h3>${escapeHtml(status)}</h3></div>
+      <div class="dash-card"><span class="muted">Score</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">Response</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">Last check</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
+      <div class="dash-card"><span class="muted">Since last down</span><h3>${formatDurationSince(lastDown && lastDown.created_at)}</h3></div>
+      <div class="dash-card"><span class="muted">Recent incidents</span><h3>${incidents} down · ${warnings} warn</h3></div>
+    </div>
+    <div class="detail-grid">
+      <div class="panel flat-panel"><div class="panel-top"><strong>Latest recommendations</strong></div><div class="check-list">${issueHtml}</div></div>
+      <div class="panel flat-panel"><div class="panel-top"><strong>Recent checks</strong></div><div class="timeline">${historyHtml}</div></div>
+    </div>`;
 }
 
 async function initDashboard() {
@@ -191,19 +294,39 @@ async function initDashboard() {
     document.getElementById('historyPanel').innerHTML = '<div class="empty">Saved.</div>';
   });
   document.getElementById('sitesList').addEventListener('click', async (event) => {
-    const runId = event.target.dataset.run;
-    const historyId = event.target.dataset.history;
-    const deleteId = event.target.dataset.delete;
+    const selectId = event.target.closest('[data-select]') && event.target.closest('[data-select]').dataset.select;
+    try {
+      if (selectId) {
+        state.selectedSiteId = selectId;
+        await loadSelectedChecks();
+        renderDashboard();
+      }
+    } catch (error) {
+      document.getElementById('siteDetail').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+    }
+  });
+  document.getElementById('siteDetail').addEventListener('click', async (event) => {
+    const action = event.target.closest('[data-run], [data-refresh-detail], [data-delete]');
+    if (!action) return;
+    const runId = action.dataset.run;
+    const refreshId = action.dataset.refreshDetail;
+    const deleteId = action.dataset.delete;
     try {
       if (runId) await runSiteCheck(runId);
-      if (historyId) await showHistory(historyId);
+      if (refreshId) {
+        state.selectedSiteId = refreshId;
+        await loadSelectedChecks();
+        renderDashboard();
+      }
       if (deleteId) {
         if (!window.confirm('Delete this monitored site and its check history?')) return;
         await state.supabase.from('sites').delete().eq('id', deleteId);
         await loadDashboard();
       }
     } catch (error) {
-      document.getElementById('historyPanel').innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      const detail = document.getElementById('siteDetail');
+      detail.classList.remove('is-loading');
+      detail.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
     }
   });
 }
