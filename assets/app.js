@@ -258,7 +258,7 @@ function renderSiteDetail(site) {
     : '<div class="empty subtle">No open recommendations from the latest check.</div>';
 
   const historyHtml = checks.length
-    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || '-'}</small></div></div>`).join('')
+    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || 'unreachable'}</small></div></div>`).join('')
     : '<div class="empty subtle">Run the first check to start history.</div>';
   const bars = checks.slice(0, 24).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
   const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';

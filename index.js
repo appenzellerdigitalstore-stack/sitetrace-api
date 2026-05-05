@@ -355,6 +355,32 @@ function isInMaintenance(site, now = new Date()) {
   return startsAt <= now && now <= endsAt;
 }
 
+function failedAnalysis(site, locale, error) {
+  const checks = [];
+  addCheck(checks, locale, 'uptime', 'status_code', 'fail', 12, 'unreachable', 'statusFail');
+
+  return {
+    status: 'success',
+    analyzed_url: site.url,
+    final_url: site.url,
+    status_code: null,
+    page_context: 'unreachable',
+    response_time_ms: null,
+    response_time: 'unreachable',
+    title: 'Unreachable',
+    meta_description: error.message,
+    h1_count: 0,
+    images: 0,
+    images_with_alt: 0,
+    seo_score: 0,
+    score: 0,
+    summary: summarize(checks),
+    ssl: null,
+    checks,
+    error_detail: error.message
+  };
+}
+
 function getSslInfo(urlObj) {
   if (urlObj.protocol !== 'https:') {
     return Promise.resolve(null);
@@ -794,10 +820,15 @@ async function runMonitorCheck(site, locale, userId) {
     return { analysis, check, level: 'maintenance', incident: { skipped: 'maintenance' } };
   }
 
-  const analysis = await analyzeWebsite(site.url, locale, {
-    keyword: site.keyword,
-    keyword_should_exist: site.keyword_should_exist
-  });
+  let analysis;
+  try {
+    analysis = await analyzeWebsite(site.url, locale, {
+      keyword: site.keyword,
+      keyword_should_exist: site.keyword_should_exist
+    });
+  } catch (error) {
+    analysis = failedAnalysis(site, locale, error);
+  }
   const level = monitoringStatus(analysis);
 
   const { data: check, error: checkError } = await supabaseAdmin
