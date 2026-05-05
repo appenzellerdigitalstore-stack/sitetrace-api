@@ -45,6 +45,12 @@ function statusCopy(status) {
   return 'Waiting for first check';
 }
 
+function normalizePublicUrl(value) {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 function uptimePercent(checks) {
   const counted = checks.filter((check) => ['online', 'warning', 'down'].includes(check.status));
   if (!counted.length) return '-';
@@ -307,10 +313,15 @@ async function initDashboard() {
   });
   document.getElementById('siteForm').addEventListener('submit', async (event) => {
     event.preventDefault();
+    const siteUrl = normalizePublicUrl(document.getElementById('siteUrl').value);
+    if (!siteUrl) {
+      document.getElementById('siteDetail').innerHTML = '<div class="empty">Enter a public website URL.</div>';
+      return;
+    }
     const payload = {
       user_id: state.session.user.id,
       name: document.getElementById('siteName').value,
-      url: document.getElementById('siteUrl').value,
+      url: siteUrl,
       monitoring_enabled: true
     };
     const { error } = await state.supabase.from('sites').insert(payload);
