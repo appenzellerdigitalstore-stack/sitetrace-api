@@ -85,6 +85,7 @@ input::placeholder { color: #7f8fa5; }
 .button.danger { color: var(--text); background: rgba(255, 107, 114, .14); border: 1px solid rgba(255,107,114,.4); }
 .button.small { min-height: 38px; padding: 0 13px; }
 .button:disabled { opacity: .64; cursor: wait; }
+.head-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .trust-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; color: var(--muted); font-size: .92rem; }
 .pill { border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; background: rgba(255,255,255,.04); }
 
@@ -131,7 +132,9 @@ section { padding: 72px 0; border-top: 1px solid rgba(255,255,255,.07); }
 .price ul { padding: 0; margin: 16px 0 20px; list-style: none; display: grid; gap: 8px; }
 .price.highlight { border-color: rgba(45,212,127,.58); background: rgba(45,212,127,.08); }
 .result-area { margin-top: 24px; padding-top: 0; border-top: 0; }
-.message { margin-top: 18px; color: var(--muted); }
+.message { margin-top: 18px; color: var(--muted); min-height: 1.4em; }
+.message.success { color: var(--green); }
+.message.error { color: var(--red); }
 .code-card { margin-top: 28px; border: 1px solid var(--line); border-radius: var(--radius); background: #050c17; overflow: auto; }
 pre { margin: 0; padding: 22px; color: #d9f7ff; }
 .api-meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 28px; }
@@ -276,6 +279,7 @@ code { color: #d9f7ff; }
   .hero { padding: 38px 0; }
   .analyzer { grid-template-columns: 1fr; }
   .button { width: 100%; }
+  .head-actions { width: 100%; justify-content: stretch; }
   .check { grid-template-columns: auto 1fr; }
   .check-value { grid-column: 2; }
   .dashboard-main { padding: 22px 12px; }

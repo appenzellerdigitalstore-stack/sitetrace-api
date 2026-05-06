@@ -92,6 +92,13 @@ function renderError(message) {
   if (target) target.innerHTML = `<div class="empty">${escapeHtml(message)}</div>`;
 }
 
+function setDashboardMessage(message, tone = '') {
+  const target = document.getElementById('dashboardMessage');
+  if (!target) return;
+  target.className = `message ${tone}`.trim();
+  target.textContent = message || '';
+}
+
 function initAnalyzer() {
   const form = document.getElementById('analyzeForm');
   if (!form) return;
@@ -201,10 +208,40 @@ function renderDashboard() {
 async function runSiteCheck(siteId) {
   const detail = document.getElementById('siteDetail');
   if (detail) detail.classList.add('is-loading');
+  setDashboardMessage('Running check...');
   const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: 'en' }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Check failed');
+  const emailResult = data.incident && data.incident.notifications && data.incident.notifications.email;
   await loadDashboard();
+  if (emailResult && emailResult.sent) {
+    setDashboardMessage('Incident email sent successfully.', 'success');
+  } else if (emailResult && !emailResult.sent) {
+    setDashboardMessage(`Incident was recorded, but email was not sent: ${emailResult.reason || 'unknown error'}`, 'error');
+  } else if (data.incident && data.incident.pending_confirmation) {
+    setDashboardMessage('First matching failure recorded. Run one more matching check to open an incident and send an alert.');
+  } else {
+    setDashboardMessage('Check completed.');
+  }
+}
+
+async function testAlertEmail() {
+  const button = document.getElementById('testEmailBtn');
+  if (button) button.disabled = true;
+  setDashboardMessage('Sending test email...');
+  try {
+    const response = await fetch(apiPath('/api/test-alert-email'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() } });
+    const data = await response.json();
+    if (!response.ok || data.status === 'error') {
+      const reason = data.email && data.email.reason ? `: ${data.email.reason}` : '';
+      throw new Error(`${data.message || 'Test email failed'}${reason}`);
+    }
+    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${data.email && data.email.id ? data.email.id : 'created'}.`, 'success');
+  } catch (error) {
+    setDashboardMessage(error.message || 'Test email failed', 'error');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 async function loadSelectedChecks() {
@@ -307,6 +344,7 @@ async function initDashboard() {
   if (page !== 'dashboard') return;
   await loadDashboard();
   document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
+  document.getElementById('testEmailBtn').addEventListener('click', testAlertEmail);
   document.getElementById('signOutBtn').addEventListener('click', async () => {
     if (state.supabase) await state.supabase.auth.signOut();
     window.location.href = '/signin';

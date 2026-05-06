@@ -450,7 +450,14 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
     return { sent: false, reason: await response.text() };
   }
 
-  return { sent: true };
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  return { sent: true, id: data && data.id ? data.id : null };
 }
 
 function incidentText({ site, status, analysis, incident }) {
@@ -518,6 +525,16 @@ async function sendIncidentNotifications({ to, site, status, analysis, incident 
     sendSlackNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
     sendTeamsNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
   ]);
+
+  console.info('Incident notification result:', {
+    site_id: site.id,
+    user_id: site.user_id,
+    status,
+    to: to ? 'configured' : 'missing',
+    email,
+    slack,
+    teams
+  });
 
   return { email, slack, teams };
 }
@@ -920,6 +937,8 @@ app.get('/config', (req, res) => {
     supabase_anon_key: SUPABASE_ANON_KEY,
     billing_enabled: Boolean(stripe && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
     alerts_enabled: Boolean(RESEND_API_KEY || SLACK_WEBHOOK_URL || TEAMS_WEBHOOK_URL),
+    email_alerts_enabled: Boolean(RESEND_API_KEY),
+    alert_from_email: ALERT_FROM_EMAIL,
     plans: {
       free: { sites: 1, interval_minutes: 60, history_days: 1 },
       starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
@@ -947,6 +966,55 @@ app.get('/api/me', requireUser, async (req, res) => {
   res.json({
     user: { id: req.user.id, email: req.user.email },
     profile: profile || { id: req.user.id, plan: 'free', subscription_status: 'inactive' }
+  });
+});
+
+app.post('/api/test-alert-email', requireUser, async (req, res) => {
+  const to = await loadProfileEmail(req.user.id);
+  const site = {
+    id: 'test-alert',
+    user_id: req.user.id,
+    name: 'SiteTrace test alert',
+    url: APP_URL,
+    public_slug: null
+  };
+  const analysis = {
+    score: 100,
+    status_code: 200,
+    response_time: 'test message',
+    response_time_ms: null
+  };
+
+  const email = await sendAlertEmail({
+    to,
+    site,
+    status: 'warning',
+    analysis,
+    incident: { duration_seconds: 0 }
+  }).catch((error) => ({ sent: false, reason: error.message }));
+
+  console.info('Test alert email result:', {
+    user_id: req.user.id,
+    to: to ? 'configured' : 'missing',
+    email
+  });
+
+  if (!email.sent) {
+    return res.status(502).json({
+      status: 'error',
+      message: 'Test email was not sent',
+      email,
+      email_alerts_enabled: Boolean(RESEND_API_KEY),
+      alert_from_email: ALERT_FROM_EMAIL
+    });
+  }
+
+  res.json({
+    status: 'success',
+    message: 'Test email sent',
+    email,
+    to,
+    alert_from_email: ALERT_FROM_EMAIL
   });
 });
 
