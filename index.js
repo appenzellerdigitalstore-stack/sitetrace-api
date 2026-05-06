@@ -492,14 +492,50 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       html,
       text,
       reply_to: ALERT_REPLY_TO_EMAIL,
-      headers: {
-        'List-Unsubscribe': `<${APP_URL}/dashboard>`,
-        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
-      },
       tags: [
         { name: 'app', value: 'sitetrace' },
         { name: 'kind', value: status === 'resolved' ? 'incident_resolved' : 'incident_alert' }
       ]
+    })
+  });
+
+  if (!response.ok) {
+    return { sent: false, reason: await response.text() };
+  }
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (error) {
+    data = null;
+  }
+
+  return { sent: true, id: data && data.id ? data.id : null };
+}
+
+async function sendPlainDiagnosticEmail({ to }) {
+  if (!RESEND_API_KEY || !to) {
+    return { sent: false, reason: 'email_not_configured' };
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      to,
+      subject: 'SiteTrace email check',
+      text: [
+        'SiteTrace email check',
+        '',
+        'This is a plain text message to confirm that your SiteTrace account can receive email.',
+        '',
+        'No action is required.'
+      ].join('\n'),
+      reply_to: ALERT_REPLY_TO_EMAIL
     })
   });
 
@@ -1038,27 +1074,7 @@ app.get('/api/me', requireUser, async (req, res) => {
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
   const to = req.user.email || await loadProfileEmail(req.user.id);
-  const site = {
-    id: 'test-alert',
-    user_id: req.user.id,
-    name: 'SiteTrace test alert',
-    url: APP_URL,
-    public_slug: null
-  };
-  const analysis = {
-    score: 100,
-    status_code: 200,
-    response_time: 'test',
-    response_time_ms: null
-  };
-
-  const email = await sendAlertEmail({
-    to,
-    site,
-    status: 'online',
-    analysis,
-    incident: { duration_seconds: 0 }
-  }).catch((error) => ({ sent: false, reason: error.message }));
+  const email = await sendPlainDiagnosticEmail({ to }).catch((error) => ({ sent: false, reason: error.message }));
 
   console.info('Test alert email result:', {
     user_id: req.user.id,
