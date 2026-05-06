@@ -236,7 +236,8 @@ async function testAlertEmail() {
       const reason = data.email && data.email.reason ? `: ${data.email.reason}` : '';
       throw new Error(`${data.message || 'Test email failed'}${reason}`);
     }
-    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${data.email && data.email.id ? data.email.id : 'created'}.`, 'success');
+    const event = data.delivery && data.delivery.last_event ? ` Event: ${data.delivery.last_event}.` : '';
+    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${data.email && data.email.id ? data.email.id : 'created'}.${event}`, 'success');
   } catch (error) {
     setDashboardMessage(error.message || 'Test email failed', 'error');
   } finally {

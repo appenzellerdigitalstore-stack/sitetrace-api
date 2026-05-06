@@ -414,6 +414,39 @@ function responseText(data) {
   return buffer.toString('utf8');
 }
 
+function alertEmailText({ site, status, analysis, incident }) {
+  const lines = [
+    'SiteTrace alert',
+    '',
+    `${site.name} is currently ${status}.`,
+    `URL: ${site.url}`,
+    `Score: ${analysis.score}/100`,
+    `Status code: ${analysis.status_code || '-'}`,
+    `Response time: ${analysis.response_time || '-'}`
+  ];
+
+  if (incident && incident.duration_seconds) {
+    lines.push(`Incident duration: ${Math.round(incident.duration_seconds / 60)} minutes`);
+  }
+
+  lines.push('', 'Open your dashboard to review the full check history.');
+  return lines.join('\n');
+}
+
+async function retrieveResendEmail(emailId) {
+  if (!RESEND_API_KEY || !emailId) return null;
+
+  const response = await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`, {
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}` }
+  });
+
+  if (!response.ok) {
+    return { error: await response.text() };
+  }
+
+  return response.json();
+}
+
 async function sendAlertEmail({ to, site, status, analysis, incident }) {
   if (!RESEND_API_KEY || !to) {
     return { sent: false, reason: 'email_not_configured' };
@@ -436,6 +469,7 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       <p>Open your dashboard to review the full check history.</p>
     </div>
   `;
+  const text = alertEmailText({ site, status, analysis, incident });
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -443,7 +477,17 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from: ALERT_FROM_EMAIL, to, subject, html })
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      to,
+      subject,
+      html,
+      text,
+      tags: [
+        { name: 'app', value: 'sitetrace' },
+        { name: 'kind', value: status === 'resolved' ? 'incident_resolved' : 'incident_alert' }
+      ]
+    })
   });
 
   if (!response.ok) {
@@ -1019,10 +1063,17 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
     });
   }
 
+  let delivery = null;
+  if (email.id) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    delivery = await retrieveResendEmail(email.id);
+  }
+
   res.json({
     status: 'success',
     message: 'Test email sent',
     email,
+    delivery,
     to,
     alert_from_email: ALERT_FROM_EMAIL
   });
