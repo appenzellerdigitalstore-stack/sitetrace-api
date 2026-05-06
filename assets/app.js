@@ -238,21 +238,41 @@ async function testAlertEmail() {
     }
     const emailId = data.email && data.email.id ? data.email.id : '';
     const event = data.delivery && data.delivery.last_event ? ` Event: ${data.delivery.last_event}.` : '';
-    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${emailId || 'created'}.${event}`, 'success');
+    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${emailId || 'created'}.${event || ' Checking delivery status...'}`, 'success');
     if (emailId) {
-      window.setTimeout(async () => {
-        const statusResponse = await fetch(apiPath(`/api/email-status/${emailId}`), { headers: authHeaders() });
-        const statusData = await statusResponse.json();
-        if (statusResponse.ok && statusData.delivery && statusData.delivery.last_event) {
-          setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${emailId}. Event: ${statusData.delivery.last_event}.`, 'success');
-        }
-      }, 5000);
+      pollEmailStatus(emailId, data.to);
     }
   } catch (error) {
     setDashboardMessage(error.message || 'Test email failed', 'error');
   } finally {
     if (button) button.disabled = false;
   }
+}
+
+function deliverySummary(delivery) {
+  if (!delivery) return '';
+  if (delivery.last_event) return `Event: ${delivery.last_event}.`;
+  if (delivery.error) return `Delivery lookup error: ${delivery.error}`;
+  return 'Delivery lookup returned no event yet.';
+}
+
+function pollEmailStatus(emailId, to) {
+  [5000, 15000, 30000].forEach((delay) => {
+    window.setTimeout(async () => {
+      try {
+        const statusResponse = await fetch(apiPath(`/api/email-status/${emailId}`), { headers: authHeaders() });
+        const statusData = await statusResponse.json();
+        if (!statusResponse.ok || statusData.status === 'error') {
+          const detail = statusData.delivery && statusData.delivery.error ? ` ${statusData.delivery.error}` : '';
+          setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. Could not read delivery status.${detail}`, 'error');
+          return;
+        }
+        setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. ${deliverySummary(statusData.delivery)}`, 'success');
+      } catch (error) {
+        setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. Delivery status check failed: ${error.message}`, 'error');
+      }
+    }, delay);
+  });
 }
 
 async function loadSelectedChecks() {

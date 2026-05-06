@@ -1066,7 +1066,7 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
   let delivery = null;
   if (email.id) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    delivery = await retrieveResendEmail(email.id);
+    delivery = await retrieveResendEmail(email.id).catch((error) => ({ error: error.message }));
   }
 
   res.json({
