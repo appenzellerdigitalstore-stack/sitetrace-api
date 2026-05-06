@@ -25,6 +25,7 @@ const CRON_SECRET = process.env.CRON_SECRET || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_READ_API_KEY = process.env.RESEND_READ_API_KEY || RESEND_API_KEY;
 const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@sitetrace.it.com>';
+const ALERT_REPLY_TO_EMAIL = process.env.ALERT_REPLY_TO_EMAIL || 'support@sitetrace.it.com';
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
 
@@ -418,13 +419,15 @@ function responseText(data) {
 function alertEmailText({ site, status, analysis, incident }) {
   const statusLabel = status === 'resolved' ? 'back online' : status;
   const lines = [
-    'SiteTrace monitor update',
+    'SiteTrace account notification',
     '',
     `Monitor: ${site.name}`,
     `Current status: ${statusLabel}`,
     `Score: ${analysis.score}/100`,
     `Status code: ${analysis.status_code || '-'}`,
     `Response time: ${analysis.response_time || '-'}`,
+    '',
+    'You are receiving this because you created a SiteTrace account and enabled website monitoring.',
     `Dashboard: ${APP_URL}/dashboard`
   ];
 
@@ -457,11 +460,11 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
 
   const statusLabel = status === 'resolved' ? 'back online' : status;
   const subject = status === 'resolved'
-    ? `SiteTrace monitor update: ${site.name} is back online`
-    : `SiteTrace monitor update: ${site.name} needs attention`;
+    ? `SiteTrace account notification: ${site.name} is back online`
+    : `SiteTrace account notification for ${site.name}`;
   const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827;background:#ffffff;">
-      <h2 style="margin:0 0 12px;font-size:20px;">SiteTrace monitor update</h2>
+    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827;background:#ffffff;max-width:560px;">
+      <h2 style="margin:0 0 12px;font-size:20px;">SiteTrace account notification</h2>
       <p style="margin:0 0 16px;">The monitor <strong>${site.name}</strong> is currently <strong>${statusLabel}</strong>.</p>
       <table role="presentation" style="border-collapse:collapse;margin:0 0 16px;">
         <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Score</td><td style="padding:4px 0;">${analysis.score}/100</td></tr>
@@ -471,6 +474,7 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       </table>
       <p style="margin:0 0 18px;">Review the full check history in your SiteTrace dashboard.</p>
       <p style="margin:0;"><a href="${APP_URL}/dashboard" style="color:#0f766e;">Open dashboard</a></p>
+      <p style="margin:22px 0 0;color:#6b7280;font-size:12px;">You are receiving this because you created a SiteTrace account and enabled website monitoring.</p>
     </div>
   `;
   const text = alertEmailText({ site, status, analysis, incident });
@@ -487,6 +491,11 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       subject,
       html,
       text,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      headers: {
+        'List-Unsubscribe': `<${APP_URL}/dashboard>`,
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+      },
       tags: [
         { name: 'app', value: 'sitetrace' },
         { name: 'kind', value: status === 'resolved' ? 'incident_resolved' : 'incident_alert' }
