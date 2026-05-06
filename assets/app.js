@@ -5,6 +5,7 @@ const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
 const state = { config: null, supabase: null, session: null, profile: null, sites: [], selectedSiteId: null, selectedChecks: [] };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
 if (page === 'home' && ['#pricing', '#api', '#dashboard'].includes(window.location.hash)) {
   window.location.replace(window.location.hash.replace('#', '/'));
@@ -134,10 +135,16 @@ async function initAuth() {
     return;
   }
 
+  if (state.session) {
+    window.location.href = '/dashboard';
+    return;
+  }
+
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const email = document.getElementById('authEmail').value;
+    const email = normalizeEmail(document.getElementById('authEmail').value);
     const password = document.getElementById('authPassword').value;
+    message.textContent = 'Signing in...';
     const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
     if (error) {
       message.textContent = error.message;
@@ -148,8 +155,9 @@ async function initAuth() {
   });
 
   document.getElementById('signUpBtn').addEventListener('click', async () => {
-    const email = document.getElementById('authEmail').value;
+    const email = normalizeEmail(document.getElementById('authEmail').value);
     const password = document.getElementById('authPassword').value;
+    message.textContent = 'Creating account...';
     const { error } = await state.supabase.auth.signUp({ email, password });
     message.textContent = error ? error.message : 'Account created. You can sign in now.';
   });
