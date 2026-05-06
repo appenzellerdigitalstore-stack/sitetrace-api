@@ -59,6 +59,10 @@ function uptimePercent(checks) {
   return `${((up / counted.length) * 100).toFixed(1)}%`;
 }
 
+function boolValue(value, fallback = true) {
+  return value === undefined || value === null ? fallback : Boolean(value);
+}
+
 async function initSupabase() {
   if (!window.supabase) return;
   state.config = await fetch(apiPath('/config')).then((res) => res.json());
@@ -192,11 +196,27 @@ async function loadDashboard() {
   renderDashboard();
 }
 
+function renderAlertStatus() {
+  const target = document.getElementById('alertStatusPanel');
+  if (!target || !state.config) return;
+  const profileEmail = state.profile && state.profile.email ? state.profile.email : state.session.user.email;
+  const items = [
+    { label: 'Email alerts', value: state.config.email_alerts_enabled ? 'Configured' : 'Not configured', ok: state.config.email_alerts_enabled },
+    { label: 'From address', value: state.config.alert_from_email || '-', ok: state.config.email_alerts_enabled },
+    { label: 'Recipient', value: profileEmail || '-', ok: Boolean(profileEmail) },
+    { label: 'Delivery lookup', value: state.config.delivery_lookup_configured ? 'Read key configured' : 'Send-only key', ok: state.config.delivery_lookup_configured },
+    { label: 'Slack', value: state.config.slack_alerts_enabled ? 'Configured' : 'Optional', ok: state.config.slack_alerts_enabled },
+    { label: 'Teams', value: state.config.teams_alerts_enabled ? 'Configured' : 'Optional', ok: state.config.teams_alerts_enabled }
+  ];
+  target.innerHTML = items.map((item) => `<div class="alert-status-card"><span class="dot ${item.ok ? '' : 'pending'}"></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></div>`).join('');
+}
+
 function renderDashboard() {
   document.getElementById('planValue').textContent = state.profile ? state.profile.plan : 'free';
   document.getElementById('siteCount').textContent = state.sites.length;
   const lastSite = state.sites.find((site) => site.last_checked_at);
   document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
+  renderAlertStatus();
   const list = document.getElementById('sitesList');
   const listCount = document.getElementById('siteListCount');
   if (listCount) listCount.textContent = state.sites.length;
@@ -373,6 +393,10 @@ function renderSiteDetail(site) {
       <label><span>Keyword must appear</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="optional text to monitor"></label>
       <label><span>Maintenance starts</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
       <label><span>Maintenance ends</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
+      <label class="toggle-row"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''}><span>Email alerts</span></label>
+      <label class="toggle-row"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''}><span>Notify when down</span></label>
+      <label class="toggle-row"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''}><span>Notify on warnings</span></label>
+      <label class="toggle-row"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''}><span>Notify on recovery</span></label>
       <label class="toggle-row"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''}><span>Enable public status page</span></label>
       ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
       <button class="button secondary" type="submit">Save settings</button>
@@ -456,6 +480,10 @@ async function initDashboard() {
       keyword_should_exist: true,
       maintenance_starts_at: document.getElementById('maintenanceStartInput').value ? new Date(document.getElementById('maintenanceStartInput').value).toISOString() : null,
       maintenance_ends_at: document.getElementById('maintenanceEndInput').value ? new Date(document.getElementById('maintenanceEndInput').value).toISOString() : null,
+      email_alerts_enabled: document.getElementById('emailAlertsInput').checked,
+      alert_on_down: document.getElementById('alertDownInput').checked,
+      alert_on_warning: document.getElementById('alertWarningInput').checked,
+      alert_on_recovery: document.getElementById('alertRecoveryInput').checked,
       status_page_enabled: document.getElementById('statusPageInput').checked
     };
     const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });

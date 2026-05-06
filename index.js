@@ -612,9 +612,19 @@ async function sendTeamsNotification(context) {
   });
 }
 
+function shouldSendEmailForStatus(site, status) {
+  if (site.email_alerts_enabled === false) return false;
+  if (status === 'resolved') return site.alert_on_recovery !== false;
+  if (status === 'down') return site.alert_on_down !== false;
+  if (status === 'warning') return site.alert_on_warning !== false;
+  return true;
+}
+
 async function sendIncidentNotifications({ to, site, status, analysis, incident }) {
   const [email, slack, teams] = await Promise.all([
-    sendAlertEmail({ to, site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
+    shouldSendEmailForStatus(site, status)
+      ? sendAlertEmail({ to, site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
+      : Promise.resolve({ sent: false, reason: 'email_alert_disabled' }),
     sendSlackNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
     sendTeamsNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
   ]);
@@ -1042,6 +1052,9 @@ app.get('/config', (req, res) => {
     alerts_enabled: Boolean(RESEND_API_KEY || SLACK_WEBHOOK_URL || TEAMS_WEBHOOK_URL),
     email_alerts_enabled: Boolean(RESEND_API_KEY),
     alert_from_email: ALERT_FROM_EMAIL,
+    delivery_lookup_configured: Boolean(RESEND_READ_API_KEY && RESEND_READ_API_KEY !== RESEND_API_KEY),
+    slack_alerts_enabled: Boolean(SLACK_WEBHOOK_URL),
+    teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
       free: { sites: 1, interval_minutes: 60, history_days: 1 },
       starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
@@ -1158,7 +1171,11 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
     'keyword_should_exist',
     'maintenance_starts_at',
     'maintenance_ends_at',
-    'status_page_enabled'
+    'status_page_enabled',
+    'email_alerts_enabled',
+    'alert_on_down',
+    'alert_on_warning',
+    'alert_on_recovery'
   ];
 
   for (const key of allowed) {

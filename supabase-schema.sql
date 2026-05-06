@@ -31,6 +31,10 @@ alter table public.sites add column if not exists maintenance_starts_at timestam
 alter table public.sites add column if not exists maintenance_ends_at timestamptz;
 alter table public.sites add column if not exists status_page_enabled boolean not null default false;
 alter table public.sites add column if not exists public_slug text unique default encode(gen_random_bytes(6), 'hex');
+alter table public.sites add column if not exists email_alerts_enabled boolean not null default true;
+alter table public.sites add column if not exists alert_on_down boolean not null default true;
+alter table public.sites add column if not exists alert_on_warning boolean not null default true;
+alter table public.sites add column if not exists alert_on_recovery boolean not null default true;
 
 create table if not exists public.checks (
   id uuid primary key default gen_random_uuid(),
