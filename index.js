@@ -416,21 +416,23 @@ function responseText(data) {
 }
 
 function alertEmailText({ site, status, analysis, incident }) {
+  const statusLabel = status === 'resolved' ? 'back online' : status;
   const lines = [
-    'SiteTrace alert',
+    'SiteTrace monitor update',
     '',
-    `${site.name} is currently ${status}.`,
-    `URL: ${site.url}`,
+    `Monitor: ${site.name}`,
+    `Current status: ${statusLabel}`,
     `Score: ${analysis.score}/100`,
     `Status code: ${analysis.status_code || '-'}`,
-    `Response time: ${analysis.response_time || '-'}`
+    `Response time: ${analysis.response_time || '-'}`,
+    `Dashboard: ${APP_URL}/dashboard`
   ];
 
   if (incident && incident.duration_seconds) {
     lines.push(`Incident duration: ${Math.round(incident.duration_seconds / 60)} minutes`);
   }
 
-  lines.push('', 'Open your dashboard to review the full check history.');
+  lines.push('', 'Open SiteTrace to review the full check history.');
   return lines.join('\n');
 }
 
@@ -453,21 +455,22 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
     return { sent: false, reason: 'email_not_configured' };
   }
 
+  const statusLabel = status === 'resolved' ? 'back online' : status;
   const subject = status === 'resolved'
-    ? `SiteTrace resolved: ${site.name} is back online`
-    : `SiteTrace alert: ${site.name} is ${status}`;
+    ? `SiteTrace monitor update: ${site.name} is back online`
+    : `SiteTrace monitor update: ${site.name} needs attention`;
   const html = `
-    <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
-      <h2>SiteTrace alert</h2>
-      <p><strong>${site.name}</strong> is currently <strong>${status}</strong>.</p>
-      <ul>
-        <li>URL: ${site.url}</li>
-        <li>Score: ${analysis.score}/100</li>
-        <li>Status code: ${analysis.status_code}</li>
-        <li>Response time: ${analysis.response_time}</li>
-        ${incident && incident.duration_seconds ? `<li>Incident duration: ${Math.round(incident.duration_seconds / 60)} minutes</li>` : ''}
-      </ul>
-      <p>Open your dashboard to review the full check history.</p>
+    <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827;background:#ffffff;">
+      <h2 style="margin:0 0 12px;font-size:20px;">SiteTrace monitor update</h2>
+      <p style="margin:0 0 16px;">The monitor <strong>${site.name}</strong> is currently <strong>${statusLabel}</strong>.</p>
+      <table role="presentation" style="border-collapse:collapse;margin:0 0 16px;">
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Score</td><td style="padding:4px 0;">${analysis.score}/100</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Status code</td><td style="padding:4px 0;">${analysis.status_code || '-'}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Response time</td><td style="padding:4px 0;">${analysis.response_time || '-'}</td></tr>
+        ${incident && incident.duration_seconds ? `<tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Duration</td><td style="padding:4px 0;">${Math.round(incident.duration_seconds / 60)} minutes</td></tr>` : ''}
+      </table>
+      <p style="margin:0 0 18px;">Review the full check history in your SiteTrace dashboard.</p>
+      <p style="margin:0;"><a href="${APP_URL}/dashboard" style="color:#0f766e;">Open dashboard</a></p>
     </div>
   `;
   const text = alertEmailText({ site, status, analysis, incident });
@@ -1036,14 +1039,14 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
   const analysis = {
     score: 100,
     status_code: 200,
-    response_time: 'test message',
+    response_time: 'test',
     response_time_ms: null
   };
 
   const email = await sendAlertEmail({
     to,
     site,
-    status: 'warning',
+    status: 'online',
     analysis,
     incident: { duration_seconds: 0 }
   }).catch((error) => ({ sent: false, reason: error.message }));
