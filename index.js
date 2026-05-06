@@ -23,6 +23,7 @@ const STRIPE_STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID || '';
 const STRIPE_AGENCY_PRICE_ID = process.env.STRIPE_AGENCY_PRICE_ID || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_READ_API_KEY = process.env.RESEND_READ_API_KEY || RESEND_API_KEY;
 const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@sitetrace.it.com>';
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
@@ -434,10 +435,10 @@ function alertEmailText({ site, status, analysis, incident }) {
 }
 
 async function retrieveResendEmail(emailId) {
-  if (!RESEND_API_KEY || !emailId) return null;
+  if (!RESEND_READ_API_KEY || !emailId) return null;
 
   const response = await fetch(`https://api.resend.com/emails/${encodeURIComponent(emailId)}`, {
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}` }
+    headers: { Authorization: `Bearer ${RESEND_READ_API_KEY}` }
   });
 
   if (!response.ok) {

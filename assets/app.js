@@ -252,7 +252,11 @@ async function testAlertEmail() {
 function deliverySummary(delivery) {
   if (!delivery) return '';
   if (delivery.last_event) return `Event: ${delivery.last_event}.`;
-  if (delivery.error) return `Delivery lookup error: ${delivery.error}`;
+  if (delivery.error) {
+    const restricted = String(delivery.error).includes('restricted_api_key') || String(delivery.error).includes('only send emails');
+    if (restricted) return 'Delivery status unavailable: Resend API key is send-only.';
+    return `Delivery lookup error: ${delivery.error}`;
+  }
   return 'Delivery lookup returned no event yet.';
 }
 
@@ -263,8 +267,8 @@ function pollEmailStatus(emailId, to) {
         const statusResponse = await fetch(apiPath(`/api/email-status/${emailId}`), { headers: authHeaders() });
         const statusData = await statusResponse.json();
         if (!statusResponse.ok || statusData.status === 'error') {
-          const detail = statusData.delivery && statusData.delivery.error ? ` ${statusData.delivery.error}` : '';
-          setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. Could not read delivery status.${detail}`, 'error');
+          const summary = deliverySummary(statusData.delivery);
+          setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. ${summary || 'Could not read delivery status.'}`, 'error');
           return;
         }
         setDashboardMessage(`Test email sent to ${to}. Resend id: ${emailId}. ${deliverySummary(statusData.delivery)}`, 'success');
