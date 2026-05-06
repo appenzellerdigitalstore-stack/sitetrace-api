@@ -540,26 +540,36 @@ async function sendIncidentNotifications({ to, site, status, analysis, incident 
 }
 
 async function loadProfileEmail(userId) {
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
+  const authEmail = authData && authData.user && authData.user.email ? authData.user.email : null;
+
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('email')
     .eq('id', userId)
     .single();
 
+  if (authEmail) {
+    if (!profile || profile.email !== authEmail) {
+      await supabaseAdmin
+        .from('profiles')
+        .upsert({ id: userId, email: authEmail, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+    }
+
+    return authEmail;
+  }
+
+  if (authError) {
+    console.error('Auth email lookup error:', authError.message);
+  }
+
   if (profile && profile.email) {
     return profile.email;
   }
 
-  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
-  if (error || !data || !data.user) {
+  if (authError || !authData || !authData.user) {
     return null;
   }
-
-  await supabaseAdmin
-    .from('profiles')
-    .upsert({ id: userId, email: data.user.email, updated_at: new Date().toISOString() }, { onConflict: 'id' });
-
-  return data.user.email;
 }
 
 async function resolveOpenIncidents({ site, analysis }) {
@@ -970,7 +980,7 @@ app.get('/api/me', requireUser, async (req, res) => {
 });
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
-  const to = await loadProfileEmail(req.user.id);
+  const to = req.user.email || await loadProfileEmail(req.user.id);
   const site = {
     id: 'test-alert',
     user_id: req.user.id,
