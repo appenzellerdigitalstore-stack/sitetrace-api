@@ -121,6 +121,7 @@ input::placeholder { color: #7f8fa5; }
 
 section { padding: 72px 0; border-top: 1px solid rgba(255,255,255,.07); }
 .section-head { max-width: 760px; margin-bottom: 30px; }
+.how-section { margin-top: 46px; }
 .features, .pricing, .dashboard-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .features.two { grid-template-columns: repeat(2, 1fr); margin-top: 24px; }
 .feature, .price, .dash-card, .empty {
