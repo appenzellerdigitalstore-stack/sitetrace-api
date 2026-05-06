@@ -528,7 +528,21 @@ async function loadProfileEmail(userId) {
     .select('email')
     .eq('id', userId)
     .single();
-  return profile && profile.email;
+
+  if (profile && profile.email) {
+    return profile.email;
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (error || !data || !data.user) {
+    return null;
+  }
+
+  await supabaseAdmin
+    .from('profiles')
+    .upsert({ id: userId, email: data.user.email, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+
+  return data.user.email;
 }
 
 async function resolveOpenIncidents({ site, analysis }) {
@@ -915,11 +929,20 @@ app.get('/config', (req, res) => {
 });
 
 app.get('/api/me', requireUser, async (req, res) => {
-  const { data: profile } = await supabaseAdmin
+  let { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('*')
     .eq('id', req.user.id)
     .single();
+
+  if (!profile || !profile.email) {
+    const { data: repaired } = await supabaseAdmin
+      .from('profiles')
+      .upsert({ id: req.user.id, email: req.user.email, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+      .select('*')
+      .single();
+    profile = repaired || profile;
+  }
 
   res.json({
     user: { id: req.user.id, email: req.user.email },
