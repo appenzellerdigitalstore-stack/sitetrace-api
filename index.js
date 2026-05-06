@@ -1079,6 +1079,19 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
   });
 });
 
+app.get('/api/email-status/:id', requireUser, async (req, res) => {
+  const delivery = await retrieveResendEmail(req.params.id).catch((error) => ({ error: error.message }));
+  if (!delivery || delivery.error) {
+    return res.status(502).json({
+      status: 'error',
+      message: 'Could not retrieve email delivery status',
+      delivery
+    });
+  }
+
+  res.json({ status: 'success', delivery });
+});
+
 app.post('/api/run-site-check', requireUser, async (req, res) => {
   const locale = language(req.body.locale);
   const siteId = req.body.site_id;

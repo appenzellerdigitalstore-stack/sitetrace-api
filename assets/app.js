@@ -236,8 +236,18 @@ async function testAlertEmail() {
       const reason = data.email && data.email.reason ? `: ${data.email.reason}` : '';
       throw new Error(`${data.message || 'Test email failed'}${reason}`);
     }
+    const emailId = data.email && data.email.id ? data.email.id : '';
     const event = data.delivery && data.delivery.last_event ? ` Event: ${data.delivery.last_event}.` : '';
-    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${data.email && data.email.id ? data.email.id : 'created'}.${event}`, 'success');
+    setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${emailId || 'created'}.${event}`, 'success');
+    if (emailId) {
+      window.setTimeout(async () => {
+        const statusResponse = await fetch(apiPath(`/api/email-status/${emailId}`), { headers: authHeaders() });
+        const statusData = await statusResponse.json();
+        if (statusResponse.ok && statusData.delivery && statusData.delivery.last_event) {
+          setDashboardMessage(`Test email sent to ${data.to}. Resend id: ${emailId}. Event: ${statusData.delivery.last_event}.`, 'success');
+        }
+      }, 5000);
+    }
   } catch (error) {
     setDashboardMessage(error.message || 'Test email failed', 'error');
   } finally {
