@@ -81,9 +81,27 @@ const copy = {
       ctaButton: 'Start with Agency'
     },
     api: {
-      title: 'SiteTrace watches the quiet signals that can cost traffic, leads, or trust.',
-      lead: 'Each monitor combines availability, speed, SSL, SEO basics, keyword presence, and security headers into a clear status so agencies and owners can react early.',
-      featureCopy: 'Title, meta description, H1 structure, image ALT text, canonical tags, viewport, language, Open Graph, and indexing signals are reviewed before they become silent traffic leaks.'
+      eyebrow: 'How it works',
+      title: 'SiteTrace checks your site repeatedly and explains what needs attention.',
+      lead: 'Add a website once. SiteTrace keeps checking whether it is online, fast enough, safe to visit, and still showing the SEO basics clients depend on.',
+      stepTitles: ['1. Add a site', '2. SiteTrace checks it', '3. You get a clear status', '4. Share the result'],
+      stepCopy: [
+        'Save a client website or run a quick manual check from the homepage.',
+        'It reviews uptime, response speed, SSL, indexing, page titles, descriptions, and other basics that often break quietly.',
+        'Each site shows a health score, current status, recent checks, and the most important issues to fix first.',
+        'Copy a client-ready report or publish a status page so people can understand what happened without reading technical logs.'
+      ],
+      watchTitle: 'What SiteTrace looks for',
+      watchCopy: 'The goal is not to overwhelm you. SiteTrace focuses on the problems most likely to hurt trust, leads, search visibility, or client confidence.',
+      watchTitles: ['Site is down', 'Site is getting slow', 'SEO basics changed', 'Trust signals need attention'],
+      watchCopies: [
+        'The page stops responding or returns a server error.',
+        'Response time increases enough that visitors may feel the delay.',
+        'Important page titles, descriptions, indexing rules, or required phrases go missing.',
+        'SSL, HTTPS, or security basics look weak or misconfigured.'
+      ],
+      maintenanceTitle: 'Built for proactive maintenance',
+      maintenanceCopy: 'Agencies and freelancers can use SiteTrace to show clients that their sites are being watched, not just repaired after complaints.'
     },
     dashboard: {
       eyebrow: 'Website health command center',
@@ -223,9 +241,27 @@ const copy = {
       ctaButton: 'Empezar con Agency'
     },
     api: {
-      title: 'SiteTrace vigila las senales silenciosas que pueden costar trafico, leads o confianza.',
-      lead: 'Cada monitor combina disponibilidad, velocidad, SSL, SEO basico, presencia de keywords y headers de seguridad en un estado claro para actuar temprano.',
-      featureCopy: 'Title, meta description, estructura H1, ALT en imagenes, canonical, viewport, idioma, Open Graph e indexacion se revisan antes de convertirse en fugas silenciosas de trafico.'
+      eyebrow: 'Como funciona',
+      title: 'SiteTrace revisa tu sitio constantemente y explica que necesita atencion.',
+      lead: 'Agrega un sitio una vez. SiteTrace sigue revisando si esta online, si carga suficientemente rapido, si es seguro visitarlo y si conserva los basicos SEO que importan.',
+      stepTitles: ['1. Agrega un sitio', '2. SiteTrace lo revisa', '3. Recibes un estado claro', '4. Comparte el resultado'],
+      stepCopy: [
+        'Guarda un sitio de cliente o corre un check rapido desde la pagina principal.',
+        'Revisa uptime, velocidad, SSL, indexacion, titles, descriptions y otros basicos que suelen romperse en silencio.',
+        'Cada sitio muestra score de salud, estado actual, checks recientes y los problemas mas importantes a corregir.',
+        'Copia un reporte listo para cliente o publica una status page para explicar que paso sin logs tecnicos.'
+      ],
+      watchTitle: 'Que busca SiteTrace',
+      watchCopy: 'La meta no es abrumarte. SiteTrace se enfoca en problemas que pueden afectar confianza, leads, visibilidad o tranquilidad del cliente.',
+      watchTitles: ['El sitio esta caido', 'El sitio se esta volviendo lento', 'Cambios en SEO basico', 'Senales de confianza debiles'],
+      watchCopies: [
+        'La pagina deja de responder o devuelve un error del servidor.',
+        'El tiempo de respuesta sube lo suficiente como para que visitantes sientan la demora.',
+        'Titles, descriptions, reglas de indexacion o frases requeridas desaparecen.',
+        'SSL, HTTPS o configuraciones basicas de seguridad se ven debiles o mal configuradas.'
+      ],
+      maintenanceTitle: 'Pensado para mantenimiento proactivo',
+      maintenanceCopy: 'Agencias y freelancers pueden usar SiteTrace para demostrar que los sitios estan siendo vigilados, no solo reparados despues de quejas.'
     },
     dashboard: {
       eyebrow: 'Centro de salud web',
@@ -485,12 +521,27 @@ function applyLanguage() {
   }
 
   if (page === 'api') {
-    setText('.page-shell .eyebrow', 'How it works');
-    if (currentLocale === 'es') setText('.page-shell .eyebrow', 'Como funciona');
+    setText('.page-shell .eyebrow', t('api.eyebrow'));
     setText('.page-shell h1', t('api.title'));
     setText('.page-shell .lead', t('api.lead'));
-    const seoCard = document.querySelector('.features.two .feature:nth-child(4) p');
-    if (seoCard) seoCard.textContent = t('api.featureCopy');
+    const groups = document.querySelectorAll('.features.two');
+    if (groups[0]) {
+      groups[0].querySelectorAll('.feature h3').forEach((element, index) => { element.textContent = t('api.stepTitles')[index] || element.textContent; });
+      groups[0].querySelectorAll('.feature p').forEach((element, index) => { element.textContent = t('api.stepCopy')[index] || element.textContent; });
+    }
+    const sections = document.querySelectorAll('.how-section');
+    if (sections[0]) {
+      sections[0].querySelector('h2').textContent = t('api.watchTitle');
+      sections[0].querySelector('p').textContent = t('api.watchCopy');
+    }
+    if (groups[1]) {
+      groups[1].querySelectorAll('.feature h3').forEach((element, index) => { element.textContent = t('api.watchTitles')[index] || element.textContent; });
+      groups[1].querySelectorAll('.feature p').forEach((element, index) => { element.textContent = t('api.watchCopies')[index] || element.textContent; });
+    }
+    if (sections[1]) {
+      sections[1].querySelector('h2').textContent = t('api.maintenanceTitle');
+      sections[1].querySelector('p').textContent = t('api.maintenanceCopy');
+    }
   }
 
   if (page === 'dashboard') {
