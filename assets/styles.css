@@ -74,7 +74,21 @@ button, input { font: inherit; }
   cursor: pointer;
 }
 .control-select { padding: 0 8px; }
-.control-button { padding: 0 10px; font-weight: 800; }
+.control-button {
+  width: 36px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.control-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 :root[data-theme="day"] .control-select,
 :root[data-theme="day"] .control-button { background: rgba(7,20,35,.04); }
 
