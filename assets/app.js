@@ -421,6 +421,37 @@ function applyTheme() {
   }
 }
 
+function updateAuthNav() {
+  const signInLink = document.querySelector('.nav-links a[href="/signin"], .nav-links a[data-auth-link="signin"]');
+  if (!signInLink) return;
+  signInLink.dataset.authLink = 'signin';
+  if (state.session) {
+    signInLink.textContent = t('nav.signout');
+    signInLink.href = '#signout';
+    signInLink.classList.add('secondary');
+  } else {
+    signInLink.textContent = t('nav.signin');
+    signInLink.href = '/signin';
+  }
+}
+
+async function initNavSession() {
+  if (page === 'dashboard') return;
+  await initSupabase();
+  updateAuthNav();
+  const signInLink = document.querySelector('.nav-links a[data-auth-link="signin"]');
+  if (!signInLink || signInLink.dataset.authBound) return;
+  signInLink.dataset.authBound = 'true';
+  signInLink.addEventListener('click', async (event) => {
+    if (!state.session) return;
+    event.preventDefault();
+    if (state.supabase) await state.supabase.auth.signOut();
+    state.session = null;
+    updateAuthNav();
+    window.location.href = '/';
+  });
+}
+
 function initPreferences() {
   document.documentElement.lang = currentLocale;
   const navLinks = document.querySelector('.nav-links');
@@ -466,6 +497,7 @@ function applyLanguage() {
   setText('.nav-links a[href="/signin"]', t('nav.signin'));
   setText('.nav-links a[href="/"]', t('nav.home'));
   setText('#signOutBtn', t('nav.signout'));
+  updateAuthNav();
 
   if (page === 'home') {
     setText('.hero .eyebrow', t('home.eyebrow'));
@@ -641,6 +673,7 @@ async function initSupabase() {
     state.session = data.session;
     state.supabase.auth.onAuthStateChange((event, session) => {
       state.session = session;
+      updateAuthNav();
       if (page === 'dashboard') loadDashboard();
     });
   }
@@ -1232,6 +1265,7 @@ async function initBilling() {
 
 initPreferences();
 applyLanguage();
+initNavSession().catch(renderError);
 initAnalyzer();
 initAuth().catch(renderError);
 initDashboard().catch(renderError);
