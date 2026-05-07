@@ -25,9 +25,9 @@ APP_URL=https://www.sitetrace.it.com
 ## 2. Stripe
 
 1. Create a product named `SiteTrace Starter`.
-2. Add a recurring monthly price for `$9`.
+2. Add a recurring monthly price for `$19`.
 3. Create a product named `SiteTrace Agency`.
-4. Add a recurring monthly price for `$29`.
+4. Add a recurring monthly price for `$79`.
 5. Copy both price IDs.
 6. Add a webhook endpoint:
 

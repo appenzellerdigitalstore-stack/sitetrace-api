@@ -13,6 +13,7 @@
       <a class="brand" href="/"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
       <div class="nav-links">
         <a href="/pricing">Pricing</a>
+        <a href="/demo">Demo</a>
         <a href="/api">How it works</a>
         <a class="active" href="/dashboard">Dashboard</a>
         <button class="link-button hidden" id="signOutBtn" type="button">Sign out</button>
@@ -40,9 +41,9 @@
       <div id="dashboardView" class="hidden">
         <div class="dashboard-head">
           <div>
-            <p class="eyebrow">Customer dashboard</p>
-            <h1>Monitoring overview</h1>
-            <p class="muted">Select a site to review uptime, last incident, technical score, and recent checks.</p>
+            <p class="eyebrow">Website health command center</p>
+            <h1>Monitor the sites that cannot quietly break.</h1>
+            <p class="muted">Track status, speed, SEO hygiene, SSL risk, security warnings, recent incidents, and client-ready history.</p>
           </div>
           <div class="head-actions">
             <button class="button secondary" id="testEmailBtn" type="button">Test email</button>
@@ -57,21 +58,21 @@
           <div class="dash-card"><span class="muted">Last check</span><h3 id="lastCheckValue">-</h3></div>
         </div>
         <form id="siteForm" class="site-form">
-          <input id="siteName" type="text" placeholder="Site name" required>
+          <input id="siteName" type="text" placeholder="Client or site name" required>
           <input id="siteUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com or https://example.com" required>
-          <button class="button" type="submit">Add site</button>
+          <button class="button" type="submit">Add monitor</button>
         </form>
 
         <div class="monitor-layout">
           <aside class="site-list-panel">
-            <div class="panel-top compact-panel"><strong>Monitored sites</strong><span id="siteListCount" class="muted">0</span></div>
+            <div class="panel-top compact-panel"><strong>Client sites</strong><span id="siteListCount" class="muted">0</span></div>
             <div id="sitesList" class="site-list"></div>
           </aside>
 
           <section class="site-detail-panel">
             <div id="siteDetail" class="site-detail empty-state">
-              <h2>No site selected</h2>
-              <p>Choose a monitored site from the left to see status, uptime context, and recent checks.</p>
+              <h2>No monitor selected</h2>
+              <p>Choose a site from the left to see health, incidents, recommendations, and recent checks.</p>
             </div>
           </section>
         </div>

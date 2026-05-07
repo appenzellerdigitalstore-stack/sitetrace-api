@@ -6,9 +6,516 @@ const page = document.body.dataset.page || 'home';
 const state = { config: null, supabase: null, session: null, profile: null, sites: [], selectedSiteId: null, selectedChecks: [] };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const savedLocale = localStorage.getItem('sitetrace_locale');
+const browserLocale = navigator.language && navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en';
+let currentLocale = savedLocale === 'es' || savedLocale === 'en' ? savedLocale : browserLocale;
+let currentTheme = localStorage.getItem('sitetrace_theme') === 'day' ? 'day' : 'night';
+
+const copy = {
+  en: {
+    nav: { pricing: 'Pricing', demo: 'Demo', how: 'How it works', dashboard: 'Dashboard', signin: 'Sign in', home: 'Home', signout: 'Sign out' },
+    controls: { themeDay: 'Day mode', themeNight: 'Night mode', language: 'Language' },
+    common: { copied: 'Report copied to clipboard.', copyFailed: 'Could not copy the report.', shareReport: 'Share report', copyReport: 'Copy client report' },
+    home: {
+      eyebrow: 'Website health monitoring for agencies and site owners',
+      title: 'Catch silent website issues before they cost traffic, leads, or client trust.',
+      lead: 'SiteTrace watches for downtime, slow pages, SSL risk, noindex mistakes, missing SEO basics, and security warnings in one client-friendly monitor.',
+      placeholder: 'https://example.com',
+      button: 'Check a site',
+      pills: ['No login for manual checks', 'Uptime + SEO + SSL + security', 'Built for ongoing monitoring'],
+      previewEyebrow: 'Health monitor preview',
+      previewSite: 'client-site.com',
+      metricResponse: 'Response time',
+      metricSsl: 'SSL certificate',
+      metricIssues: 'Issues to fix',
+      checkReachableTitle: 'Site is reachable',
+      checkReachableCopy: 'Your server is responding normally.',
+      checkMetaTitle: 'Homepage meta changed',
+      checkMetaCopy: 'A weak snippet can lower clicks from search and shared links.',
+      checkSecurityTitle: 'Security headers missing',
+      checkSecurityCopy: 'Flag baseline trust and protection gaps before a client asks.',
+      sectionEyebrow: 'Positioned for maintenance revenue',
+      sectionTitle: 'Give every client site a simple health monitor.',
+      sectionCopy: 'Agencies and freelancers can use SiteTrace to prove they are watching the details clients never check until something breaks.',
+      featureTitles: ['Silent issue alerts', 'Client-ready health score', 'Agency-friendly monitoring'],
+      featureCopy: [
+        'Know when a site is online but still risky: slow response, noindex, missing metadata, SSL trouble, or keyword changes.',
+        'Turn technical checks into a plain score, issue list, and recent history that a non-technical client can understand.',
+        'Manage multiple sites, run checks on demand, publish status pages, and build recurring maintenance around proactive care.'
+      ],
+      agencyEyebrow: 'For agencies',
+      agencyTitle: 'Turn website maintenance into something clients can see.',
+      agencyCopy: 'SiteTrace gives you the proof layer for recurring care: what changed, what is risky, when it happened, and what you did before the client noticed.',
+      agencyPoints: ['Monitor every client site from one dashboard', 'Copy client-ready reports after each check', 'Use status pages and incidents to show proactive support'],
+      whyEyebrow: 'Why it matters',
+      whyTitle: 'A site can be live and still be losing business.',
+      whyCopy: 'Downtime is obvious. The expensive problems are often quieter: a CMS update removes a title, a page becomes noindex, SSL starts expiring, a homepage slows down, or a required phrase disappears from a client page.',
+      plans: 'See plans',
+      footer: 'SiteTrace - Website health monitoring for agencies and site owners.'
+    },
+    pricing: {
+      title: 'Plans built around proactive website care.',
+      lead: 'Start with manual checks, then monitor the sites that matter with alerts, history, status pages, and agency-ready capacity.',
+      cards: [
+        ['Validate', 'Free', '$0', 'For quick site health checks.', ['Manual website scans', 'Uptime, SSL, SEO, and security basics', 'Shareable issue language']],
+        ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', '5-minute checks', 'Email alerts and 30-day history', 'Public status pages']],
+        ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Client-friendly reports and status pages', 'Slack, Teams, webhooks, and API access', 'Sell proactive maintenance with proof']]
+      ],
+      buttons: ['Start monitoring', 'Upgrade to Agency'],
+      note: 'Launch focus:',
+      noteCopy: ' SiteTrace is designed to help agencies and freelancers package monitoring as recurring website care, not as another giant SEO suite.'
+    },
+    demo: {
+      eyebrow: 'Live-style demo',
+      title: 'See how SiteTrace explains client website health.',
+      lead: 'Explore sample monitors for a healthy site, a warning state, and a down incident before creating an account.',
+      select: 'Sample client sites',
+      current: 'Current health',
+      score: 'Health score',
+      response: 'Response',
+      lastCheck: 'Last check',
+      issues: 'Issues SiteTrace would surface',
+      history: 'Recent checks',
+      ctaTitle: 'Use this as your sales demo.',
+      ctaCopy: 'A freelancer or agency can show this view to explain why proactive monitoring belongs in every maintenance plan.',
+      ctaButton: 'Start with Agency'
+    },
+    api: {
+      title: 'SiteTrace watches the quiet signals that can cost traffic, leads, or trust.',
+      lead: 'Each monitor combines availability, speed, SSL, SEO basics, keyword presence, and security headers into a clear status so agencies and owners can react early.',
+      featureCopy: 'Title, meta description, H1 structure, image ALT text, canonical tags, viewport, language, Open Graph, and indexing signals are reviewed before they become silent traffic leaks.'
+    },
+    dashboard: {
+      eyebrow: 'Website health command center',
+      title: 'Monitor the sites that cannot quietly break.',
+      lead: 'Track status, speed, SEO hygiene, SSL risk, security warnings, recent incidents, and client-ready history.',
+      addName: 'Client or site name',
+      addButton: 'Add monitor',
+      clientSites: 'Client sites',
+      emptyTitle: 'No monitor selected',
+      emptyCopy: 'Choose a site from the left to see health, incidents, recommendations, and recent checks.',
+      plan: 'Plan',
+      sites: 'Sites',
+      lastCheck: 'Last check',
+      alerts: ['Email alerts', 'From address', 'Recipient', 'Delivery lookup', 'Slack', 'Teams'],
+      alertValues: {
+        configured: 'Configured',
+        notConfigured: 'Not configured',
+        readKey: 'Read key configured',
+        sendOnly: 'Send-only key',
+        optional: 'Optional'
+      },
+      noSites: 'No client sites monitored yet.',
+      running: 'Checking uptime, speed, SEO basics, SSL, and security signals...',
+      completed: 'Health check completed.',
+      emailSent: 'Incident email sent successfully.',
+      emailNotSent: 'Incident was recorded, but email was not sent:',
+      pendingIncident: 'First matching failure recorded. Run one more matching check to open an incident and send an alert.',
+      sendingTest: 'Sending test email...',
+      noHistory: 'No check history yet.',
+      noIssues: 'No open recommendations from the latest check.',
+      firstCheck: 'Run the first check to start history.',
+      monitorEyebrow: 'Client site monitor',
+      runCheck: 'Run health check',
+      refresh: 'Refresh history',
+      delete: 'Delete',
+      currentHealth: 'Current health',
+      uptimeSample: 'Uptime sample',
+      healthScore: 'Health score',
+      avgResponse: 'Avg response',
+      sinceDown: 'Since last down',
+      recentIncidents: 'Recent incidents',
+      settings: 'Monitor settings',
+      settingsCopy: 'Keyword checks, maintenance, alerts, public status.',
+      keyword: 'Keyword must appear',
+      keywordPlaceholder: 'optional text to monitor',
+      maintenanceStart: 'Maintenance starts',
+      maintenanceEnd: 'Maintenance ends',
+      emailAlerts: 'Email alerts',
+      alertDown: 'Notify when down',
+      alertWarning: 'Notify on warnings',
+      alertRecovery: 'Notify on recovery',
+      statusPage: 'Enable public status page',
+      save: 'Save settings',
+      latestIssues: 'Latest silent issues',
+      recentChecks: 'Recent checks',
+      enterUrl: 'Enter a public website URL.',
+      saved: 'Saved.',
+      deleteConfirm: 'Delete this monitored site and its check history?',
+      saveFailed: 'Could not save settings'
+    },
+    signin: {
+      eyebrow: 'Customer access',
+      title: 'Sign in to manage monitored sites.',
+      lead: 'Create an account to save sites, run checks, and keep history separate from the public scanner.',
+      formTitle: 'Sign in or create account',
+      password: 'Password',
+      signin: 'Sign in',
+      signup: 'Create account'
+    }
+  },
+  es: {
+    nav: { pricing: 'Precios', demo: 'Demo', how: 'Como funciona', dashboard: 'Dashboard', signin: 'Entrar', home: 'Inicio', signout: 'Salir' },
+    controls: { themeDay: 'Modo dia', themeNight: 'Modo noche', language: 'Idioma' },
+    common: { copied: 'Reporte copiado al portapapeles.', copyFailed: 'No se pudo copiar el reporte.', shareReport: 'Compartir reporte', copyReport: 'Copiar reporte para cliente' },
+    home: {
+      eyebrow: 'Monitoreo de salud web para agencias y duenos de sitios',
+      title: 'Detecta problemas silenciosos antes de que cuesten trafico, leads o confianza.',
+      lead: 'SiteTrace vigila caidas, paginas lentas, riesgo SSL, errores noindex, SEO basico faltante y alertas de seguridad en un monitor facil de explicar al cliente.',
+      placeholder: 'https://ejemplo.com',
+      button: 'Revisar sitio',
+      pills: ['Checks manuales sin login', 'Uptime + SEO + SSL + seguridad', 'Pensado para monitoreo continuo'],
+      previewEyebrow: 'Vista del monitor',
+      previewSite: 'sitio-cliente.com',
+      metricResponse: 'Tiempo de respuesta',
+      metricSsl: 'Certificado SSL',
+      metricIssues: 'Problemas a corregir',
+      checkReachableTitle: 'El sitio responde',
+      checkReachableCopy: 'El servidor esta respondiendo normalmente.',
+      checkMetaTitle: 'La meta del home cambio',
+      checkMetaCopy: 'Un snippet debil puede bajar clics desde busqueda y enlaces compartidos.',
+      checkSecurityTitle: 'Faltan headers de seguridad',
+      checkSecurityCopy: 'Detecta brechas basicas de confianza antes de que pregunte un cliente.',
+      sectionEyebrow: 'Orientado a ingresos recurrentes',
+      sectionTitle: 'Dale a cada sitio de cliente un monitor de salud simple.',
+      sectionCopy: 'Agencias y freelancers pueden usar SiteTrace para demostrar que vigilan detalles que los clientes no revisan hasta que algo se rompe.',
+      featureTitles: ['Alertas de problemas silenciosos', 'Score claro para clientes', 'Monitoreo para agencias'],
+      featureCopy: [
+        'Sabe cuando un sitio esta online pero sigue en riesgo: respuesta lenta, noindex, metadata faltante, SSL o cambios de keywords.',
+        'Convierte checks tecnicos en un score, lista de problemas e historial que un cliente no tecnico puede entender.',
+        'Administra varios sitios, corre checks, publica status pages y vende mantenimiento recurrente con evidencia.'
+      ],
+      agencyEyebrow: 'Para agencias',
+      agencyTitle: 'Convierte el mantenimiento web en algo que el cliente puede ver.',
+      agencyCopy: 'SiteTrace te da la capa de evidencia para cuidado recurrente: que cambio, que esta en riesgo, cuando paso y que hiciste antes de que el cliente lo notara.',
+      agencyPoints: ['Monitorea todos los sitios de clientes desde un dashboard', 'Copia reportes listos para cliente despues de cada check', 'Usa status pages e incidentes para mostrar soporte proactivo'],
+      whyEyebrow: 'Por que importa',
+      whyTitle: 'Un sitio puede estar vivo y aun asi perder negocio.',
+      whyCopy: 'La caida total es obvia. Los problemas caros suelen ser mas silenciosos: una actualizacion quita el title, una pagina queda noindex, el SSL empieza a expirar, el home se vuelve lento o desaparece una frase clave.',
+      plans: 'Ver planes',
+      footer: 'SiteTrace - Monitoreo de salud web para agencias y duenos de sitios.'
+    },
+    pricing: {
+      title: 'Planes pensados para cuidado web proactivo.',
+      lead: 'Empieza con checks manuales y luego monitorea los sitios importantes con alertas, historial, status pages y capacidad para agencias.',
+      cards: [
+        ['Validar', 'Free', '$0', 'Para checks rapidos de salud web.', ['Escaneos manuales', 'Uptime, SSL, SEO y seguridad basica', 'Texto facil de compartir']],
+        ['Mejor primer plan pago', 'Starter', '$19/mes', 'Para un negocio o los sitios clave de un freelancer.', ['5 sitios monitoreados', 'Checks cada 5 minutos', 'Alertas por email e historial de 30 dias', 'Status pages publicas']],
+        ['Para cuidado recurrente', 'Agency', '$79/mes', 'Para equipos que manejan sitios de clientes.', ['50 sitios monitoreados', 'Reportes y status pages para clientes', 'Slack, Teams, webhooks y API', 'Vende mantenimiento proactivo con evidencia']]
+      ],
+      buttons: ['Empezar monitoreo', 'Subir a Agency'],
+      note: 'Enfoque de lanzamiento:',
+      noteCopy: ' SiteTrace ayuda a agencias y freelancers a empaquetar monitoreo como cuidado web recurrente, no como otra suite SEO gigante.'
+    },
+    demo: {
+      eyebrow: 'Demo tipo monitoreo real',
+      title: 'Mira como SiteTrace explica la salud web de clientes.',
+      lead: 'Explora monitores de ejemplo para un sitio saludable, uno con alerta y uno con incidente antes de crear cuenta.',
+      select: 'Sitios de cliente de ejemplo',
+      current: 'Salud actual',
+      score: 'Score de salud',
+      response: 'Respuesta',
+      lastCheck: 'Ultimo check',
+      issues: 'Problemas que SiteTrace mostraria',
+      history: 'Checks recientes',
+      ctaTitle: 'Usa esto como demo de venta.',
+      ctaCopy: 'Un freelancer o agencia puede mostrar esta vista para explicar por que el monitoreo proactivo pertenece a cada plan de mantenimiento.',
+      ctaButton: 'Empezar con Agency'
+    },
+    api: {
+      title: 'SiteTrace vigila las senales silenciosas que pueden costar trafico, leads o confianza.',
+      lead: 'Cada monitor combina disponibilidad, velocidad, SSL, SEO basico, presencia de keywords y headers de seguridad en un estado claro para actuar temprano.',
+      featureCopy: 'Title, meta description, estructura H1, ALT en imagenes, canonical, viewport, idioma, Open Graph e indexacion se revisan antes de convertirse en fugas silenciosas de trafico.'
+    },
+    dashboard: {
+      eyebrow: 'Centro de salud web',
+      title: 'Monitorea los sitios que no pueden romperse en silencio.',
+      lead: 'Sigue estado, velocidad, SEO basico, riesgo SSL, seguridad, incidentes recientes e historial claro para clientes.',
+      addName: 'Cliente o nombre del sitio',
+      addButton: 'Agregar monitor',
+      clientSites: 'Sitios de clientes',
+      emptyTitle: 'No hay monitor seleccionado',
+      emptyCopy: 'Elige un sitio de la izquierda para ver salud, incidentes, recomendaciones y checks recientes.',
+      plan: 'Plan',
+      sites: 'Sitios',
+      lastCheck: 'Ultimo check',
+      alerts: ['Alertas por email', 'Remitente', 'Destinatario', 'Consulta de entrega', 'Slack', 'Teams'],
+      alertValues: {
+        configured: 'Configurado',
+        notConfigured: 'No configurado',
+        readKey: 'Read key configurada',
+        sendOnly: 'Llave solo de envio',
+        optional: 'Opcional'
+      },
+      noSites: 'Aun no hay sitios de clientes monitoreados.',
+      running: 'Revisando uptime, velocidad, SEO basico, SSL y seguridad...',
+      completed: 'Check de salud completado.',
+      emailSent: 'Email de incidente enviado correctamente.',
+      emailNotSent: 'El incidente se registro, pero el email no se envio:',
+      pendingIncident: 'Primer fallo registrado. Corre otro check igual para abrir incidente y enviar alerta.',
+      sendingTest: 'Enviando email de prueba...',
+      noHistory: 'Aun no hay historial de checks.',
+      noIssues: 'No hay recomendaciones abiertas en el ultimo check.',
+      firstCheck: 'Corre el primer check para iniciar el historial.',
+      monitorEyebrow: 'Monitor de sitio cliente',
+      runCheck: 'Correr health check',
+      refresh: 'Actualizar historial',
+      delete: 'Eliminar',
+      currentHealth: 'Salud actual',
+      uptimeSample: 'Muestra de uptime',
+      healthScore: 'Score de salud',
+      avgResponse: 'Respuesta prom.',
+      sinceDown: 'Desde ultima caida',
+      recentIncidents: 'Incidentes recientes',
+      settings: 'Configuracion del monitor',
+      settingsCopy: 'Keywords, mantenimiento, alertas y status publico.',
+      keyword: 'Keyword requerida',
+      keywordPlaceholder: 'texto opcional a monitorear',
+      maintenanceStart: 'Inicio de mantenimiento',
+      maintenanceEnd: 'Fin de mantenimiento',
+      emailAlerts: 'Alertas por email',
+      alertDown: 'Avisar si cae',
+      alertWarning: 'Avisar con warnings',
+      alertRecovery: 'Avisar recuperacion',
+      statusPage: 'Activar status page publica',
+      save: 'Guardar configuracion',
+      latestIssues: 'Problemas silenciosos recientes',
+      recentChecks: 'Checks recientes',
+      enterUrl: 'Ingresa una URL publica.',
+      saved: 'Guardado.',
+      deleteConfirm: 'Eliminar este sitio monitoreado y su historial?',
+      saveFailed: 'No se pudo guardar la configuracion'
+    },
+    signin: {
+      eyebrow: 'Acceso de cliente',
+      title: 'Entra para manejar sitios monitoreados.',
+      lead: 'Crea una cuenta para guardar sitios, correr checks y separar el historial del scanner publico.',
+      formTitle: 'Entrar o crear cuenta',
+      password: 'Contrasena',
+      signin: 'Entrar',
+      signup: 'Crear cuenta'
+    }
+  }
+};
+
+function t(path) {
+  return path.split('.').reduce((value, key) => value && value[key], copy[currentLocale]) || path;
+}
+
+function setText(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) element.textContent = value;
+}
+
+function setAllText(selector, values) {
+  document.querySelectorAll(selector).forEach((element, index) => {
+    if (values[index]) element.textContent = values[index];
+  });
+}
+
+function localizedStatus(status) {
+  const labels = {
+    en: { online: 'online', warning: 'warning', down: 'down', maintenance: 'maintenance', pending: 'pending' },
+    es: { online: 'online', warning: 'warning', down: 'caido', maintenance: 'mantenimiento', pending: 'pendiente' }
+  };
+  return labels[currentLocale][status] || status || labels[currentLocale].pending;
+}
+
+async function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+function reportSummaryFromAnalysis(data) {
+  const checks = Array.isArray(data.checks) ? data.checks : [];
+  const issues = checks.filter((check) => check.level !== 'pass').slice(0, 8);
+  const lines = [
+    `SiteTrace report: ${data.final_url || data.analyzed_url}`,
+    `Score: ${data.score || data.seo_score || 0}/100`,
+    `HTTP: ${data.status_code || '-'}`,
+    `Response: ${data.response_time || '-'}`,
+    '',
+    currentLocale === 'es' ? 'Problemas principales:' : 'Top issues:'
+  ];
+  if (!issues.length) lines.push(currentLocale === 'es' ? 'No hay problemas abiertos.' : 'No open issues.');
+  issues.forEach((check) => lines.push(`- ${check.title}: ${check.recommendation || check.description}`));
+  return lines.join('\n');
+}
+
+function reportSummaryFromSite(site, checks) {
+  const latest = checks[0] || {};
+  const result = latest.result || {};
+  const issues = Array.isArray(result.checks) ? result.checks.filter((check) => check.level !== 'pass').slice(0, 8) : [];
+  const lines = [
+    `SiteTrace client report: ${site.name}`,
+    `URL: ${site.url}`,
+    `Status: ${localizedStatus(statusLabel(site.last_status))}`,
+    `Score: ${site.last_score || latest.score || '-'}/100`,
+    `Response: ${site.last_response_time_ms || latest.response_time_ms || '-'}ms`,
+    `Last check: ${formatDateTime(site.last_checked_at || latest.created_at)}`,
+    '',
+    currentLocale === 'es' ? 'Problemas principales:' : 'Top issues:'
+  ];
+  if (!issues.length) lines.push(currentLocale === 'es' ? 'No hay problemas abiertos.' : 'No open issues.');
+  issues.forEach((check) => lines.push(`- ${check.title}: ${check.recommendation || check.description}`));
+  return lines.join('\n');
+}
+
+function applyTheme() {
+  document.documentElement.dataset.theme = currentTheme;
+  const button = document.getElementById('themeToggle');
+  if (button) {
+    button.textContent = currentTheme === 'day' ? t('controls.themeNight') : t('controls.themeDay');
+    button.setAttribute('aria-label', button.textContent);
+  }
+}
+
+function initPreferences() {
+  document.documentElement.lang = currentLocale;
+  const navLinks = document.querySelector('.nav-links');
+  if (navLinks && !document.getElementById('languageSelect')) {
+    const controls = document.createElement('div');
+    controls.className = 'nav-controls';
+    controls.innerHTML = `
+      <select id="languageSelect" class="control-select" aria-label="${escapeHtml(t('controls.language'))}">
+        <option value="en">EN</option>
+        <option value="es">ES</option>
+      </select>
+      <button id="themeToggle" class="control-button" type="button"></button>`;
+    navLinks.appendChild(controls);
+    document.getElementById('languageSelect').value = currentLocale;
+    document.getElementById('languageSelect').addEventListener('change', (event) => {
+      currentLocale = event.target.value === 'es' ? 'es' : 'en';
+      localStorage.setItem('sitetrace_locale', currentLocale);
+      applyLanguage();
+      if (page === 'dashboard' && state.sites.length) renderDashboard();
+    });
+    document.getElementById('themeToggle').addEventListener('click', () => {
+      currentTheme = currentTheme === 'day' ? 'night' : 'day';
+      localStorage.setItem('sitetrace_theme', currentTheme);
+      applyTheme();
+    });
+  }
+  applyTheme();
+}
 
 if (page === 'home' && ['#pricing', '#api', '#dashboard'].includes(window.location.hash)) {
   window.location.replace(window.location.hash.replace('#', '/'));
+}
+
+function applyLanguage() {
+  document.documentElement.lang = currentLocale;
+  const languageSelect = document.getElementById('languageSelect');
+  if (languageSelect) languageSelect.value = currentLocale;
+
+  setText('.nav-links a[href="/pricing"]', t('nav.pricing'));
+  setText('.nav-links a[href="/demo"]', t('nav.demo'));
+  setText('.nav-links a[href="/api"]', t('nav.how'));
+  setText('.nav-links a[href="/dashboard"]', t('nav.dashboard'));
+  setText('.nav-links a[href="/signin"]', t('nav.signin'));
+  setText('.nav-links a[href="/"]', t('nav.home'));
+  setText('#signOutBtn', t('nav.signout'));
+
+  if (page === 'home') {
+    setText('.hero .eyebrow', t('home.eyebrow'));
+    setText('.hero h1', t('home.title'));
+    setText('.hero .lead', t('home.lead'));
+    const urlInput = document.getElementById('urlInput');
+    if (urlInput) urlInput.placeholder = t('home.placeholder');
+    setText('#analyzeBtn', t('home.button'));
+    setAllText('.trust-row .pill', t('home.pills'));
+    setText('.panel .panel-top .eyebrow', t('home.previewEyebrow'));
+    setText('.panel .panel-top strong', t('home.previewSite'));
+    setAllText('.metric-grid .metric span', [t('home.metricResponse'), t('home.metricSsl'), t('home.metricIssues')]);
+    setAllText('.panel .check-title', [t('home.checkReachableTitle'), t('home.checkMetaTitle'), t('home.checkSecurityTitle')]);
+    setAllText('.panel .check-copy', [t('home.checkReachableCopy'), t('home.checkMetaCopy'), t('home.checkSecurityCopy')]);
+    setText('main section:nth-of-type(2) .section-head .eyebrow', t('home.sectionEyebrow'));
+    setText('main section:nth-of-type(2) .section-head h2', t('home.sectionTitle'));
+    setText('main section:nth-of-type(2) .section-head p:not(.eyebrow)', t('home.sectionCopy'));
+    setAllText('main section:nth-of-type(2) .feature h3', t('home.featureTitles'));
+    setAllText('main section:nth-of-type(2) .feature p', t('home.featureCopy'));
+    setText('.agency-section .eyebrow', t('home.agencyEyebrow'));
+    setText('.agency-section h2', t('home.agencyTitle'));
+    setText('.agency-section .lead', t('home.agencyCopy'));
+    setAllText('.agency-section li', t('home.agencyPoints'));
+    setText('.conversion-band .eyebrow', t('home.whyEyebrow'));
+    setText('.conversion-band h2', t('home.whyTitle'));
+    setText('.conversion-band p:not(.eyebrow)', t('home.whyCopy'));
+    setText('.conversion-band .button', t('home.plans'));
+    setText('.footer .container', t('home.footer'));
+  }
+
+  if (page === 'pricing') {
+    setText('.section-head h1', t('pricing.title'));
+    setText('.section-head p:not(.eyebrow)', t('pricing.lead'));
+    document.querySelectorAll('.price').forEach((card, index) => {
+      const data = t('pricing.cards')[index];
+      if (!data) return;
+      setText(`.price:nth-child(${index + 1}) .eyebrow`, data[0]);
+      setText(`.price:nth-child(${index + 1}) h3`, data[1]);
+      setText(`.price:nth-child(${index + 1}) strong`, data[2]);
+      setText(`.price:nth-child(${index + 1}) p:not(.eyebrow)`, data[3]);
+      setAllText(`.price:nth-child(${index + 1}) li`, data[4]);
+    });
+    setAllText('[data-upgrade]', t('pricing.buttons'));
+    const note = document.querySelector('.pricing-note');
+    if (note) note.innerHTML = `<strong>${escapeHtml(t('pricing.note'))}</strong>${escapeHtml(t('pricing.noteCopy'))}`;
+  }
+
+  if (page === 'demo') {
+    setText('.section-head .eyebrow', t('demo.eyebrow'));
+    setText('.section-head h1', t('demo.title'));
+    setText('.section-head p:not(.eyebrow)', t('demo.lead'));
+    renderDemo();
+  }
+
+  if (page === 'api') {
+    setText('.page-shell .eyebrow', 'How it works');
+    if (currentLocale === 'es') setText('.page-shell .eyebrow', 'Como funciona');
+    setText('.page-shell h1', t('api.title'));
+    setText('.page-shell .lead', t('api.lead'));
+    const seoCard = document.querySelector('.features.two .feature:nth-child(4) p');
+    if (seoCard) seoCard.textContent = t('api.featureCopy');
+  }
+
+  if (page === 'dashboard') {
+    setText('.dashboard-head .eyebrow', t('dashboard.eyebrow'));
+    setText('.dashboard-head h1', t('dashboard.title'));
+    setText('.dashboard-head .muted', t('dashboard.lead'));
+    const siteName = document.getElementById('siteName');
+    if (siteName) siteName.placeholder = t('dashboard.addName');
+    setText('#siteForm .button', t('dashboard.addButton'));
+    setText('.site-list-panel .panel-top strong', t('dashboard.clientSites'));
+    const empty = document.querySelector('#siteDetail.empty-state');
+    if (empty) {
+      setText('#siteDetail h2', t('dashboard.emptyTitle'));
+      setText('#siteDetail p', t('dashboard.emptyCopy'));
+    }
+  }
+
+  if (page === 'signin') {
+    setText('.auth-copy .eyebrow', t('signin.eyebrow'));
+    setText('.auth-copy h1', t('signin.title'));
+    setText('.auth-copy .lead', t('signin.lead'));
+    setText('.auth-form h2', t('signin.formTitle'));
+    const password = document.getElementById('authPassword');
+    if (password) password.placeholder = t('signin.password');
+    setText('#authForm .button[type="submit"]', t('signin.signin'));
+    setText('#signUpBtn', t('signin.signup'));
+  }
+
+  applyTheme();
 }
 
 function authHeaders() {
@@ -27,10 +534,10 @@ function formatDateTime(value) {
 }
 
 function formatDurationSince(value) {
-  if (!value) return 'No downtime recorded';
+  if (!value) return currentLocale === 'es' ? 'Sin caidas registradas' : 'No downtime recorded';
   const diff = Math.max(0, Date.now() - new Date(value).getTime());
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return currentLocale === 'es' ? 'Ahora' : 'Just now';
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ${minutes % 60}m`;
@@ -39,9 +546,16 @@ function formatDurationSince(value) {
 }
 
 function statusCopy(status) {
-  if (status === 'online') return 'Responding normally';
-  if (status === 'warning') return 'Needs attention';
-  if (status === 'down') return 'Currently down';
+  if (currentLocale === 'es') {
+    if (status === 'online') return 'Saludable ahora';
+    if (status === 'warning') return 'Problema silencioso';
+    if (status === 'down') return 'Requiere accion';
+    if (status === 'maintenance') return 'Ventana de mantenimiento';
+    return 'Esperando primer check';
+  }
+  if (status === 'online') return 'Healthy right now';
+  if (status === 'warning') return 'Silent issue found';
+  if (status === 'down') return 'Action needed';
   if (status === 'maintenance') return 'Maintenance window';
   return 'Waiting for first check';
 }
@@ -88,7 +602,8 @@ function renderResults(data) {
   const score = Number(data.score || data.seo_score || 0);
   const checkHtml = sorted.map((check) => `<div class="check"><span class="dot ${check.level === 'pass' ? '' : check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.description)}</p><p class="check-copy"><strong>Recommendation:</strong> ${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('');
 
-  target.innerHTML = `<div class="result-shell"><div class="panel-top"><div><p class="eyebrow compact">Site health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div><div class="metric-grid"><div class="metric"><strong>${score}/100</strong><span>Score</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div><div class="metric"><strong>${escapeHtml(data.status_code)}</strong><span>Status code</span></div><div class="metric"><strong>${failCount}</strong><span>Failed</span></div><div class="metric"><strong>${warningCount}</strong><span>Warning</span></div><div class="metric"><strong>${checks.length}</strong><span>Checks</span></div></div><div class="check-list">${checkHtml}</div></div>`;
+  const reportText = encodeURIComponent(reportSummaryFromAnalysis(data));
+  target.innerHTML = `<div class="result-shell"><div class="panel-top"><div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="result-actions"><button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div></div><div class="metric-grid"><div class="metric"><strong>${score}/100</strong><span>Health score</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div><div class="metric"><strong>${escapeHtml(data.status_code)}</strong><span>Status code</span></div><div class="metric"><strong>${failCount}</strong><span>Critical issues</span></div><div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div><div class="metric"><strong>${checks.length}</strong><span>Total checks</span></div></div><div class="check-list">${checkHtml}</div></div>`;
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -114,9 +629,9 @@ function initAnalyzer() {
     const url = input.value.trim();
     if (!url) return renderError('Enter a website URL first.');
     button.disabled = true;
-    document.getElementById('results').innerHTML = '<div class="result-shell"><div class="panel-top"><strong>Analyzing your website...</strong></div></div>';
+    document.getElementById('results').innerHTML = '<div class="result-shell"><div class="panel-top"><strong>Checking for silent website issues...</strong></div></div>';
     try {
-      const response = await fetch(apiPath('/analyze'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, locale: 'en' }) });
+      const response = await fetch(apiPath('/analyze'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, locale: currentLocale }) });
       const data = await response.json();
       if (!response.ok || data.status === 'error') renderError(data.message || 'Analysis failed');
       else renderResults(data);
@@ -124,6 +639,17 @@ function initAnalyzer() {
       renderError(error.message || 'Analysis failed');
     } finally {
       button.disabled = false;
+    }
+  });
+  document.getElementById('results').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-share-report]');
+    if (!button) return;
+    try {
+      await copyToClipboard(decodeURIComponent(button.dataset.shareReport));
+      button.textContent = t('common.copied');
+      window.setTimeout(() => { button.textContent = t('common.shareReport'); }, 2200);
+    } catch (error) {
+      button.textContent = t('common.copyFailed');
     }
   });
 }
@@ -200,18 +726,23 @@ function renderAlertStatus() {
   const target = document.getElementById('alertStatusPanel');
   if (!target || !state.config) return;
   const profileEmail = state.profile && state.profile.email ? state.profile.email : state.session.user.email;
+  const labels = t('dashboard.alerts');
+  const values = t('dashboard.alertValues');
   const items = [
-    { label: 'Email alerts', value: state.config.email_alerts_enabled ? 'Configured' : 'Not configured', ok: state.config.email_alerts_enabled },
-    { label: 'From address', value: state.config.alert_from_email || '-', ok: state.config.email_alerts_enabled },
-    { label: 'Recipient', value: profileEmail || '-', ok: Boolean(profileEmail) },
-    { label: 'Delivery lookup', value: state.config.delivery_lookup_configured ? 'Read key configured' : 'Send-only key', ok: state.config.delivery_lookup_configured },
-    { label: 'Slack', value: state.config.slack_alerts_enabled ? 'Configured' : 'Optional', ok: state.config.slack_alerts_enabled },
-    { label: 'Teams', value: state.config.teams_alerts_enabled ? 'Configured' : 'Optional', ok: state.config.teams_alerts_enabled }
+    { label: labels[0], value: state.config.email_alerts_enabled ? values.configured : values.notConfigured, ok: state.config.email_alerts_enabled },
+    { label: labels[1], value: state.config.alert_from_email || '-', ok: state.config.email_alerts_enabled },
+    { label: labels[2], value: profileEmail || '-', ok: Boolean(profileEmail) },
+    { label: labels[3], value: state.config.delivery_lookup_configured ? values.readKey : values.sendOnly, ok: state.config.delivery_lookup_configured },
+    { label: labels[4], value: state.config.slack_alerts_enabled ? values.configured : values.optional, ok: state.config.slack_alerts_enabled },
+    { label: labels[5], value: state.config.teams_alerts_enabled ? values.configured : values.optional, ok: state.config.teams_alerts_enabled }
   ];
   target.innerHTML = items.map((item) => `<div class="alert-status-card"><span class="dot ${item.ok ? '' : 'pending'}"></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></div>`).join('');
 }
 
 function renderDashboard() {
+  setText('.dashboard-grid .dash-card:nth-child(1) .muted', t('dashboard.plan'));
+  setText('.dashboard-grid .dash-card:nth-child(2) .muted', t('dashboard.sites'));
+  setText('.dashboard-grid .dash-card:nth-child(3) .muted', t('dashboard.lastCheck'));
   document.getElementById('planValue').textContent = state.profile ? state.profile.plan : 'free';
   document.getElementById('siteCount').textContent = state.sites.length;
   const lastSite = state.sites.find((site) => site.last_checked_at);
@@ -221,14 +752,14 @@ function renderDashboard() {
   const listCount = document.getElementById('siteListCount');
   if (listCount) listCount.textContent = state.sites.length;
   if (!state.sites.length) {
-    list.innerHTML = '<div class="empty">No monitored sites yet.</div>';
+    list.innerHTML = `<div class="empty">${escapeHtml(t('dashboard.noSites'))}</div>`;
     renderSiteDetail(null);
     return;
   }
   list.innerHTML = state.sites.map((site) => {
     const active = site.id === state.selectedSiteId ? ' active' : '';
     const status = statusLabel(site.last_status);
-    return `<button class="site-list-item${active}" type="button" data-select="${site.id}"><span class="dot ${status === 'online' ? '' : status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${status}">${escapeHtml(status)}</em></button>`;
+    return `<button class="site-list-item${active}" type="button" data-select="${site.id}"><span class="dot ${status === 'online' ? '' : status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${status}">${escapeHtml(localizedStatus(status))}</em></button>`;
   }).join('');
   renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
 }
@@ -236,27 +767,27 @@ function renderDashboard() {
 async function runSiteCheck(siteId) {
   const detail = document.getElementById('siteDetail');
   if (detail) detail.classList.add('is-loading');
-  setDashboardMessage('Running check...');
-  const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: 'en' }) });
+  setDashboardMessage(t('dashboard.running'));
+  const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: currentLocale }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Check failed');
   const emailResult = data.incident && data.incident.notifications && data.incident.notifications.email;
   await loadDashboard();
   if (emailResult && emailResult.sent) {
-    setDashboardMessage('Incident email sent successfully.', 'success');
+    setDashboardMessage(t('dashboard.emailSent'), 'success');
   } else if (emailResult && !emailResult.sent) {
-    setDashboardMessage(`Incident was recorded, but email was not sent: ${emailResult.reason || 'unknown error'}`, 'error');
+    setDashboardMessage(`${t('dashboard.emailNotSent')} ${emailResult.reason || 'unknown error'}`, 'error');
   } else if (data.incident && data.incident.pending_confirmation) {
-    setDashboardMessage('First matching failure recorded. Run one more matching check to open an incident and send an alert.');
+    setDashboardMessage(t('dashboard.pendingIncident'));
   } else {
-    setDashboardMessage('Check completed.');
+    setDashboardMessage(t('dashboard.completed'));
   }
 }
 
 async function testAlertEmail() {
   const button = document.getElementById('testEmailBtn');
   if (button) button.disabled = true;
-  setDashboardMessage('Sending test email...');
+  setDashboardMessage(t('dashboard.sendingTest'));
   try {
     const response = await fetch(apiPath('/api/test-alert-email'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() } });
     const data = await response.json();
@@ -322,10 +853,101 @@ async function showHistory(siteId) {
   if (error) throw error;
   const history = document.getElementById('siteDetail');
   if (!data.length) {
-    history.innerHTML = '<div class="empty">No check history yet.</div>';
+    history.innerHTML = `<div class="empty">${escapeHtml(t('dashboard.noHistory'))}</div>`;
     return;
   }
   history.innerHTML = `<div class="check-list">${data.map((check) => `<div class="check"><span class="dot ${check.status}"></span><div><p class="check-title">${new Date(check.created_at).toLocaleString()} <span class="level-badge ${check.status}">${escapeHtml(check.status)}</span></p><p class="check-copy">${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || '-'}</p></div><span class="check-value">${escapeHtml(check.result && check.result.page_context)}</span></div>`).join('')}</div>`;
+}
+
+const demoSites = [
+  {
+    name: 'Northstar Dental',
+    url: 'https://northstar-dental.example',
+    status: 'online',
+    score: 94,
+    response: 286,
+    lastCheck: '4m',
+    issues: [
+      ['warning', 'Open Graph image missing', 'Shared links work, but the preview could look stronger for campaigns.'],
+      ['warning', 'CSP header missing', 'Add a basic Content Security Policy to improve the security baseline.']
+    ],
+    history: ['online', 'online', 'online', 'online', 'warning', 'online', 'online', 'online']
+  },
+  {
+    name: 'Atlas Roofing',
+    url: 'https://atlas-roofing.example',
+    status: 'warning',
+    score: 71,
+    response: 1840,
+    lastCheck: '7m',
+    issues: [
+      ['warning', 'Homepage response slowed down', 'The site is online, but a slower homepage can reduce leads from mobile visitors.'],
+      ['fail', 'Required phrase missing', 'The monitored phrase "emergency roof repair" disappeared from the landing page.'],
+      ['warning', 'Meta description too short', 'Rewrite the snippet so searchers understand the offer before they click.']
+    ],
+    history: ['online', 'online', 'warning', 'warning', 'online', 'warning', 'warning', 'warning']
+  },
+  {
+    name: 'Luma Studio',
+    url: 'https://luma-studio.example',
+    status: 'down',
+    score: 18,
+    response: null,
+    lastCheck: '2m',
+    issues: [
+      ['fail', 'Server error detected', 'The homepage returned a server error and needs immediate attention.'],
+      ['fail', 'Client status page updated', 'The public status view shows an active incident while the team investigates.']
+    ],
+    history: ['online', 'online', 'warning', 'down', 'down', 'down', 'warning', 'down']
+  }
+];
+
+function renderDemo(selectedIndex = 0) {
+  const root = document.getElementById('demoRoot');
+  if (!root) return;
+  const selected = demoSites[selectedIndex] || demoSites[0];
+  const issueHtml = selected.issues.map((issue) => `<div class="check compact-check"><span class="dot ${issue[0]}"></span><div><p class="check-title">${escapeHtml(issue[1])} <span class="level-badge ${issue[0]}">${escapeHtml(issue[0])}</span></p><p class="check-copy">${escapeHtml(issue[2])}</p></div></div>`).join('');
+  const historyHtml = selected.history.map((status) => `<span class="uptime-bar ${statusLabel(status)}" title="${escapeHtml(localizedStatus(status))}"></span>`).join('');
+  root.innerHTML = `
+    <div class="demo-layout">
+      <aside class="site-list-panel demo-list">
+        <div class="panel-top compact-panel"><strong>${escapeHtml(t('demo.select'))}</strong></div>
+        <div class="site-list">
+          ${demoSites.map((site, index) => `<button class="site-list-item${index === selectedIndex ? ' active' : ''}" type="button" data-demo-site="${index}"><span class="dot ${site.status === 'online' ? '' : site.status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${site.status}">${escapeHtml(localizedStatus(site.status))}</em></button>`).join('')}
+        </div>
+      </aside>
+      <section class="site-detail-panel">
+        <div class="site-detail">
+          <div class="detail-hero">
+            <div><p class="eyebrow compact">${escapeHtml(t('demo.current'))}</p><h2>${escapeHtml(selected.name)}</h2><p class="muted">${escapeHtml(selected.url)}</p></div>
+            <span class="status-pill ${selected.status}"><span class="dot ${selected.status === 'online' ? '' : selected.status}"></span>${escapeHtml(statusCopy(selected.status))}</span>
+          </div>
+          <div class="detail-metrics">
+            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.score'))}</span><h3>${selected.score}/100</h3></div>
+            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.response'))}</span><h3>${selected.response ? `${selected.response}ms` : '-'}</h3></div>
+            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.lastCheck'))}</span><h3>${escapeHtml(selected.lastCheck)}</h3></div>
+          </div>
+          <div class="uptime-strip">${historyHtml}</div>
+          <div class="detail-grid">
+            <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('demo.issues'))}</strong></div><div class="check-list">${issueHtml}</div></div>
+            <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('demo.history'))}</strong></div><div class="timeline">${selected.history.map((status, index) => `<div class="timeline-row"><span class="dot ${status === 'online' ? '' : status}"></span><div><strong>${escapeHtml(localizedStatus(status))}</strong><small>${index + 1} ${currentLocale === 'es' ? 'check reciente' : 'recent check'}</small></div></div>`).join('')}</div></div>
+          </div>
+        </div>
+      </section>
+    </div>
+    <div class="conversion-band demo-cta">
+      <div><p class="eyebrow">${escapeHtml(t('demo.ctaTitle'))}</p><p>${escapeHtml(t('demo.ctaCopy'))}</p></div>
+      <a class="button secondary" href="/pricing">${escapeHtml(t('demo.ctaButton'))}</a>
+    </div>`;
+}
+
+function initDemo() {
+  if (page !== 'demo') return;
+  renderDemo();
+  document.getElementById('demoRoot').addEventListener('click', (event) => {
+    const button = event.target.closest('[data-demo-site]');
+    if (button) renderDemo(Number(button.dataset.demoSite));
+  });
 }
 
 function renderSiteDetail(site) {
@@ -334,7 +956,7 @@ function renderSiteDetail(site) {
   detail.classList.remove('empty-state', 'is-loading');
   if (!site) {
     detail.classList.add('empty-state');
-    detail.innerHTML = '<h2>No site selected</h2><p>Choose a monitored site from the left to see status, uptime context, and recent checks.</p>';
+    detail.innerHTML = `<h2>${escapeHtml(t('dashboard.emptyTitle'))}</h2><p>${escapeHtml(t('dashboard.emptyCopy'))}</p>`;
     return;
   }
 
@@ -355,55 +977,57 @@ function renderSiteDetail(site) {
 
   const issueHtml = importantChecks.length
     ? importantChecks.map((check) => `<div class="check compact-check"><span class="dot ${check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('')
-    : '<div class="empty subtle">No open recommendations from the latest check.</div>';
+    : `<div class="empty subtle">${escapeHtml(t('dashboard.noIssues'))}</div>`;
 
   const historyHtml = checks.length
-    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(check.status)}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || 'unreachable'}</small></div></div>`).join('')
-    : '<div class="empty subtle">Run the first check to start history.</div>';
+    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(localizedStatus(check.status))}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || 'unreachable'}</small></div></div>`).join('')
+    : `<div class="empty subtle">${escapeHtml(t('dashboard.firstCheck'))}</div>`;
   const bars = checks.slice(0, 24).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
   const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
+  const reportText = encodeURIComponent(reportSummaryFromSite(site, checks));
 
   detail.innerHTML = `
     <div class="detail-hero">
       <div>
-        <p class="eyebrow compact">Selected monitor</p>
+        <p class="eyebrow compact">${escapeHtml(t('dashboard.monitorEyebrow'))}</p>
         <h2>${escapeHtml(site.name)}</h2>
         <p class="muted">${escapeHtml(site.url)}</p>
       </div>
       <span class="status-pill ${status}"><span class="dot ${status === 'online' ? '' : status}"></span>${escapeHtml(statusCopy(status))}</span>
     </div>
     <div class="detail-actions">
-      <button class="button" type="button" data-run="${site.id}">Run check</button>
-      <button class="button secondary" type="button" data-refresh-detail="${site.id}">Refresh history</button>
-      <button class="button danger" type="button" data-delete="${site.id}">Delete</button>
+      <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
+      <button class="button secondary" type="button" data-copy-client-report="${reportText}">${escapeHtml(t('common.copyReport'))}</button>
+      <button class="button secondary" type="button" data-refresh-detail="${site.id}">${escapeHtml(t('dashboard.refresh'))}</button>
+      <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
     </div>
     <div class="detail-metrics">
-      <div class="dash-card"><span class="muted">Current status</span><h3>${escapeHtml(status)}</h3></div>
-      <div class="dash-card"><span class="muted">Uptime sample</span><h3>${uptimePercent(checks)}</h3></div>
-      <div class="dash-card"><span class="muted">Score</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
-      <div class="dash-card"><span class="muted">Response</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
-      <div class="dash-card"><span class="muted">Avg response</span><h3>${avgMs}</h3></div>
-      <div class="dash-card"><span class="muted">Last check</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
-      <div class="dash-card"><span class="muted">Since last down</span><h3>${formatDurationSince(lastDown && lastDown.created_at)}</h3></div>
-      <div class="dash-card"><span class="muted">Recent incidents</span><h3>${incidents} down - ${warnings} warn</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.currentHealth'))}</span><h3>${escapeHtml(localizedStatus(status))}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('demo.response'))}</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.lastCheck'))}</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.sinceDown'))}</span><h3>${formatDurationSince(lastDown && lastDown.created_at)}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.recentIncidents'))}</span><h3>${incidents} down - ${warnings} warn</h3></div>
     </div>
     <div class="uptime-strip">${bars || '<span class="muted">No uptime samples yet.</span>'}</div>
     <form class="monitor-settings" id="monitorSettingsForm">
-      <div class="settings-head"><strong>Monitor settings</strong><span class="muted">Keyword checks, maintenance, public status.</span></div>
-      <label><span>Keyword must appear</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="optional text to monitor"></label>
-      <label><span>Maintenance starts</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
-      <label><span>Maintenance ends</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
-      <label class="toggle-row"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''}><span>Email alerts</span></label>
-      <label class="toggle-row"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''}><span>Notify when down</span></label>
-      <label class="toggle-row"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''}><span>Notify on warnings</span></label>
-      <label class="toggle-row"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''}><span>Notify on recovery</span></label>
-      <label class="toggle-row"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''}><span>Enable public status page</span></label>
+      <div class="settings-head"><strong>${escapeHtml(t('dashboard.settings'))}</strong><span class="muted">${escapeHtml(t('dashboard.settingsCopy'))}</span></div>
+      <label><span>${escapeHtml(t('dashboard.keyword'))}</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="${escapeHtml(t('dashboard.keywordPlaceholder'))}"></label>
+      <label><span>${escapeHtml(t('dashboard.maintenanceStart'))}</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
+      <label><span>${escapeHtml(t('dashboard.maintenanceEnd'))}</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
+      <label class="toggle-row"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
+      <label class="toggle-row"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
+      <label class="toggle-row"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
+      <label class="toggle-row"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
+      <label class="toggle-row"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
       ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
-      <button class="button secondary" type="submit">Save settings</button>
+      <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
     </form>
     <div class="detail-grid">
-      <div class="panel flat-panel"><div class="panel-top"><strong>Latest recommendations</strong></div><div class="check-list">${issueHtml}</div></div>
-      <div class="panel flat-panel"><div class="panel-top"><strong>Recent checks</strong></div><div class="timeline">${historyHtml}</div></div>
+      <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('dashboard.latestIssues'))}</strong></div><div class="check-list">${issueHtml}</div></div>
+      <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('dashboard.recentChecks'))}</strong></div><div class="timeline">${historyHtml}</div></div>
     </div>`;
 }
 
@@ -420,7 +1044,7 @@ async function initDashboard() {
     event.preventDefault();
     const siteUrl = normalizePublicUrl(document.getElementById('siteUrl').value);
     if (!siteUrl) {
-      document.getElementById('siteDetail').innerHTML = '<div class="empty">Enter a public website URL.</div>';
+      document.getElementById('siteDetail').innerHTML = `<div class="empty">${escapeHtml(t('dashboard.enterUrl'))}</div>`;
       return;
     }
     const payload = {
@@ -433,7 +1057,7 @@ async function initDashboard() {
     if (error) throw error;
     event.target.reset();
     await loadDashboard();
-    document.getElementById('siteDetail').insertAdjacentHTML('afterbegin', '<div class="empty subtle">Saved.</div>');
+    document.getElementById('siteDetail').insertAdjacentHTML('afterbegin', `<div class="empty subtle">${escapeHtml(t('dashboard.saved'))}</div>`);
   });
   document.getElementById('sitesList').addEventListener('click', async (event) => {
     const selectId = event.target.closest('[data-select]') && event.target.closest('[data-select]').dataset.select;
@@ -448,20 +1072,26 @@ async function initDashboard() {
     }
   });
   document.getElementById('siteDetail').addEventListener('click', async (event) => {
-    const action = event.target.closest('[data-run], [data-refresh-detail], [data-delete]');
+    const action = event.target.closest('[data-run], [data-copy-client-report], [data-refresh-detail], [data-delete]');
     if (!action) return;
     const runId = action.dataset.run;
+    const copyReport = action.dataset.copyClientReport;
     const refreshId = action.dataset.refreshDetail;
     const deleteId = action.dataset.delete;
     try {
       if (runId) await runSiteCheck(runId);
+      if (copyReport) {
+        await copyToClipboard(decodeURIComponent(copyReport));
+        action.textContent = t('common.copied');
+        window.setTimeout(() => { action.textContent = t('common.copyReport'); }, 2200);
+      }
       if (refreshId) {
         state.selectedSiteId = refreshId;
         await loadSelectedChecks();
         renderDashboard();
       }
       if (deleteId) {
-        if (!window.confirm('Delete this monitored site and its check history?')) return;
+        if (!window.confirm(t('dashboard.deleteConfirm'))) return;
         await state.supabase.from('sites').delete().eq('id', deleteId);
         await loadDashboard();
       }
@@ -488,7 +1118,7 @@ async function initDashboard() {
     };
     const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || 'Could not save settings');
+    if (!response.ok) throw new Error(data.message || t('dashboard.saveFailed'));
     await loadDashboard();
   });
 }
@@ -545,8 +1175,11 @@ async function initBilling() {
   }));
 }
 
+initPreferences();
+applyLanguage();
 initAnalyzer();
 initAuth().catch(renderError);
 initDashboard().catch(renderError);
+initDemo();
 initBilling().catch(renderError);
 initStatusPage().catch(renderError);

@@ -1057,7 +1057,7 @@ app.get('/config', (req, res) => {
     teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
       free: { sites: 1, interval_minutes: 60, history_days: 1 },
-      starter: { sites: 10, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
+      starter: { sites: 5, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
       agency: { sites: 50, interval_minutes: 1, history_days: 90, price_id: STRIPE_AGENCY_PRICE_ID || null }
     }
   });
@@ -1298,6 +1298,10 @@ app.get('/pricing', (req, res) => {
 
 app.get('/api', (req, res) => {
   res.sendFile(path.join(__dirname, 'api.html'));
+});
+
+app.get('/demo', (req, res) => {
+  res.sendFile(path.join(__dirname, 'demo.html'));
 });
 
 app.get('/signin', (req, res) => {

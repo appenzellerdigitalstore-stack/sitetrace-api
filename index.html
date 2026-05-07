@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="SiteTrace monitors uptime, speed, SEO health, SSL, and security basics for websites.">
-  <title>SiteTrace - Website monitoring and SEO health checks</title>
+  <meta name="description" content="SiteTrace catches silent website issues before they cost traffic, leads, or client trust. Monitor uptime, speed, SSL, SEO basics, and security warnings.">
+  <title>SiteTrace - Catch silent website issues before they cost you</title>
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body data-page="home">
@@ -13,6 +13,7 @@
       <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
       <div class="nav-links">
         <a href="/pricing">Pricing</a>
+        <a href="/demo">Demo</a>
         <a href="/api">How it works</a>
         <a href="/dashboard">Dashboard</a>
         <a class="button small secondary" href="/signin">Sign in</a>
@@ -24,33 +25,33 @@
     <header class="hero">
       <div class="container hero-grid">
         <div>
-          <p class="eyebrow">Website monitoring plus instant SEO diagnostics</p>
-          <h1>Know when your site is down, slow, insecure, or hurting search visibility.</h1>
-          <p class="lead">SiteTrace checks uptime, response speed, SSL, SEO basics, accessibility signals, and security headers in one clear report.</p>
+          <p class="eyebrow">Website health monitoring for agencies and site owners</p>
+          <h1>Catch silent website issues before they cost traffic, leads, or client trust.</h1>
+          <p class="lead">SiteTrace watches for downtime, slow pages, SSL risk, noindex mistakes, missing SEO basics, and security warnings in one client-friendly monitor.</p>
           <form class="analyzer" id="analyzeForm">
             <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
-            <button class="button" id="analyzeBtn" type="submit">Run free check</button>
+            <button class="button" id="analyzeBtn" type="submit">Check a site</button>
           </form>
           <div class="trust-row">
-            <span class="pill">No login required</span>
-            <span class="pill">Uptime + SEO + SSL</span>
-            <span class="pill">Actionable recommendations</span>
+            <span class="pill">No login for manual checks</span>
+            <span class="pill">Uptime + SEO + SSL + security</span>
+            <span class="pill">Built for ongoing monitoring</span>
           </div>
         </div>
         <aside class="panel" aria-label="SiteTrace report preview">
           <div class="panel-top">
-            <div><p class="eyebrow compact">Live report preview</p><strong>sitetrace.it.com</strong></div>
+            <div><p class="eyebrow compact">Health monitor preview</p><strong>client-site.com</strong></div>
             <div class="score-ring"><span>89</span></div>
           </div>
           <div class="metric-grid">
             <div class="metric"><strong>243ms</strong><span>Response time</span></div>
             <div class="metric"><strong>Valid</strong><span>SSL certificate</span></div>
-            <div class="metric"><strong>3</strong><span>Issues found</span></div>
+            <div class="metric"><strong>3</strong><span>Issues to fix</span></div>
           </div>
           <div class="check-list">
             <div class="check"><span class="dot"></span><div><p class="check-title">Site is reachable</p><p class="check-copy">Your server is responding normally.</p></div><span class="check-value">200</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title">Meta description could improve</p><p class="check-copy">Better snippets help people understand the page before they click.</p></div><span class="check-value">42 chars</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title">Security headers missing</p><p class="check-copy">Add CSP and HSTS for stronger baseline protection.</p></div><span class="check-value">2</span></div>
+            <div class="check"><span class="dot warning"></span><div><p class="check-title">Homepage meta changed</p><p class="check-copy">A weak snippet can lower clicks from search and shared links.</p></div><span class="check-value">42 chars</span></div>
+            <div class="check"><span class="dot warning"></span><div><p class="check-title">Security headers missing</p><p class="check-copy">Flag baseline trust and protection gaps before a client asks.</p></div><span class="check-value">2</span></div>
           </div>
         </aside>
       </div>
@@ -61,19 +62,46 @@
     <section>
       <div class="container">
         <div class="section-head">
-          <h2>Built for owners, freelancers, and small agencies.</h2>
-          <p>Instead of overwhelming dashboards, SiteTrace explains what is broken, why it matters, and what to fix next.</p>
+          <p class="eyebrow">Positioned for maintenance revenue</p>
+          <h2>Give every client site a simple health monitor.</h2>
+          <p>Agencies and freelancers can use SiteTrace to prove they are watching the details clients never check until something breaks.</p>
         </div>
         <div class="features">
-          <article class="feature"><h3>Uptime and speed</h3><p>Track HTTP status, response time, redirects, and hosting reliability from one report.</p></article>
-          <article class="feature"><h3>SEO health</h3><p>Check title, meta description, H1, image ALT text, canonical tags, mobile viewport, and indexing.</p></article>
-          <article class="feature"><h3>Security basics</h3><p>Spot SSL expiration risk and missing headers like HSTS, CSP, and frame protection.</p></article>
+          <article class="feature"><h3>Silent issue alerts</h3><p>Know when a site is online but still risky: slow response, noindex, missing metadata, SSL trouble, or keyword changes.</p></article>
+          <article class="feature"><h3>Client-ready health score</h3><p>Turn technical checks into a plain score, issue list, and recent history that a non-technical client can understand.</p></article>
+          <article class="feature"><h3>Agency-friendly monitoring</h3><p>Manage multiple sites, run checks on demand, publish status pages, and build recurring maintenance around proactive care.</p></article>
         </div>
+      </div>
+    </section>
+
+    <section class="agency-section">
+      <div class="container agency-band">
+        <div>
+          <p class="eyebrow">For agencies</p>
+          <h2>Turn website maintenance into something clients can see.</h2>
+          <p class="lead">SiteTrace gives you the proof layer for recurring care: what changed, what is risky, when it happened, and what you did before the client noticed.</p>
+        </div>
+        <ul class="agency-list">
+          <li>Monitor every client site from one dashboard</li>
+          <li>Copy client-ready reports after each check</li>
+          <li>Use status pages and incidents to show proactive support</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <div class="container conversion-band">
+        <div>
+          <p class="eyebrow">Why it matters</p>
+          <h2>A site can be live and still be losing business.</h2>
+          <p>Downtime is obvious. The expensive problems are often quieter: a CMS update removes a title, a page becomes noindex, SSL starts expiring, a homepage slows down, or a required phrase disappears from a client page.</p>
+        </div>
+        <a class="button secondary" href="/pricing">See plans</a>
       </div>
     </section>
   </main>
 
-  <footer class="footer"><div class="container">SiteTrace - Website monitoring and SEO health checks.</div></footer>
+  <footer class="footer"><div class="container">SiteTrace - Website health monitoring for agencies and site owners.</div></footer>
   <script src="/assets/app.js"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
 .edge-profile/
+node_modules/
 dashboard-dom.html
 server-test.*.log
