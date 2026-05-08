@@ -10,6 +10,7 @@ const savedLocale = localStorage.getItem('sitetrace_locale');
 const browserLocale = navigator.language && navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en';
 let currentLocale = savedLocale === 'es' || savedLocale === 'en' ? savedLocale : browserLocale;
 let currentTheme = localStorage.getItem('sitetrace_theme') === 'day' ? 'day' : 'night';
+let supabaseInitPromise = null;
 
 const copy = {
   en: {
@@ -436,7 +437,7 @@ function updateAuthNav() {
 }
 
 async function initNavSession() {
-  if (page === 'dashboard') return;
+  if (page === 'dashboard' || page === 'signin') return;
   await initSupabase();
   updateAuthNav();
   const signInLink = document.querySelector('.nav-links a[data-auth-link="signin"]');
@@ -665,6 +666,12 @@ function boolValue(value, fallback = true) {
 }
 
 async function initSupabase() {
+  if (supabaseInitPromise) return supabaseInitPromise;
+  supabaseInitPromise = initSupabaseOnce();
+  return supabaseInitPromise;
+}
+
+async function initSupabaseOnce() {
   if (!window.supabase) return;
   state.config = await fetch(apiPath('/config')).then((res) => res.json());
   if (state.config.supabase_url && state.config.supabase_anon_key) {
@@ -747,6 +754,13 @@ async function initAuth() {
   if (!form) return;
   await initSupabase();
   const message = document.getElementById('authMessage');
+  const submitButton = form.querySelector('button[type="submit"]');
+  const signUpButton = document.getElementById('signUpBtn');
+
+  function setAuthBusy(isBusy) {
+    if (submitButton) submitButton.disabled = isBusy;
+    if (signUpButton) signUpButton.disabled = isBusy;
+  }
 
   if (!state.supabase) {
     message.textContent = 'Supabase is not configured yet.';
@@ -763,21 +777,32 @@ async function initAuth() {
     const email = normalizeEmail(document.getElementById('authEmail').value);
     const password = document.getElementById('authPassword').value;
     message.textContent = 'Signing in...';
-    const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      message.textContent = error.message;
-      return;
+    setAuthBusy(true);
+    try {
+      const { data, error } = await state.supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        message.textContent = error.message;
+        return;
+      }
+      state.session = data.session;
+      message.textContent = 'Opening dashboard...';
+      window.location.replace('/dashboard');
+    } finally {
+      setAuthBusy(false);
     }
-    state.session = data.session;
-    window.location.href = '/dashboard';
   });
 
-  document.getElementById('signUpBtn').addEventListener('click', async () => {
+  signUpButton.addEventListener('click', async () => {
     const email = normalizeEmail(document.getElementById('authEmail').value);
     const password = document.getElementById('authPassword').value;
     message.textContent = 'Creating account...';
-    const { error } = await state.supabase.auth.signUp({ email, password });
-    message.textContent = error ? error.message : 'Account created. You can sign in now.';
+    setAuthBusy(true);
+    try {
+      const { error } = await state.supabase.auth.signUp({ email, password });
+      message.textContent = error ? error.message : 'Account created. You can sign in now.';
+    } finally {
+      setAuthBusy(false);
+    }
   });
 }
 
