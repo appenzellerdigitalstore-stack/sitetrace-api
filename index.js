@@ -166,7 +166,17 @@ const messages = {
       domain: ['Domain registration looks healthy', 'The domain registration is not close to expiration.', 'Keep auto-renew enabled and payment details current.'],
       domainWarning: ['Domain registration expires soon', 'The domain registration is close to expiration.', 'Renew the domain or confirm auto-renew is working.'],
       domainFail: ['Domain registration is critically close to expiry', 'The domain may stop resolving if it is not renewed soon.', 'Renew the domain immediately and confirm the registrar account is in good standing.'],
-      domainUnknown: ['Domain expiry could not be confirmed', 'The registry did not return a clear expiration date.', 'Check the registrar manually if this is a critical domain.']
+      domainUnknown: ['Domain expiry could not be confirmed', 'The registry did not return a clear expiration date.', 'Check the registrar manually if this is a critical domain.'],
+      structuredData: ['Structured data found', 'The page includes machine-readable structured data.', 'Keep schema markup accurate and aligned with the visible content.'],
+      structuredDataWarning: ['Structured data missing', 'Search engines may have fewer clues for rich results.', 'Add JSON-LD schema for organization, local business, article, product, or FAQ content when relevant.'],
+      wordCount: ['Content depth looks useful', 'The page has enough visible text for users and search engines to understand it.', 'Keep important pages specific and helpful.'],
+      wordCountWarning: ['Page content looks thin', 'The page has limited visible text.', 'Add useful copy that explains the offer, services, benefits, and next steps.'],
+      pageSize: ['Page size is lightweight', 'The HTML response is not overly large.', 'Keep markup lean and optimize heavy assets.'],
+      pageSizeWarning: ['Page size may be heavy', 'The response is large enough to deserve a performance review.', 'Compress assets, remove unused scripts, and cache where possible.'],
+      links: ['Links are present', 'The page includes navigation or supporting links.', 'Keep important internal links easy to find.'],
+      linksWarning: ['Few links found', 'The page may not guide visitors or crawlers very well.', 'Add clear navigation, service links, or next-step links.'],
+      favicon: ['Favicon found', 'The page has a browser tab icon.', 'Keep the favicon consistent with the brand.'],
+      faviconWarning: ['Favicon missing', 'The page may look less polished in browser tabs and bookmarks.', 'Add a favicon or site icon.']
     }
   },
   es: {
@@ -221,7 +231,17 @@ const messages = {
       domain: ['El registro del dominio se ve saludable', 'El registro del dominio no esta cerca de vencer.', 'Manten auto-renew activo y el metodo de pago actualizado.'],
       domainWarning: ['El dominio vence pronto', 'El registro del dominio esta cerca de vencer.', 'Renueva el dominio o confirma que auto-renew esta funcionando.'],
       domainFail: ['El dominio esta criticamente cerca de vencer', 'El dominio podria dejar de resolver si no se renueva pronto.', 'Renueva el dominio de inmediato y revisa la cuenta del registrador.'],
-      domainUnknown: ['No pudimos confirmar el vencimiento del dominio', 'El registro no devolvio una fecha clara de vencimiento.', 'Revisa el registrador manualmente si este dominio es critico.']
+      domainUnknown: ['No pudimos confirmar el vencimiento del dominio', 'El registro no devolvio una fecha clara de vencimiento.', 'Revisa el registrador manualmente si este dominio es critico.'],
+      structuredData: ['Structured data encontrado', 'La pagina incluye datos estructurados legibles por buscadores.', 'Manten el schema alineado con el contenido visible.'],
+      structuredDataWarning: ['Falta structured data', 'Los buscadores pueden tener menos senales para rich results.', 'Agrega JSON-LD de organization, local business, article, product o FAQ cuando aplique.'],
+      wordCount: ['El contenido tiene buena profundidad', 'La pagina tiene suficiente texto visible para explicar su valor.', 'Manten paginas importantes especificas y utiles.'],
+      wordCountWarning: ['El contenido parece delgado', 'La pagina tiene poco texto visible.', 'Agrega copy util que explique oferta, servicios, beneficios y siguiente paso.'],
+      pageSize: ['La pagina es ligera', 'La respuesta HTML no es demasiado grande.', 'Manten el markup limpio y optimiza assets pesados.'],
+      pageSizeWarning: ['La pagina puede estar pesada', 'La respuesta es suficientemente grande para revisar performance.', 'Comprime assets, elimina scripts innecesarios y usa cache cuando sea posible.'],
+      links: ['Hay enlaces en la pagina', 'La pagina incluye navegacion o enlaces de apoyo.', 'Manten enlaces internos importantes faciles de encontrar.'],
+      linksWarning: ['Pocos enlaces encontrados', 'La pagina podria guiar mejor a visitantes y crawlers.', 'Agrega navegacion clara, enlaces a servicios o proximos pasos.'],
+      favicon: ['Favicon encontrado', 'La pagina tiene icono para la pestana del navegador.', 'Manten el favicon consistente con la marca.'],
+      faviconWarning: ['Falta favicon', 'La pagina puede verse menos pulida en pestanas y marcadores.', 'Agrega un favicon o site icon.']
     }
   }
 };
@@ -432,7 +452,7 @@ function summarize(checks) {
     summary[check.level] = (summary[check.level] || 0) + 1;
     summary[check.category] = (summary[check.category] || 0) + 1;
     return summary;
-  }, { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0, domain: 0 });
+  }, { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0, domain: 0, content: 0 });
 }
 
 function monitoringStatus(analysis) {
@@ -958,6 +978,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     ? response.request.res.responseUrl
     : urlObj.toString();
   const html = responseText(response.data);
+  const pageSizeBytes = Buffer.byteLength(html, 'utf8');
   const $ = cheerio.load(html);
   const headers = response.headers || {};
   const [ssl, domainExpiry] = await Promise.all([sslPromise, domainExpiryPromise]);
@@ -974,6 +995,20 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const htmlLang = $('html').attr('lang') || '';
   const robots = ($('meta[name="robots" i]').attr('content') || '').toLowerCase();
   const ogCount = $('meta[property^="og:" i]').length;
+  const structuredDataCount = $('script[type="application/ld+json" i]').length;
+  const visibleText = $('body').text().replace(/\s+/g, ' ').trim();
+  const wordCount = visibleText ? visibleText.split(/\s+/).filter(Boolean).length : 0;
+  const internalLinks = $('a[href]').filter((_, link) => {
+    const href = ($(link).attr('href') || '').trim();
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return false;
+    try {
+      const linkUrl = new URL(href, finalUrl);
+      return linkUrl.hostname.replace(/^www\./, '') === urlObj.hostname.replace(/^www\./, '');
+    } catch (error) {
+      return false;
+    }
+  }).length;
+  const favicon = $('link[rel~="icon" i], link[rel="shortcut icon" i], link[rel="apple-touch-icon" i]').first().attr('href') || '';
   const hasFrameProtection = Boolean(headers['x-frame-options'] || (headers['content-security-policy'] || '').includes('frame-ancestors'));
   const pageContext = getPageContext(urlObj, title, metaDescription);
 
@@ -1029,6 +1064,11 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   else addCheck(checks, locale, 'seo', 'open_graph', 'warning', 3, ogCount, 'ogWarning');
 
   addCheck(checks, locale, 'seo', 'robots_indexing', robots.includes('noindex') ? 'fail' : 'pass', 3, robots || 'indexable', robots.includes('noindex') ? 'robotsFail' : 'robots');
+  addCheck(checks, locale, 'seo', 'structured_data', structuredDataCount ? 'pass' : 'warning', 4, structuredDataCount || 'Missing', structuredDataCount ? 'structuredData' : 'structuredDataWarning');
+  addCheck(checks, locale, 'content', 'word_count', wordCount >= 250 ? 'pass' : 'warning', 4, wordCount, wordCount >= 250 ? 'wordCount' : 'wordCountWarning');
+  addCheck(checks, locale, 'content', 'links', internalLinks >= 3 ? 'pass' : 'warning', 3, internalLinks, internalLinks >= 3 ? 'links' : 'linksWarning');
+  addCheck(checks, locale, 'content', 'page_size', pageSizeBytes <= 500000 ? 'pass' : 'warning', 3, `${Math.round(pageSizeBytes / 1024)}KB`, pageSizeBytes <= 500000 ? 'pageSize' : 'pageSizeWarning');
+  addCheck(checks, locale, 'content', 'favicon', favicon ? 'pass' : 'warning', 2, favicon || 'Missing', favicon ? 'favicon' : 'faviconWarning');
 
   addCheck(checks, locale, 'security', 'hsts', headers['strict-transport-security'] ? 'pass' : 'warning', 3, headers['strict-transport-security'] ? 'Present' : 'Missing', headers['strict-transport-security'] ? 'hsts' : 'hstsWarning');
   addCheck(checks, locale, 'security', 'csp', headers['content-security-policy'] ? 'pass' : 'warning', 3, headers['content-security-policy'] ? 'Present' : 'Missing', headers['content-security-policy'] ? 'csp' : 'cspWarning');
@@ -1045,6 +1085,11 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     page_context: pageContext,
     response_time_ms: responseTime,
     response_time: `${responseTime}ms`,
+    page_size_bytes: pageSizeBytes,
+    word_count: wordCount,
+    internal_links: internalLinks,
+    structured_data_count: structuredDataCount,
+    favicon: favicon || null,
     title: title || 'No title',
     meta_description: metaDescription || 'No description',
     h1_count: h1Count,

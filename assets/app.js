@@ -18,16 +18,16 @@ const copy = {
     controls: { themeDay: 'Day mode', themeNight: 'Night mode', language: 'Language' },
     common: { copied: 'Report copied to clipboard.', copyFailed: 'Could not copy the report.', shareReport: 'Share report', copyReport: 'Copy client report' },
     home: {
-      eyebrow: 'Website health monitoring for agencies and site owners',
-      title: 'Catch silent website issues before they cost traffic, leads, or client trust.',
-      lead: 'SiteTrace watches for downtime, slow pages, SSL risk, noindex mistakes, missing SEO basics, and security warnings in one client-friendly monitor.',
+      eyebrow: 'Instant website audit plus monitoring',
+      title: 'Find SEO, uptime, SSL, and domain issues before they cost you leads.',
+      lead: 'Run a free website health check in seconds. Then monitor client sites for silent changes, outages, slowdowns, expiring domains, and SEO basics that break quietly.',
       placeholder: 'https://example.com',
       button: 'Check a site',
-      pills: ['No login for manual checks', 'Uptime + SEO + SSL + security', 'Built for ongoing monitoring'],
-      previewEyebrow: 'Health monitor preview',
+      pills: ['Free instant audit', 'SEO + uptime + SSL + domain expiry', 'Upgrade for monitoring and history'],
+      previewEyebrow: 'Audit preview',
       previewSite: 'client-site.com',
       metricResponse: 'Response time',
-      metricSsl: 'SSL certificate',
+      metricSsl: 'Domain expiry',
       metricIssues: 'Issues to fix',
       checkReachableTitle: 'Site is reachable',
       checkReachableCopy: 'Your server is responding normally.',
@@ -185,16 +185,16 @@ const copy = {
     controls: { themeDay: 'Modo dia', themeNight: 'Modo noche', language: 'Idioma' },
     common: { copied: 'Reporte copiado al portapapeles.', copyFailed: 'No se pudo copiar el reporte.', shareReport: 'Compartir reporte', copyReport: 'Copiar reporte para cliente' },
     home: {
-      eyebrow: 'Monitoreo de salud web para agencias y duenos de sitios',
-      title: 'Detecta problemas silenciosos antes de que cuesten trafico, leads o confianza.',
-      lead: 'SiteTrace vigila caidas, paginas lentas, riesgo SSL, errores noindex, SEO basico faltante y alertas de seguridad en un monitor facil de explicar al cliente.',
+      eyebrow: 'Auditoria web instantanea mas monitoreo',
+      title: 'Encuentra problemas SEO, uptime, SSL y dominio antes de que cuesten leads.',
+      lead: 'Corre un health check gratis en segundos. Luego monitorea sitios de clientes por cambios silenciosos, caidas, lentitud, dominios por vencer y SEO basico que se rompe sin avisar.',
       placeholder: 'https://ejemplo.com',
       button: 'Revisar sitio',
-      pills: ['Checks manuales sin login', 'Uptime + SEO + SSL + seguridad', 'Pensado para monitoreo continuo'],
-      previewEyebrow: 'Vista del monitor',
+      pills: ['Auditoria instantanea gratis', 'SEO + uptime + SSL + dominio', 'Mejora para monitoreo e historial'],
+      previewEyebrow: 'Vista de auditoria',
       previewSite: 'sitio-cliente.com',
       metricResponse: 'Tiempo de respuesta',
-      metricSsl: 'Certificado SSL',
+      metricSsl: 'Vencimiento dominio',
       metricIssues: 'Problemas a corregir',
       checkReachableTitle: 'El sitio responde',
       checkReachableCopy: 'El servidor esta respondiendo normalmente.',
@@ -751,11 +751,37 @@ function renderResults(data) {
   const warningCount = checks.filter((check) => check.level === 'warning').length;
   const sorted = [...checks].sort((a, b) => ({ fail: 0, warning: 1, pass: 2 }[a.level] - { fail: 0, warning: 1, pass: 2 }[b.level]));
   const score = Number(data.score || data.seo_score || 0);
-  const checkHtml = sorted.map((check) => `<div class="check"><span class="dot ${check.level === 'pass' ? '' : check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.description)}</p><p class="check-copy"><strong>Recommendation:</strong> ${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('');
+  const topIssues = sorted.filter((check) => check.level !== 'pass').slice(0, 3);
+  const grouped = ['uptime', 'seo', 'security', 'domain', 'content'].map((category) => {
+    const categoryChecks = sorted.filter((check) => check.category === category);
+    if (!categoryChecks.length) return '';
+    return `<div class="result-category"><div class="result-category-head"><strong>${escapeHtml(category)}</strong><span>${categoryChecks.filter((check) => check.level !== 'pass').length} issues</span></div>${categoryChecks.map((check) => `<div class="check compact-check"><span class="dot ${check.level === 'pass' ? '' : check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.description)}</p><p class="check-copy"><strong>Fix:</strong> ${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('')}</div>`;
+  }).join('');
+  const topIssueHtml = topIssues.length
+    ? topIssues.map((check) => `<div class="priority-item"><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span><div><strong>${escapeHtml(check.title)}</strong><p>${escapeHtml(check.recommendation)}</p></div></div>`).join('')
+    : '<div class="priority-item"><span class="level-badge pass">pass</span><div><strong>No critical fixes found</strong><p>Keep monitoring for silent changes over time.</p></div></div>';
+  const domainDays = data.domain_expiry && data.domain_expiry.days_remaining !== null && data.domain_expiry.days_remaining !== undefined ? `${data.domain_expiry.days_remaining}d` : '-';
+  const pageSizeKb = data.page_size_bytes ? `${Math.round(Number(data.page_size_bytes) / 1024)}KB` : '-';
 
   const reportText = encodeURIComponent(reportSummaryFromAnalysis(data));
-  target.innerHTML = `<div class="result-shell"><div class="panel-top"><div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="result-actions"><button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div></div><div class="metric-grid"><div class="metric"><strong>${score}/100</strong><span>Health score</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div><div class="metric"><strong>${escapeHtml(data.status_code)}</strong><span>Status code</span></div><div class="metric"><strong>${failCount}</strong><span>Critical issues</span></div><div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div><div class="metric"><strong>${checks.length}</strong><span>Total checks</span></div></div><div class="check-list">${checkHtml}</div></div>`;
+  target.innerHTML = `<div class="result-shell result-report"><div class="panel-top"><div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="result-actions"><button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div></div><div class="metric-grid report-metrics"><div class="metric"><strong>${score}/100</strong><span>Health score</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div><div class="metric"><strong>${domainDays}</strong><span>Domain expiry</span></div><div class="metric"><strong>${pageSizeKb}</strong><span>Page size</span></div><div class="metric"><strong>${failCount}</strong><span>Critical</span></div><div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div></div><div class="result-summary-grid"><section class="priority-panel"><p class="eyebrow compact">Top fixes</p>${topIssueHtml}</section><section class="priority-panel"><p class="eyebrow compact">What was checked</p><div class="summary-pills"><span>${checks.filter((check) => check.category === 'uptime').length} uptime</span><span>${checks.filter((check) => check.category === 'seo').length} SEO</span><span>${checks.filter((check) => check.category === 'security').length} security</span><span>${checks.filter((check) => check.category === 'domain').length} domain</span><span>${checks.filter((check) => check.category === 'content').length} content</span></div></section></div><div class="result-categories">${grouped}</div></div>`;
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderLoadingSteps() {
+  const target = document.getElementById('results');
+  if (!target) return () => {};
+  const steps = ['Connecting to site', 'Checking server response', 'Reading metadata', 'Inspecting SEO basics', 'Checking SSL and domain expiry', 'Building report'];
+  let index = 0;
+  const draw = () => {
+    target.innerHTML = `<div class="result-shell loading-report"><div class="panel-top"><strong>Building your website health report...</strong></div><div class="scan-steps">${steps.map((step, stepIndex) => `<div class="scan-step ${stepIndex < index ? 'done' : stepIndex === index ? 'active' : ''}"><span>${stepIndex < index ? '✓' : stepIndex + 1}</span><strong>${step}</strong></div>`).join('')}</div></div>`;
+  };
+  draw();
+  const timer = window.setInterval(() => {
+    index = Math.min(index + 1, steps.length - 1);
+    draw();
+  }, 550);
+  return () => window.clearInterval(timer);
 }
 
 function renderError(message) {
@@ -780,13 +806,15 @@ function initAnalyzer() {
     const url = input.value.trim();
     if (!url) return renderError('Enter a website URL first.');
     button.disabled = true;
-    document.getElementById('results').innerHTML = '<div class="result-shell"><div class="panel-top"><strong>Checking for silent website issues...</strong></div></div>';
+    const stopLoading = renderLoadingSteps();
     try {
       const response = await fetch(apiPath('/analyze'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, locale: currentLocale }) });
       const data = await response.json();
+      stopLoading();
       if (!response.ok || data.status === 'error') renderError(data.message || 'Analysis failed');
       else renderResults(data);
     } catch (error) {
+      stopLoading();
       renderError(error.message || 'Analysis failed');
     } finally {
       button.disabled = false;
