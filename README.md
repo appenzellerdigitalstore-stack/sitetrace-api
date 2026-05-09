@@ -9,6 +9,7 @@ SiteTrace is a lightweight website monitoring and SEO health check product. It s
 - HTTP status and response time
 - Keyword presence checks for monitored sites
 - HTTPS usage and SSL certificate expiration
+- Domain registration expiration through RDAP
 - Title and meta description health
 - H1 structure
 - Image ALT coverage
@@ -24,8 +25,8 @@ SiteTrace is a lightweight website monitoring and SEO health check product. It s
 Suggested paid tiers:
 
 - Free: manual checks, limited hourly usage
-- Starter: `$19/month`, 5 monitored sites, 5-minute checks, email alerts, 30-day history
-- Agency: `$79/month`, 50 monitored sites, client reports, status pages, webhooks, API access
+- Starter: `$19/month`, 5 monitored sites, 5-minute scheduled checks, email alerts, 30-day history
+- Agency: `$79/month`, 50 monitored sites, 1-minute scheduled checks, client reports, status pages, webhooks, API access
 
 ## Dashboard, Login, And Billing
 

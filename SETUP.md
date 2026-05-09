@@ -92,6 +92,7 @@ If no alert provider is configured, SiteTrace still records incidents but skips 
 Alerts are intentionally conservative:
 
 - a down or warning incident opens only after two matching checks
+- domain registration expiry warnings use the same incident flow when the domain is near expiry
 - resolved alerts are sent when a monitor returns to online
 - maintenance windows skip incident creation
 

@@ -214,6 +214,21 @@ section { padding: 72px 0; border-top: 1px solid rgba(255,255,255,.07); }
 .message.success { color: var(--green); }
 .message.error { color: var(--red); }
 .alert-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 18px; }
+.plan-usage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 8px 0 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.04);
+}
+.plan-usage.limit { border-color: rgba(245,184,75,.46); background: rgba(245,184,75,.08); }
+.plan-usage strong, .plan-usage span { display: block; }
+.plan-usage span { color: var(--muted); margin-top: 3px; }
+:root[data-theme="day"] .plan-usage { background: rgba(255,255,255,.72); }
 .alert-status-card {
   display: grid;
   grid-template-columns: auto minmax(0,1fr);

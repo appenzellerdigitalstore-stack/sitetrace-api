@@ -3,7 +3,7 @@ const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   : 'https://sitetrace-api.onrender.com';
 const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
-const state = { config: null, supabase: null, session: null, profile: null, sites: [], selectedSiteId: null, selectedChecks: [] };
+const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [] };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const savedLocale = localStorage.getItem('sitetrace_locale');
@@ -161,7 +161,14 @@ const copy = {
       enterUrl: 'Enter a public website URL.',
       saved: 'Saved.',
       deleteConfirm: 'Delete this monitored site and its check history?',
-      saveFailed: 'Could not save settings'
+      saveFailed: 'Could not save settings',
+      planUsage: 'Plan usage',
+      upgradePrompt: 'Upgrade to add more monitored sites or run checks more often.',
+      upgradeStarter: 'Upgrade to Starter',
+      upgradeAgency: 'Upgrade to Agency',
+      limitReached: 'Monitor limit reached for this plan.',
+      domainExpiry: 'Domain expiry',
+      domainUnknown: 'Unknown'
     },
     signin: {
       eyebrow: 'Customer access',
@@ -321,7 +328,14 @@ const copy = {
       enterUrl: 'Ingresa una URL publica.',
       saved: 'Guardado.',
       deleteConfirm: 'Eliminar este sitio monitoreado y su historial?',
-      saveFailed: 'No se pudo guardar la configuracion'
+      saveFailed: 'No se pudo guardar la configuracion',
+      planUsage: 'Uso del plan',
+      upgradePrompt: 'Mejora tu plan para agregar mas sitios o correr checks con mas frecuencia.',
+      upgradeStarter: 'Subir a Starter',
+      upgradeAgency: 'Subir a Agency',
+      limitReached: 'Limite de monitores alcanzado para este plan.',
+      domainExpiry: 'Vencimiento dominio',
+      domainUnknown: 'Desconocido'
     },
     signin: {
       eyebrow: 'Acceso de cliente',
@@ -665,6 +679,48 @@ function boolValue(value, fallback = true) {
   return value === undefined || value === null ? fallback : Boolean(value);
 }
 
+function planUpgradeTarget() {
+  if (state.plan === 'free') return 'starter';
+  if (state.plan === 'starter') return 'agency';
+  return '';
+}
+
+async function startUpgrade(plan) {
+  if (!plan) return;
+  const response = await fetch(apiPath('/billing/create-checkout-session'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ plan })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Billing is not configured');
+  window.location.href = data.url;
+}
+
+function renderPlanUsage() {
+  const target = document.getElementById('planUsagePanel');
+  if (!target || !state.limits || !state.usage) return;
+  const used = Number(state.usage.sites || state.sites.length || 0);
+  const max = Number(state.limits.sites || 1);
+  const interval = Number(state.limits.interval_minutes || 60);
+  const reached = used >= max;
+  const upgrade = planUpgradeTarget();
+  target.innerHTML = `
+    <div class="plan-usage ${reached ? 'limit' : ''}">
+      <div>
+        <strong>${escapeHtml(t('dashboard.planUsage'))}</strong>
+        <span>${escapeHtml(state.plan)} - ${used}/${max} ${escapeHtml(t('dashboard.sites').toLowerCase())} - ${interval}m checks</span>
+      </div>
+      ${upgrade ? `<button class="button small secondary" type="button" data-dashboard-upgrade="${upgrade}">${escapeHtml(upgrade === 'starter' ? t('dashboard.upgradeStarter') : t('dashboard.upgradeAgency'))}</button>` : ''}
+    </div>
+    ${reached && upgrade ? `<div class="message error">${escapeHtml(t('dashboard.limitReached'))} ${escapeHtml(t('dashboard.upgradePrompt'))}</div>` : ''}`;
+}
+
+function domainExpiryLabel(domainExpiry) {
+  if (!domainExpiry || domainExpiry.days_remaining === null || domainExpiry.days_remaining === undefined) return t('dashboard.domainUnknown');
+  return `${domainExpiry.days_remaining}d`;
+}
+
 async function initSupabase() {
   if (supabaseInitPromise) return supabaseInitPromise;
   supabaseInitPromise = initSupabaseOnce();
@@ -768,7 +824,9 @@ async function initAuth() {
   }
 
   if (state.session) {
-    window.location.href = '/dashboard';
+    message.textContent = 'Opening dashboard...';
+    setAuthBusy(true);
+    window.location.replace('/dashboard');
     return;
   }
 
@@ -824,6 +882,9 @@ async function loadDashboard() {
 
   const me = await fetch(apiPath('/api/me'), { headers: authHeaders() }).then((res) => res.json());
   state.profile = me.profile;
+  state.plan = me.plan || (me.profile && me.profile.plan) || 'free';
+  state.limits = me.limits || (state.config && state.config.plans && state.config.plans[state.plan]) || null;
+  state.usage = me.usage || null;
   const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
   if (error) throw error;
   state.sites = sites || [];
@@ -856,11 +917,12 @@ function renderDashboard() {
   setText('.dashboard-grid .dash-card:nth-child(1) .muted', t('dashboard.plan'));
   setText('.dashboard-grid .dash-card:nth-child(2) .muted', t('dashboard.sites'));
   setText('.dashboard-grid .dash-card:nth-child(3) .muted', t('dashboard.lastCheck'));
-  document.getElementById('planValue').textContent = state.profile ? state.profile.plan : 'free';
+  document.getElementById('planValue').textContent = state.plan || (state.profile ? state.profile.plan : 'free');
   document.getElementById('siteCount').textContent = state.sites.length;
   const lastSite = state.sites.find((site) => site.last_checked_at);
   document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
   renderAlertStatus();
+  renderPlanUsage();
   const list = document.getElementById('sitesList');
   const listCount = document.getElementById('siteListCount');
   if (listCount) listCount.textContent = state.sites.length;
@@ -1084,6 +1146,7 @@ function renderSiteDetail(site) {
     : '-';
   const status = statusLabel(site.last_status);
   const latestResult = latest && latest.result ? latest.result : null;
+  const domainExpiry = latestResult && latestResult.domain_expiry ? latestResult.domain_expiry : null;
   const importantChecks = latestResult && Array.isArray(latestResult.checks)
     ? latestResult.checks.filter((check) => check.level !== 'pass').slice(0, 5)
     : [];
@@ -1118,6 +1181,7 @@ function renderSiteDetail(site) {
       <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.currentHealth'))}</span><h3>${escapeHtml(localizedStatus(status))}</h3></div>
       <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
       <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.domainExpiry'))}</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
       <div class="dash-card"><span class="muted">${escapeHtml(t('demo.response'))}</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
       <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
       <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.lastCheck'))}</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
@@ -1149,6 +1213,15 @@ async function initDashboard() {
   await loadDashboard();
   document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
   document.getElementById('testEmailBtn').addEventListener('click', testAlertEmail);
+  document.getElementById('planUsagePanel').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-dashboard-upgrade]');
+    if (!button) return;
+    try {
+      await startUpgrade(button.dataset.dashboardUpgrade);
+    } catch (error) {
+      setDashboardMessage(error.message, 'error');
+    }
+  });
   document.getElementById('signOutBtn').addEventListener('click', async () => {
     if (state.supabase) await state.supabase.auth.signOut();
     window.location.href = '/signin';
@@ -1161,13 +1234,20 @@ async function initDashboard() {
       return;
     }
     const payload = {
-      user_id: state.session.user.id,
       name: document.getElementById('siteName').value,
       url: siteUrl,
       monitoring_enabled: true
     };
-    const { error } = await state.supabase.from('sites').insert(payload);
-    if (error) throw error;
+    const response = await fetch(apiPath('/api/sites'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify(payload)
+    });
+    const created = await response.json();
+    if (!response.ok) throw new Error(created.message || 'Could not add monitor');
+    if (created.plan) state.plan = created.plan;
+    if (created.limits) state.limits = created.limits;
+    if (created.usage) state.usage = created.usage;
     event.target.reset();
     await loadDashboard();
     document.getElementById('siteDetail').insertAdjacentHTML('afterbegin', `<div class="empty subtle">${escapeHtml(t('dashboard.saved'))}</div>`);
@@ -1278,10 +1358,7 @@ async function initBilling() {
       return;
     }
     try {
-      const response = await fetch(apiPath('/billing/create-checkout-session'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ plan: button.dataset.upgrade }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Billing is not configured');
-      window.location.href = data.url;
+      await startUpgrade(button.dataset.upgrade);
     } catch (error) {
       message.textContent = error.message;
     }

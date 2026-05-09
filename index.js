@@ -28,6 +28,13 @@ const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@site
 const ALERT_REPLY_TO_EMAIL = process.env.ALERT_REPLY_TO_EMAIL || 'support@sitetrace.it.com';
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
+const PLAN_LIMITS = {
+  free: { sites: 1, interval_minutes: 60, history_days: 1 },
+  starter: { sites: 5, interval_minutes: 5, history_days: 30 },
+  agency: { sites: 50, interval_minutes: 1, history_days: 90 }
+};
+const DOMAIN_EXPIRY_WARNING_DAYS = Number(process.env.DOMAIN_EXPIRY_WARNING_DAYS || 30);
+const DOMAIN_EXPIRY_CRITICAL_DAYS = Number(process.env.DOMAIN_EXPIRY_CRITICAL_DAYS || 7);
 
 const requestCounts = new Map();
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -155,7 +162,11 @@ const messages = {
       csp: ['Content Security Policy found', 'The site has a CSP security header.', 'Keep CSP rules strict but compatible.'],
       cspWarning: ['Content Security Policy missing', 'The site has less protection against injected scripts.', 'Add a Content-Security-Policy header when possible.'],
       frame: ['Clickjacking protection found', 'The site sends a frame protection header.', 'Keep frame rules aligned with embedding needs.'],
-      frameWarning: ['Clickjacking protection missing', 'The page may be embeddable by other sites.', 'Add X-Frame-Options or frame-ancestors in CSP.']
+      frameWarning: ['Clickjacking protection missing', 'The page may be embeddable by other sites.', 'Add X-Frame-Options or frame-ancestors in CSP.'],
+      domain: ['Domain registration looks healthy', 'The domain registration is not close to expiration.', 'Keep auto-renew enabled and payment details current.'],
+      domainWarning: ['Domain registration expires soon', 'The domain registration is close to expiration.', 'Renew the domain or confirm auto-renew is working.'],
+      domainFail: ['Domain registration is critically close to expiry', 'The domain may stop resolving if it is not renewed soon.', 'Renew the domain immediately and confirm the registrar account is in good standing.'],
+      domainUnknown: ['Domain expiry could not be confirmed', 'The registry did not return a clear expiration date.', 'Check the registrar manually if this is a critical domain.']
     }
   },
   es: {
@@ -206,7 +217,11 @@ const messages = {
       csp: ['Content Security Policy encontrado', 'El sitio tiene un header CSP de seguridad.', 'Manten reglas CSP estrictas pero compatibles.'],
       cspWarning: ['Falta Content Security Policy', 'El sitio tiene menos proteccion contra scripts inyectados.', 'Agrega un header Content-Security-Policy cuando sea posible.'],
       frame: ['Proteccion contra clickjacking encontrada', 'El sitio envia un header de proteccion de frames.', 'Manten las reglas alineadas con tus necesidades de embedding.'],
-      frameWarning: ['Falta proteccion contra clickjacking', 'La pagina podria ser embebida por otros sitios.', 'Agrega X-Frame-Options o frame-ancestors en CSP.']
+      frameWarning: ['Falta proteccion contra clickjacking', 'La pagina podria ser embebida por otros sitios.', 'Agrega X-Frame-Options o frame-ancestors en CSP.'],
+      domain: ['El registro del dominio se ve saludable', 'El registro del dominio no esta cerca de vencer.', 'Manten auto-renew activo y el metodo de pago actualizado.'],
+      domainWarning: ['El dominio vence pronto', 'El registro del dominio esta cerca de vencer.', 'Renueva el dominio o confirma que auto-renew esta funcionando.'],
+      domainFail: ['El dominio esta criticamente cerca de vencer', 'El dominio podria dejar de resolver si no se renueva pronto.', 'Renueva el dominio de inmediato y revisa la cuenta del registrador.'],
+      domainUnknown: ['No pudimos confirmar el vencimiento del dominio', 'El registro no devolvio una fecha clara de vencimiento.', 'Revisa el registrador manualmente si este dominio es critico.']
     }
   }
 };
@@ -306,6 +321,101 @@ function addCheck(checks, locale, category, id, level, weight, value, messageKey
   checks.push({ category, id, level, weight, value, title, description, recommendation });
 }
 
+function planLimits(plan) {
+  return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+}
+
+async function loadUserPlan(userId) {
+  if (!supabaseAdmin || !userId) return 'free';
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('plan, subscription_status')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data || data.subscription_status === 'canceled') return 'free';
+  return PLAN_LIMITS[data.plan] ? data.plan : 'free';
+}
+
+function shouldRunForPlan(site, plan, now = new Date()) {
+  const limits = planLimits(plan);
+  if (!site.last_checked_at) return true;
+  const requested = Number(site.check_interval_minutes || limits.interval_minutes);
+  const interval = Math.max(limits.interval_minutes, requested);
+  const elapsedMs = now.getTime() - new Date(site.last_checked_at).getTime();
+  return elapsedMs >= interval * 60 * 1000;
+}
+
+function rdapEventDate(events) {
+  if (!Array.isArray(events)) return null;
+  const event = events.find((item) => {
+    const action = String(item.eventAction || '').toLowerCase();
+    return action.includes('expiration') || action.includes('expiry');
+  });
+  return event && event.eventDate ? event.eventDate : null;
+}
+
+function domainCandidates(hostname) {
+  const labels = String(hostname || '').replace(/^www\./i, '').split('.').filter(Boolean);
+  const candidates = [];
+  for (let index = 0; index <= labels.length - 2; index += 1) {
+    candidates.push(labels.slice(index).join('.'));
+  }
+  return [...new Set(candidates)];
+}
+
+async function getDomainExpiryInfo(hostname) {
+  const candidates = domainCandidates(hostname);
+  for (const domain of candidates) {
+    try {
+      const response = await axios.get(`https://rdap.org/domain/${encodeURIComponent(domain)}`, {
+        timeout: 5000,
+        proxy: false,
+        validateStatus: () => true,
+        headers: { 'User-Agent': 'SiteTraceBot/1.0 (+https://www.sitetrace.it.com/)' }
+      });
+      if (response.status >= 400 || !response.data) continue;
+      const expiresAt = rdapEventDate(response.data.events);
+      if (!expiresAt) continue;
+      const expires = new Date(expiresAt);
+      if (Number.isNaN(expires.getTime())) continue;
+      const daysRemaining = Math.ceil((expires.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      return {
+        domain,
+        expires_at: expires.toISOString(),
+        days_remaining: daysRemaining,
+        source: 'rdap'
+      };
+    } catch (error) {
+      // Try the next candidate; RDAP coverage varies by registry.
+    }
+  }
+
+  return {
+    domain: candidates[0] || hostname,
+    expires_at: null,
+    days_remaining: null,
+    source: 'rdap',
+    error: 'expiry_not_found'
+  };
+}
+
+function addDomainExpiryCheck(checks, locale, domainExpiry) {
+  if (!domainExpiry || domainExpiry.days_remaining === null || domainExpiry.days_remaining === undefined) {
+    addCheck(checks, locale, 'domain', 'domain_expiry', 'warning', 10, 'Unknown', 'domainUnknown');
+    return;
+  }
+
+  const days = Number(domainExpiry.days_remaining);
+  const value = `${days} days`;
+  if (days <= DOMAIN_EXPIRY_CRITICAL_DAYS) {
+    addCheck(checks, locale, 'domain', 'domain_expiry', 'fail', 10, value, 'domainFail');
+  } else if (days <= DOMAIN_EXPIRY_WARNING_DAYS) {
+    addCheck(checks, locale, 'domain', 'domain_expiry', 'warning', 10, value, 'domainWarning');
+  } else {
+    addCheck(checks, locale, 'domain', 'domain_expiry', 'pass', 10, value, 'domain');
+  }
+}
+
 function calculateScore(checks) {
   const totalWeight = checks.reduce((sum, check) => sum + check.weight, 0);
   const earned = checks.reduce((sum, check) => {
@@ -322,7 +432,7 @@ function summarize(checks) {
     summary[check.level] = (summary[check.level] || 0) + 1;
     summary[check.category] = (summary[check.category] || 0) + 1;
     return summary;
-  }, { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0 });
+  }, { pass: 0, warning: 0, fail: 0, uptime: 0, seo: 0, security: 0, domain: 0 });
 }
 
 function monitoringStatus(analysis) {
@@ -334,6 +444,9 @@ function monitoringStatus(analysis) {
   const keywordCheck = Array.isArray(analysis.checks)
     ? analysis.checks.find((check) => check.id === 'keyword')
     : null;
+  const domainCheck = Array.isArray(analysis.checks)
+    ? analysis.checks.find((check) => check.id === 'domain_expiry')
+    : null;
 
   if (!statusCode || statusCode >= 500) {
     return 'down';
@@ -344,6 +457,10 @@ function monitoringStatus(analysis) {
   }
 
   if (statusCode >= 400 || (responseTimeCheck && responseTimeCheck.level === 'fail')) {
+    return 'warning';
+  }
+
+  if (domainCheck && ['warning', 'fail'].includes(domainCheck.level)) {
     return 'warning';
   }
 
@@ -416,8 +533,15 @@ function responseText(data) {
   return buffer.toString('utf8');
 }
 
+function importantIssues(analysis, limit = 5) {
+  return Array.isArray(analysis && analysis.checks)
+    ? analysis.checks.filter((check) => check.level !== 'pass').slice(0, limit)
+    : [];
+}
+
 function alertEmailText({ site, status, analysis, incident }) {
   const statusLabel = status === 'resolved' ? 'back online' : status;
+  const issues = importantIssues(analysis, 5);
   const lines = [
     'SiteTrace account notification',
     '',
@@ -427,6 +551,7 @@ function alertEmailText({ site, status, analysis, incident }) {
     `Status code: ${analysis.status_code || '-'}`,
     `Response time: ${analysis.response_time || '-'}`,
     '',
+    ...(issues.length ? ['Top issues:', ...issues.map((issue) => `- ${issue.title}: ${issue.value}`), ''] : []),
     'You are receiving this because you created a SiteTrace account and enabled website monitoring.',
     `Dashboard: ${APP_URL}/dashboard`
   ];
@@ -462,6 +587,10 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
   const subject = status === 'resolved'
     ? `SiteTrace account notification: ${site.name} is back online`
     : `SiteTrace account notification for ${site.name}`;
+  const issues = importantIssues(analysis, 5);
+  const issueRows = issues.map((issue) => `
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">${issue.title}</td><td style="padding:4px 0;">${issue.value || issue.level}</td></tr>
+  `).join('');
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827;background:#ffffff;max-width:560px;">
       <h2 style="margin:0 0 12px;font-size:20px;">SiteTrace account notification</h2>
@@ -470,6 +599,7 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
         <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Score</td><td style="padding:4px 0;">${analysis.score}/100</td></tr>
         <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Status code</td><td style="padding:4px 0;">${analysis.status_code || '-'}</td></tr>
         <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Response time</td><td style="padding:4px 0;">${analysis.response_time || '-'}</td></tr>
+        ${issueRows}
         ${incident && incident.duration_seconds ? `<tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Duration</td><td style="padding:4px 0;">${Math.round(incident.duration_seconds / 60)} minutes</td></tr>` : ''}
       </table>
       <p style="margin:0 0 18px;">Review the full check history in your SiteTrace dashboard.</p>
@@ -555,6 +685,7 @@ async function sendPlainDiagnosticEmail({ to }) {
 
 function incidentText({ site, status, analysis, incident }) {
   const statusLabel = status === 'resolved' ? 'back online' : status;
+  const issues = importantIssues(analysis, 5);
   const lines = [
     `SiteTrace: ${site.name} is ${statusLabel}`,
     `URL: ${site.url}`,
@@ -562,6 +693,11 @@ function incidentText({ site, status, analysis, incident }) {
     `Response time: ${analysis.response_time || '-'}`,
     `Score: ${analysis.score || '-'}/100`
   ];
+
+  if (issues.length) {
+    lines.push('', 'Top issues:');
+    issues.forEach((issue) => lines.push(`- ${issue.title}: ${issue.value}`));
+  }
 
   if (incident && incident.duration_seconds) {
     lines.push(`Duration: ${Math.round(incident.duration_seconds / 60)} minutes`);
@@ -756,7 +892,7 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
       site_id: site.id,
       user_id: site.user_id,
       status: level,
-      title: `${site.name} is ${level}`,
+      title: `${site.name}: ${(importantIssues(analysis, 1)[0] && importantIssues(analysis, 1)[0].title) || `is ${level}`}`,
       details: analysis,
       confirmed_after_checks: 2
     })
@@ -797,6 +933,13 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const urlObj = normalizeUrl(rawUrl);
   const startedAt = Date.now();
   const sslPromise = getSslInfo(urlObj);
+  const domainExpiryPromise = getDomainExpiryInfo(urlObj.hostname).catch((error) => ({
+    domain: urlObj.hostname,
+    expires_at: null,
+    days_remaining: null,
+    source: 'rdap',
+    error: error.message
+  }));
 
   const response = await axios.get(urlObj.toString(), {
     timeout: API_TIMEOUT_MS,
@@ -817,7 +960,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const html = responseText(response.data);
   const $ = cheerio.load(html);
   const headers = response.headers || {};
-  const ssl = await sslPromise;
+  const [ssl, domainExpiry] = await Promise.all([sslPromise, domainExpiryPromise]);
   const checks = [];
 
   const title = ($('title').first().text() || '').trim().replace(/\s+/g, ' ');
@@ -890,6 +1033,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   addCheck(checks, locale, 'security', 'hsts', headers['strict-transport-security'] ? 'pass' : 'warning', 3, headers['strict-transport-security'] ? 'Present' : 'Missing', headers['strict-transport-security'] ? 'hsts' : 'hstsWarning');
   addCheck(checks, locale, 'security', 'csp', headers['content-security-policy'] ? 'pass' : 'warning', 3, headers['content-security-policy'] ? 'Present' : 'Missing', headers['content-security-policy'] ? 'csp' : 'cspWarning');
   addCheck(checks, locale, 'security', 'frame', hasFrameProtection ? 'pass' : 'warning', 2, headers['x-frame-options'] || 'Missing', hasFrameProtection ? 'frame' : 'frameWarning');
+  addDomainExpiryCheck(checks, locale, domainExpiry);
 
   const score = calculateScore(checks);
 
@@ -910,6 +1054,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     score,
     summary: summarize(checks),
     ssl,
+    domain_expiry: domainExpiry,
     checks
   };
 }
@@ -1056,9 +1201,9 @@ app.get('/config', (req, res) => {
     slack_alerts_enabled: Boolean(SLACK_WEBHOOK_URL),
     teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
-      free: { sites: 1, interval_minutes: 60, history_days: 1 },
-      starter: { sites: 5, interval_minutes: 5, history_days: 30, price_id: STRIPE_STARTER_PRICE_ID || null },
-      agency: { sites: 50, interval_minutes: 1, history_days: 90, price_id: STRIPE_AGENCY_PRICE_ID || null }
+      free: { ...PLAN_LIMITS.free },
+      starter: { ...PLAN_LIMITS.starter, price_id: STRIPE_STARTER_PRICE_ID || null },
+      agency: { ...PLAN_LIMITS.agency, price_id: STRIPE_AGENCY_PRICE_ID || null }
     }
   });
 });
@@ -1079,10 +1224,72 @@ app.get('/api/me', requireUser, async (req, res) => {
     profile = repaired || profile;
   }
 
+  const plan = profile && PLAN_LIMITS[profile.plan] && profile.subscription_status !== 'canceled' ? profile.plan : 'free';
+  const limits = planLimits(plan);
+  const { count } = await supabaseAdmin
+    .from('sites')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', req.user.id);
+
   res.json({
     user: { id: req.user.id, email: req.user.email },
-    profile: profile || { id: req.user.id, plan: 'free', subscription_status: 'inactive' }
+    profile: profile || { id: req.user.id, plan: 'free', subscription_status: 'inactive' },
+    plan,
+    limits,
+    usage: { sites: count || 0 }
   });
+});
+
+app.post('/api/sites', requireUser, async (req, res) => {
+  const plan = await loadUserPlan(req.user.id);
+  const limits = planLimits(plan);
+  const { count } = await supabaseAdmin
+    .from('sites')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', req.user.id);
+
+  if ((count || 0) >= limits.sites) {
+    return res.status(402).json({
+      status: 'error',
+      code: 'plan_limit_reached',
+      message: `Your ${plan} plan supports up to ${limits.sites} monitored site${limits.sites === 1 ? '' : 's'}. Upgrade to add more.`,
+      plan,
+      limits,
+      usage: { sites: count || 0 }
+    });
+  }
+
+  const name = String(req.body.name || '').trim();
+  const url = String(req.body.url || '').trim();
+
+  if (!name || !url) {
+    return res.status(400).json({ status: 'error', message: 'Site name and URL are required' });
+  }
+
+  let normalized;
+  try {
+    normalized = normalizeUrl(url).toString();
+  } catch (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('sites')
+    .insert({
+      user_id: req.user.id,
+      name,
+      url: normalized,
+      monitoring_enabled: true,
+      check_interval_minutes: limits.interval_minutes
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  res.status(201).json({ status: 'success', site: data, plan, limits, usage: { sites: (count || 0) + 1 } });
 });
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
@@ -1272,7 +1479,7 @@ app.post('/jobs/run-checks', async (req, res) => {
     .from('sites')
     .select('*')
     .eq('monitoring_enabled', true)
-    .limit(25);
+    .limit(100);
 
   if (error) {
     return res.status(500).json({ status: 'error', message: error.message });
@@ -1282,14 +1489,19 @@ app.post('/jobs/run-checks', async (req, res) => {
 
   for (const site of sites || []) {
     try {
+      const plan = await loadUserPlan(site.user_id);
+      if (!shouldRunForPlan(site, plan)) {
+        results.push({ site_id: site.id, status: 'skipped', reason: 'plan_cadence', plan });
+        continue;
+      }
       const { analysis, level, incident } = await runMonitorCheck(site, 'en', site.user_id);
-      results.push({ site_id: site.id, status: level, score: analysis.score, incident: Boolean(incident && incident.incident) });
+      results.push({ site_id: site.id, status: level, score: analysis.score, plan, incident: Boolean(incident && incident.incident) });
     } catch (error) {
       results.push({ site_id: site.id, status: 'error', error: error.message });
     }
   }
 
-  res.json({ status: 'success', checked: results.length, results });
+  res.json({ status: 'success', checked: results.filter((result) => result.status !== 'skipped').length, results });
 });
 
 app.get('/pricing', (req, res) => {
