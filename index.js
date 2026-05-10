@@ -29,9 +29,41 @@ const ALERT_REPLY_TO_EMAIL = process.env.ALERT_REPLY_TO_EMAIL || 'support@sitetr
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
 const PLAN_LIMITS = {
-  free: { sites: 1, interval_minutes: 60, history_days: 1 },
+  free: { sites: 0, interval_minutes: 0, history_days: 0 },
   starter: { sites: 5, interval_minutes: 5, history_days: 30 },
   agency: { sites: 50, interval_minutes: 1, history_days: 90 }
+};
+const PLAN_FEATURES = {
+  free: {
+    instant_audit: true,
+    monitored_sites: false,
+    scheduled_checks: false,
+    email_alerts: false,
+    status_pages: false,
+    client_reports: false,
+    webhooks: false,
+    api_access: false
+  },
+  starter: {
+    instant_audit: true,
+    monitored_sites: true,
+    scheduled_checks: true,
+    email_alerts: true,
+    status_pages: true,
+    client_reports: true,
+    webhooks: false,
+    api_access: false
+  },
+  agency: {
+    instant_audit: true,
+    monitored_sites: true,
+    scheduled_checks: true,
+    email_alerts: true,
+    status_pages: true,
+    client_reports: true,
+    webhooks: true,
+    api_access: true
+  }
 };
 const DOMAIN_EXPIRY_WARNING_DAYS = Number(process.env.DOMAIN_EXPIRY_WARNING_DAYS || 30);
 const DOMAIN_EXPIRY_CRITICAL_DAYS = Number(process.env.DOMAIN_EXPIRY_CRITICAL_DAYS || 7);
@@ -343,6 +375,10 @@ function addCheck(checks, locale, category, id, level, weight, value, messageKey
 
 function planLimits(plan) {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
+}
+
+function planFeatures(plan) {
+  return PLAN_FEATURES[plan] || PLAN_FEATURES.free;
 }
 
 async function loadUserPlan(userId) {
@@ -776,13 +812,17 @@ function shouldSendEmailForStatus(site, status) {
   return true;
 }
 
-async function sendIncidentNotifications({ to, site, status, analysis, incident }) {
+async function sendIncidentNotifications({ to, site, status, analysis, incident, features = PLAN_FEATURES.free }) {
   const [email, slack, teams] = await Promise.all([
-    shouldSendEmailForStatus(site, status)
+    features.email_alerts && shouldSendEmailForStatus(site, status)
       ? sendAlertEmail({ to, site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
-      : Promise.resolve({ sent: false, reason: 'email_alert_disabled' }),
-    sendSlackNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message })),
-    sendTeamsNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
+      : Promise.resolve({ sent: false, reason: features.email_alerts ? 'email_alert_disabled' : 'plan_does_not_include_email_alerts' }),
+    features.webhooks
+      ? sendSlackNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
+      : Promise.resolve({ sent: false, reason: 'plan_does_not_include_webhooks' }),
+    features.webhooks
+      ? sendTeamsNotification({ site, status, analysis, incident }).catch((error) => ({ sent: false, reason: error.message }))
+      : Promise.resolve({ sent: false, reason: 'plan_does_not_include_webhooks' })
   ]);
 
   console.info('Incident notification result:', {
@@ -924,7 +964,8 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
     return null;
   }
 
-  const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident });
+  const plan = await loadUserPlan(site.user_id);
+  const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident, features: planFeatures(plan) });
   return { incident, notifications };
 }
 
@@ -1246,9 +1287,9 @@ app.get('/config', (req, res) => {
     slack_alerts_enabled: Boolean(SLACK_WEBHOOK_URL),
     teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
-      free: { ...PLAN_LIMITS.free },
-      starter: { ...PLAN_LIMITS.starter, price_id: STRIPE_STARTER_PRICE_ID || null },
-      agency: { ...PLAN_LIMITS.agency, price_id: STRIPE_AGENCY_PRICE_ID || null }
+      free: { ...PLAN_LIMITS.free, features: { ...PLAN_FEATURES.free } },
+      starter: { ...PLAN_LIMITS.starter, features: { ...PLAN_FEATURES.starter }, price_id: STRIPE_STARTER_PRICE_ID || null },
+      agency: { ...PLAN_LIMITS.agency, features: { ...PLAN_FEATURES.agency }, price_id: STRIPE_AGENCY_PRICE_ID || null }
     }
   });
 });
@@ -1271,6 +1312,7 @@ app.get('/api/me', requireUser, async (req, res) => {
 
   const plan = profile && PLAN_LIMITS[profile.plan] && profile.subscription_status !== 'canceled' ? profile.plan : 'free';
   const limits = planLimits(plan);
+  const features = planFeatures(plan);
   const { count } = await supabaseAdmin
     .from('sites')
     .select('id', { count: 'exact', head: true })
@@ -1281,6 +1323,7 @@ app.get('/api/me', requireUser, async (req, res) => {
     profile: profile || { id: req.user.id, plan: 'free', subscription_status: 'inactive' },
     plan,
     limits,
+    features,
     usage: { sites: count || 0 }
   });
 });
@@ -1288,10 +1331,23 @@ app.get('/api/me', requireUser, async (req, res) => {
 app.post('/api/sites', requireUser, async (req, res) => {
   const plan = await loadUserPlan(req.user.id);
   const limits = planLimits(plan);
+  const features = planFeatures(plan);
   const { count } = await supabaseAdmin
     .from('sites')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', req.user.id);
+
+  if (!features.monitored_sites) {
+    return res.status(402).json({
+      status: 'error',
+      code: 'paid_monitoring_required',
+      message: 'The free plan includes instant audits only. Upgrade to Starter to add monitored sites, history, and alerts.',
+      plan,
+      limits,
+      features,
+      usage: { sites: count || 0 }
+    });
+  }
 
   if ((count || 0) >= limits.sites) {
     return res.status(402).json({
@@ -1300,6 +1356,7 @@ app.post('/api/sites', requireUser, async (req, res) => {
       message: `Your ${plan} plan supports up to ${limits.sites} monitored site${limits.sites === 1 ? '' : 's'}. Upgrade to add more.`,
       plan,
       limits,
+      features,
       usage: { sites: count || 0 }
     });
   }
@@ -1334,10 +1391,22 @@ app.post('/api/sites', requireUser, async (req, res) => {
     return res.status(400).json({ status: 'error', message: error.message });
   }
 
-  res.status(201).json({ status: 'success', site: data, plan, limits, usage: { sites: (count || 0) + 1 } });
+  res.status(201).json({ status: 'success', site: data, plan, limits, features, usage: { sites: (count || 0) + 1 } });
 });
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
+  const plan = await loadUserPlan(req.user.id);
+  const features = planFeatures(plan);
+  if (!features.email_alerts) {
+    return res.status(402).json({
+      status: 'error',
+      code: 'paid_alerts_required',
+      message: 'Email alerts are available on Starter and Agency plans.',
+      plan,
+      features
+    });
+  }
+
   const to = req.user.email || await loadProfileEmail(req.user.id);
   const email = await sendPlainDiagnosticEmail({ to }).catch((error) => ({ sent: false, reason: error.message }));
 
@@ -1389,6 +1458,18 @@ app.get('/api/email-status/:id', requireUser, async (req, res) => {
 app.post('/api/run-site-check', requireUser, async (req, res) => {
   const locale = language(req.body.locale);
   const siteId = req.body.site_id;
+  const plan = await loadUserPlan(req.user.id);
+  const features = planFeatures(plan);
+
+  if (!features.monitored_sites) {
+    return res.status(402).json({
+      status: 'error',
+      code: 'paid_monitoring_required',
+      message: 'Monitor checks, history, and incidents are available on paid plans. Use the public scanner for free one-time audits.',
+      plan,
+      features
+    });
+  }
 
   if (!siteId) {
     return res.status(400).json({ status: 'error', message: 'site_id is required' });
@@ -1414,6 +1495,8 @@ app.post('/api/run-site-check', requireUser, async (req, res) => {
 });
 
 app.patch('/api/sites/:id', requireUser, async (req, res) => {
+  const plan = await loadUserPlan(req.user.id);
+  const features = planFeatures(plan);
   const updates = {};
   const allowed = [
     'name',
@@ -1434,6 +1517,14 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, key)) {
       updates[key] = req.body[key] === '' ? null : req.body[key];
     }
+  }
+
+  if (updates.status_page_enabled && !features.status_pages) {
+    return res.status(402).json({ status: 'error', code: 'paid_status_required', message: 'Public status pages are available on Starter and Agency plans.', plan, features });
+  }
+
+  if ((updates.email_alerts_enabled || updates.alert_on_down || updates.alert_on_warning || updates.alert_on_recovery) && !features.email_alerts) {
+    return res.status(402).json({ status: 'error', code: 'paid_alerts_required', message: 'Email alerts are available on Starter and Agency plans.', plan, features });
   }
 
   updates.updated_at = new Date().toISOString();
@@ -1535,6 +1626,11 @@ app.post('/jobs/run-checks', async (req, res) => {
   for (const site of sites || []) {
     try {
       const plan = await loadUserPlan(site.user_id);
+      const features = planFeatures(plan);
+      if (!features.scheduled_checks) {
+        results.push({ site_id: site.id, status: 'skipped', reason: 'plan_does_not_include_scheduled_checks', plan });
+        continue;
+      }
       if (!shouldRunForPlan(site, plan)) {
         results.push({ site_id: site.id, status: 'skipped', reason: 'plan_cadence', plan });
         continue;

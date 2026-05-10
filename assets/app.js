@@ -3,7 +3,7 @@ const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   : 'https://sitetrace-api.onrender.com';
 const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
-const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [] };
+const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, features: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [] };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const savedLocale = localStorage.getItem('sitetrace_locale');
@@ -56,15 +56,19 @@ const copy = {
     },
     pricing: {
       title: 'Plans built around proactive website care.',
-      lead: 'Start with manual checks, then monitor the sites that matter with alerts, history, status pages, and agency-ready capacity.',
+      lead: 'Start with a free instant audit, then monitor the sites that matter with alerts, history, status pages, and agency-ready capacity.',
       cards: [
-        ['Validate', 'Free', '$0', 'For quick site health checks.', ['Manual website scans', 'Uptime, SSL, SEO, and security basics', 'Shareable issue language']],
-        ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', '5-minute checks', 'Email alerts and 30-day history', 'Public status pages']],
-        ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Client-friendly reports and status pages', 'Slack, Teams, webhooks, and API access', 'Sell proactive maintenance with proof']]
+        ['Validate', 'Free', '$0', 'For one-time website health checks.', ['Instant public audit', 'SEO, uptime, SSL, domain expiry, and security basics', 'Visual score with shareable recommendations', 'No saved monitors, history, or alerts']],
+        ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', 'Checks every 5 minutes', 'Email alerts and 30-day history', 'Public status pages and client-ready reports']],
+        ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Checks every 1 minute', '90-day history, client reports, and status pages', 'Slack, Teams, webhooks, and API access']]
       ],
       buttons: ['Start monitoring', 'Upgrade to Agency'],
       note: 'Launch focus:',
-      noteCopy: ' SiteTrace is designed to help agencies and freelancers package monitoring as recurring website care, not as another giant SEO suite.'
+      noteCopy: ' The free audit helps people validate a site now. Paid plans sell the ongoing protection: monitoring, alerts, history, and proof.',
+      splitTitle: 'Simple rule: scan free, monitor paid.',
+      splitCopy: 'Free should answer "what is wrong right now?" Paid should answer "what changed, who was alerted, and what proof can I show the client?"',
+      splitFree: ['Instant audit', 'Visual score', 'Fix recommendations', 'No storage needed'],
+      splitPaid: ['Scheduled monitoring', 'Incident alerts', 'Check history', 'Client reports and status pages']
     },
     demo: {
       eyebrow: 'Live-style demo',
@@ -167,6 +171,14 @@ const copy = {
       upgradeStarter: 'Upgrade to Starter',
       upgradeAgency: 'Upgrade to Agency',
       limitReached: 'Monitor limit reached for this plan.',
+      freeScanOnly: 'Free plan = instant audits only',
+      paidFeaturesTitle: 'Upgrade to monitor sites continuously',
+      paidFeaturesCopy: 'Starter unlocks saved monitors, scheduled checks, email alerts, history, status pages, and client-ready reports. Agency adds higher capacity, webhooks, and API access.',
+      paidFeatureItems: ['Saved client monitors', 'Scheduled checks', 'Email alerts', 'History and incidents', 'Status pages', 'Reports for clients'],
+      monitoringUnavailable: 'Monitoring is a paid feature. Use the homepage scanner for a free one-time audit.',
+      lockedForPlan: 'Locked on this plan',
+      lockedStatusPage: 'Status pages require Starter or Agency.',
+      lockedAlerts: 'Email alerts require Starter or Agency.',
       domainExpiry: 'Domain expiry',
       domainUnknown: 'Unknown'
     },
@@ -223,15 +235,19 @@ const copy = {
     },
     pricing: {
       title: 'Planes pensados para cuidado web proactivo.',
-      lead: 'Empieza con checks manuales y luego monitorea los sitios importantes con alertas, historial, status pages y capacidad para agencias.',
+      lead: 'Empieza con una auditoria instantanea gratis y luego monitorea los sitios importantes con alertas, historial, status pages y capacidad para agencias.',
       cards: [
-        ['Validar', 'Free', '$0', 'Para checks rapidos de salud web.', ['Escaneos manuales', 'Uptime, SSL, SEO y seguridad basica', 'Texto facil de compartir']],
-        ['Mejor primer plan pago', 'Starter', '$19/mes', 'Para un negocio o los sitios clave de un freelancer.', ['5 sitios monitoreados', 'Checks cada 5 minutos', 'Alertas por email e historial de 30 dias', 'Status pages publicas']],
-        ['Para cuidado recurrente', 'Agency', '$79/mes', 'Para equipos que manejan sitios de clientes.', ['50 sitios monitoreados', 'Reportes y status pages para clientes', 'Slack, Teams, webhooks y API', 'Vende mantenimiento proactivo con evidencia']]
+        ['Validar', 'Free', '$0', 'Para checks puntuales de salud web.', ['Auditoria publica instantanea', 'SEO, uptime, SSL, dominio y seguridad basica', 'Score visual con recomendaciones compartibles', 'Sin monitores guardados, historial ni alertas']],
+        ['Mejor primer plan pago', 'Starter', '$19/mes', 'Para un negocio o los sitios clave de un freelancer.', ['5 sitios monitoreados', 'Checks cada 5 minutos', 'Alertas por email e historial de 30 dias', 'Status pages y reportes para cliente']],
+        ['Para cuidado recurrente', 'Agency', '$79/mes', 'Para equipos que manejan sitios de clientes.', ['50 sitios monitoreados', 'Checks cada 1 minuto', 'Historial de 90 dias, reportes y status pages', 'Slack, Teams, webhooks y API']]
       ],
       buttons: ['Empezar monitoreo', 'Subir a Agency'],
       note: 'Enfoque de lanzamiento:',
-      noteCopy: ' SiteTrace ayuda a agencias y freelancers a empaquetar monitoreo como cuidado web recurrente, no como otra suite SEO gigante.'
+      noteCopy: ' El audit gratis ayuda a validar un sitio ahora. Los planes pagos venden proteccion continua: monitoreo, alertas, historial y evidencia.',
+      splitTitle: 'Regla simple: escanear gratis, monitorear pagado.',
+      splitCopy: 'Free responde "que esta mal ahora?". Pago responde "que cambio, a quien se aviso y que evidencia puedo mostrar al cliente?".',
+      splitFree: ['Auditoria instantanea', 'Score visual', 'Recomendaciones', 'Sin guardar datos'],
+      splitPaid: ['Monitoreo programado', 'Alertas de incidentes', 'Historial de checks', 'Reportes y status pages']
     },
     demo: {
       eyebrow: 'Demo tipo monitoreo real',
@@ -334,6 +350,14 @@ const copy = {
       upgradeStarter: 'Subir a Starter',
       upgradeAgency: 'Subir a Agency',
       limitReached: 'Limite de monitores alcanzado para este plan.',
+      freeScanOnly: 'Plan Free = auditorias instantaneas',
+      paidFeaturesTitle: 'Sube de plan para monitorear sitios continuamente',
+      paidFeaturesCopy: 'Starter desbloquea monitores guardados, checks programados, alertas por email, historial, status pages y reportes para clientes. Agency agrega mas capacidad, webhooks y API.',
+      paidFeatureItems: ['Monitores de clientes', 'Checks programados', 'Alertas por email', 'Historial e incidentes', 'Status pages', 'Reportes para clientes'],
+      monitoringUnavailable: 'El monitoreo es una funcion de pago. Usa el scanner del inicio para una auditoria gratis puntual.',
+      lockedForPlan: 'Bloqueado en este plan',
+      lockedStatusPage: 'Las status pages requieren Starter o Agency.',
+      lockedAlerts: 'Las alertas por email requieren Starter o Agency.',
       domainExpiry: 'Vencimiento dominio',
       domainUnknown: 'Desconocido'
     },
@@ -558,6 +582,10 @@ function applyLanguage() {
     setAllText('[data-upgrade]', t('pricing.buttons'));
     const note = document.querySelector('.pricing-note');
     if (note) note.innerHTML = `<strong>${escapeHtml(t('pricing.note'))}</strong>${escapeHtml(t('pricing.noteCopy'))}`;
+    setText('.plan-divider h2', t('pricing.splitTitle'));
+    setText('.plan-divider > div > p', t('pricing.splitCopy'));
+    setAllText('.plan-split article:nth-child(1) li', t('pricing.splitFree'));
+    setAllText('.plan-split article:nth-child(2) li', t('pricing.splitPaid'));
   }
 
   if (page === 'demo') {
@@ -685,6 +713,10 @@ function planUpgradeTarget() {
   return '';
 }
 
+function hasFeature(name) {
+  return Boolean(state.features && state.features[name]);
+}
+
 async function startUpgrade(plan) {
   if (!plan) return;
   const response = await fetch(apiPath('/billing/create-checkout-session'), {
@@ -701,19 +733,40 @@ function renderPlanUsage() {
   const target = document.getElementById('planUsagePanel');
   if (!target || !state.limits || !state.usage) return;
   const used = Number(state.usage.sites || state.sites.length || 0);
-  const max = Number(state.limits.sites || 1);
+  const max = Number.isFinite(Number(state.limits.sites)) ? Number(state.limits.sites) : 0;
   const interval = Number(state.limits.interval_minutes || 60);
   const reached = used >= max;
   const upgrade = planUpgradeTarget();
+  const cadence = interval > 0 ? `${interval}m checks` : t('dashboard.freeScanOnly');
   target.innerHTML = `
     <div class="plan-usage ${reached ? 'limit' : ''}">
       <div>
         <strong>${escapeHtml(t('dashboard.planUsage'))}</strong>
-        <span>${escapeHtml(state.plan)} - ${used}/${max} ${escapeHtml(t('dashboard.sites').toLowerCase())} - ${interval}m checks</span>
+        <span>${escapeHtml(state.plan)} - ${used}/${max} ${escapeHtml(t('dashboard.sites').toLowerCase())} - ${escapeHtml(cadence)}</span>
       </div>
       ${upgrade ? `<button class="button small secondary" type="button" data-dashboard-upgrade="${upgrade}">${escapeHtml(upgrade === 'starter' ? t('dashboard.upgradeStarter') : t('dashboard.upgradeAgency'))}</button>` : ''}
     </div>
     ${reached && upgrade ? `<div class="message error">${escapeHtml(t('dashboard.limitReached'))} ${escapeHtml(t('dashboard.upgradePrompt'))}</div>` : ''}`;
+}
+
+function renderPaidFeaturePanel() {
+  const target = document.getElementById('paidFeaturePanel');
+  if (!target) return;
+  if (hasFeature('monitored_sites')) {
+    target.innerHTML = '';
+    return;
+  }
+  const items = t('dashboard.paidFeatureItems').map((item) => `<span>${escapeHtml(item)}</span>`).join('');
+  target.innerHTML = `
+    <div class="paid-lock">
+      <div>
+        <p class="eyebrow compact">${escapeHtml(t('dashboard.freeScanOnly'))}</p>
+        <h3>${escapeHtml(t('dashboard.paidFeaturesTitle'))}</h3>
+        <p>${escapeHtml(t('dashboard.paidFeaturesCopy'))}</p>
+        <div class="summary-pills">${items}</div>
+      </div>
+      <button class="button" type="button" data-dashboard-upgrade="starter">${escapeHtml(t('dashboard.upgradeStarter'))}</button>
+    </div>`;
 }
 
 function domainExpiryLabel(domainExpiry) {
@@ -774,7 +827,7 @@ function renderLoadingSteps() {
   const steps = ['Connecting to site', 'Checking server response', 'Reading metadata', 'Inspecting SEO basics', 'Checking SSL and domain expiry', 'Building report'];
   let index = 0;
   const draw = () => {
-    target.innerHTML = `<div class="result-shell loading-report"><div class="panel-top"><strong>Building your website health report...</strong></div><div class="scan-steps">${steps.map((step, stepIndex) => `<div class="scan-step ${stepIndex < index ? 'done' : stepIndex === index ? 'active' : ''}"><span>${stepIndex < index ? '✓' : stepIndex + 1}</span><strong>${step}</strong></div>`).join('')}</div></div>`;
+    target.innerHTML = `<div class="result-shell loading-report"><div class="panel-top"><strong>Building your website health report...</strong></div><div class="scan-steps">${steps.map((step, stepIndex) => `<div class="scan-step ${stepIndex < index ? 'done' : stepIndex === index ? 'active' : ''}"><span>${stepIndex < index ? 'OK' : stepIndex + 1}</span><strong>${step}</strong></div>`).join('')}</div></div>`;
   };
   draw();
   const timer = window.setInterval(() => {
@@ -912,6 +965,7 @@ async function loadDashboard() {
   state.profile = me.profile;
   state.plan = me.plan || (me.profile && me.profile.plan) || 'free';
   state.limits = me.limits || (state.config && state.config.plans && state.config.plans[state.plan]) || null;
+  state.features = me.features || (state.config && state.config.plans && state.config.plans[state.plan] && state.config.plans[state.plan].features) || null;
   state.usage = me.usage || null;
   const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
   if (error) throw error;
@@ -951,6 +1005,15 @@ function renderDashboard() {
   document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
   renderAlertStatus();
   renderPlanUsage();
+  renderPaidFeaturePanel();
+  const testEmail = document.getElementById('testEmailBtn');
+  if (testEmail) testEmail.disabled = !hasFeature('email_alerts');
+  const form = document.getElementById('siteForm');
+  if (form) {
+    form.querySelectorAll('input, button').forEach((element) => {
+      element.disabled = !hasFeature('monitored_sites');
+    });
+  }
   const list = document.getElementById('sitesList');
   const listCount = document.getElementById('siteListCount');
   if (listCount) listCount.textContent = state.sites.length;
@@ -1189,6 +1252,9 @@ function renderSiteDetail(site) {
   const bars = checks.slice(0, 24).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
   const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
   const reportText = encodeURIComponent(reportSummaryFromSite(site, checks));
+  const alertsLocked = !hasFeature('email_alerts');
+  const statusLocked = !hasFeature('status_pages');
+  const reportLocked = !hasFeature('client_reports');
 
   detail.innerHTML = `
     <div class="detail-hero">
@@ -1201,7 +1267,7 @@ function renderSiteDetail(site) {
     </div>
     <div class="detail-actions">
       <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
-      <button class="button secondary" type="button" data-copy-client-report="${reportText}">${escapeHtml(t('common.copyReport'))}</button>
+      <button class="button secondary" type="button" ${reportLocked ? 'data-dashboard-upgrade="starter"' : `data-copy-client-report="${reportText}"`}>${escapeHtml(reportLocked ? t('dashboard.lockedForPlan') : t('common.copyReport'))}</button>
       <button class="button secondary" type="button" data-refresh-detail="${site.id}">${escapeHtml(t('dashboard.refresh'))}</button>
       <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
     </div>
@@ -1222,11 +1288,13 @@ function renderSiteDetail(site) {
       <label><span>${escapeHtml(t('dashboard.keyword'))}</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="${escapeHtml(t('dashboard.keywordPlaceholder'))}"></label>
       <label><span>${escapeHtml(t('dashboard.maintenanceStart'))}</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
       <label><span>${escapeHtml(t('dashboard.maintenanceEnd'))}</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
-      <label class="toggle-row"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
-      <label class="toggle-row"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
-      <label class="toggle-row"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
-      <label class="toggle-row"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
-      <label class="toggle-row"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
+      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
+      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
+      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
+      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
+      <label class="toggle-row ${statusLocked ? 'locked-control' : ''}"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''} ${statusLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
+      ${alertsLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedAlerts'))}</div>` : ''}
+      ${statusLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedStatusPage'))}</div>` : ''}
       ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
       <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
     </form>
@@ -1241,7 +1309,7 @@ async function initDashboard() {
   await loadDashboard();
   document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
   document.getElementById('testEmailBtn').addEventListener('click', testAlertEmail);
-  document.getElementById('planUsagePanel').addEventListener('click', async (event) => {
+  document.querySelector('.dashboard-main').addEventListener('click', async (event) => {
     const button = event.target.closest('[data-dashboard-upgrade]');
     if (!button) return;
     try {
@@ -1256,6 +1324,10 @@ async function initDashboard() {
   });
   document.getElementById('siteForm').addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (!hasFeature('monitored_sites')) {
+      setDashboardMessage(t('dashboard.monitoringUnavailable'), 'error');
+      return;
+    }
     const siteUrl = normalizePublicUrl(document.getElementById('siteUrl').value);
     if (!siteUrl) {
       document.getElementById('siteDetail').innerHTML = `<div class="empty">${escapeHtml(t('dashboard.enterUrl'))}</div>`;
@@ -1275,6 +1347,7 @@ async function initDashboard() {
     if (!response.ok) throw new Error(created.message || 'Could not add monitor');
     if (created.plan) state.plan = created.plan;
     if (created.limits) state.limits = created.limits;
+    if (created.features) state.features = created.features;
     if (created.usage) state.usage = created.usage;
     event.target.reset();
     await loadDashboard();
@@ -1331,11 +1404,11 @@ async function initDashboard() {
       keyword_should_exist: true,
       maintenance_starts_at: document.getElementById('maintenanceStartInput').value ? new Date(document.getElementById('maintenanceStartInput').value).toISOString() : null,
       maintenance_ends_at: document.getElementById('maintenanceEndInput').value ? new Date(document.getElementById('maintenanceEndInput').value).toISOString() : null,
-      email_alerts_enabled: document.getElementById('emailAlertsInput').checked,
-      alert_on_down: document.getElementById('alertDownInput').checked,
-      alert_on_warning: document.getElementById('alertWarningInput').checked,
-      alert_on_recovery: document.getElementById('alertRecoveryInput').checked,
-      status_page_enabled: document.getElementById('statusPageInput').checked
+      email_alerts_enabled: hasFeature('email_alerts') ? document.getElementById('emailAlertsInput').checked : false,
+      alert_on_down: hasFeature('email_alerts') ? document.getElementById('alertDownInput').checked : false,
+      alert_on_warning: hasFeature('email_alerts') ? document.getElementById('alertWarningInput').checked : false,
+      alert_on_recovery: hasFeature('email_alerts') ? document.getElementById('alertRecoveryInput').checked : false,
+      status_page_enabled: hasFeature('status_pages') ? document.getElementById('statusPageInput').checked : false
     };
     const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
     const data = await response.json();

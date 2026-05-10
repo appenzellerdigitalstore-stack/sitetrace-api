@@ -24,9 +24,9 @@ SiteTrace is a lightweight website monitoring and SEO health check product. It s
 
 Suggested paid tiers:
 
-- Free: manual checks, limited hourly usage
-- Starter: `$19/month`, 5 monitored sites, 5-minute scheduled checks, email alerts, 30-day history
-- Agency: `$79/month`, 50 monitored sites, 1-minute scheduled checks, client reports, status pages, webhooks, API access
+- Free: public one-time audits with visual SEO, uptime, SSL, domain expiry, content, and security recommendations
+- Starter: `$19/month`, 5 monitored sites, 5-minute scheduled checks, email alerts, status pages, client-ready reports, 30-day history
+- Agency: `$79/month`, 50 monitored sites, 1-minute scheduled checks, 90-day history, client reports, status pages, webhooks, API access
 
 ## Dashboard, Login, And Billing
 
