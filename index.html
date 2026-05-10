@@ -10,7 +10,7 @@
 <body data-page="home">
   <nav class="nav">
     <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark">ST</span><span>SiteTrace</span></a>
+      <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span><span>SiteTrace</span></a>
       <div class="nav-links">
         <a href="/pricing">Pricing</a>
         <a href="/demo">Demo</a>
@@ -23,14 +23,14 @@
 
   <main>
     <header class="hero">
-      <div class="container hero-grid">
-        <div>
+      <div class="container hero-center">
+        <div class="hero-copy">
           <p class="eyebrow">Instant website audit plus monitoring</p>
           <h1>Find SEO, uptime, SSL, and domain issues before they cost you leads.</h1>
           <p class="lead">Run a free website health check in seconds. Then monitor client sites for silent changes, outages, slowdowns, expiring domains, and SEO basics that break quietly.</p>
           <form class="analyzer" id="analyzeForm">
             <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
-            <button class="button" id="analyzeBtn" type="submit">Check a site</button>
+            <button class="button" id="analyzeBtn" type="submit">Check a site <span aria-hidden="true">-&gt;</span></button>
           </form>
           <div class="trust-row">
             <span class="pill">Free instant audit</span>
@@ -38,6 +38,13 @@
             <span class="pill">Upgrade for monitoring and history</span>
           </div>
         </div>
+      </div>
+    </header>
+
+    <section id="results" class="container result-area" aria-live="polite"></section>
+
+    <section class="audit-preview-section">
+      <div class="container">
         <aside class="panel" aria-label="SiteTrace report preview">
           <div class="panel-top">
             <div><p class="eyebrow compact">Audit preview</p><strong>client-site.com</strong></div>
@@ -55,11 +62,9 @@
           </div>
         </aside>
       </div>
-    </header>
+    </section>
 
-    <section id="results" class="container result-area" aria-live="polite"></section>
-
-    <section>
+    <section class="value-section">
       <div class="container">
         <div class="section-head">
           <p class="eyebrow">Positioned for maintenance revenue</p>

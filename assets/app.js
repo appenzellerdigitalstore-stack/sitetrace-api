@@ -9,7 +9,7 @@ const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const savedLocale = localStorage.getItem('sitetrace_locale');
 const browserLocale = navigator.language && navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en';
 let currentLocale = savedLocale === 'es' || savedLocale === 'en' ? savedLocale : browserLocale;
-let currentTheme = localStorage.getItem('sitetrace_theme') === 'day' ? 'day' : 'night';
+let currentTheme = localStorage.getItem('sitetrace_theme') === 'night' ? 'night' : 'day';
 let supabaseInitPromise = null;
 
 const copy = {
@@ -22,7 +22,7 @@ const copy = {
       title: 'Find SEO, uptime, SSL, and domain issues before they cost you leads.',
       lead: 'Run a free website health check in seconds. Then monitor client sites for silent changes, outages, slowdowns, expiring domains, and SEO basics that break quietly.',
       placeholder: 'https://example.com',
-      button: 'Check a site',
+      button: 'Check a site ->',
       pills: ['Free instant audit', 'SEO + uptime + SSL + domain expiry', 'Upgrade for monitoring and history'],
       previewEyebrow: 'Audit preview',
       previewSite: 'client-site.com',
@@ -201,7 +201,7 @@ const copy = {
       title: 'Encuentra problemas SEO, uptime, SSL y dominio antes de que cuesten leads.',
       lead: 'Corre un health check gratis en segundos. Luego monitorea sitios de clientes por cambios silenciosos, caidas, lentitud, dominios por vencer y SEO basico que se rompe sin avisar.',
       placeholder: 'https://ejemplo.com',
-      button: 'Revisar sitio',
+      button: 'Revisar sitio ->',
       pills: ['Auditoria instantanea gratis', 'SEO + uptime + SSL + dominio', 'Mejora para monitoreo e historial'],
       previewEyebrow: 'Vista de auditoria',
       previewSite: 'sitio-cliente.com',
@@ -551,11 +551,11 @@ function applyLanguage() {
     setAllText('.metric-grid .metric span', [t('home.metricResponse'), t('home.metricSsl'), t('home.metricIssues')]);
     setAllText('.panel .check-title', [t('home.checkReachableTitle'), t('home.checkMetaTitle'), t('home.checkSecurityTitle')]);
     setAllText('.panel .check-copy', [t('home.checkReachableCopy'), t('home.checkMetaCopy'), t('home.checkSecurityCopy')]);
-    setText('main section:nth-of-type(2) .section-head .eyebrow', t('home.sectionEyebrow'));
-    setText('main section:nth-of-type(2) .section-head h2', t('home.sectionTitle'));
-    setText('main section:nth-of-type(2) .section-head p:not(.eyebrow)', t('home.sectionCopy'));
-    setAllText('main section:nth-of-type(2) .feature h3', t('home.featureTitles'));
-    setAllText('main section:nth-of-type(2) .feature p', t('home.featureCopy'));
+    setText('.value-section .section-head .eyebrow', t('home.sectionEyebrow'));
+    setText('.value-section .section-head h2', t('home.sectionTitle'));
+    setText('.value-section .section-head p:not(.eyebrow)', t('home.sectionCopy'));
+    setAllText('.value-section .feature h3', t('home.featureTitles'));
+    setAllText('.value-section .feature p', t('home.featureCopy'));
     setText('.agency-section .eyebrow', t('home.agencyEyebrow'));
     setText('.agency-section h2', t('home.agencyTitle'));
     setText('.agency-section .lead', t('home.agencyCopy'));
