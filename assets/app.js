@@ -462,6 +462,11 @@ function applyTheme() {
     button.setAttribute('aria-label', label);
     button.setAttribute('title', label);
   }
+  const languageControl = document.querySelector('.language-control');
+  if (languageControl) {
+    languageControl.setAttribute('aria-label', t('controls.language'));
+    languageControl.setAttribute('title', t('controls.language'));
+  }
 }
 
 function updateAuthNav() {
@@ -502,10 +507,13 @@ function initPreferences() {
     const controls = document.createElement('div');
     controls.className = 'nav-controls';
     controls.innerHTML = `
-      <select id="languageSelect" class="control-select" aria-label="${escapeHtml(t('controls.language'))}">
-        <option value="en">EN</option>
-        <option value="es">ES</option>
-      </select>
+      <label class="language-control" aria-label="${escapeHtml(t('controls.language'))}" title="${escapeHtml(t('controls.language'))}">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 0 20"/><path d="M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+        <select id="languageSelect" class="control-select" aria-label="${escapeHtml(t('controls.language'))}">
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
+      </label>
       <button id="themeToggle" class="control-button" type="button"></button>`;
     navLinks.appendChild(controls);
     document.getElementById('languageSelect').value = currentLocale;
@@ -532,6 +540,12 @@ function applyLanguage() {
   document.documentElement.lang = currentLocale;
   const languageSelect = document.getElementById('languageSelect');
   if (languageSelect) languageSelect.value = currentLocale;
+  const languageControl = document.querySelector('.language-control');
+  if (languageControl) {
+    languageControl.setAttribute('aria-label', t('controls.language'));
+    languageControl.setAttribute('title', t('controls.language'));
+  }
+  if (languageSelect) languageSelect.setAttribute('aria-label', t('controls.language'));
 
   setText('.nav-links a[href="/pricing"]', t('nav.pricing'));
   setText('.nav-links a[href="/demo"]', t('nav.demo'));
