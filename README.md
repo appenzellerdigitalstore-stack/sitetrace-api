@@ -111,6 +111,8 @@ SLACK_WEBHOOK_URL=...
 TEAMS_WEBHOOK_URL=...
 ```
 
+For `sitetrace.it.com`, keep Resend SPF/DKIM records and remove the custom `_dmarc.sitetrace.it.com` TXT record if it conflicts with the parent `it.com` DMARC policy. Resend indicated Gmail rejections are likely caused by that DMARC conflict.
+
 ## Local Development
 
 ```bash

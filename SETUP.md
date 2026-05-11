@@ -78,7 +78,24 @@ Add these to Render:
 ```bash
 RESEND_API_KEY=
 ALERT_FROM_EMAIL=SiteTrace <alerts@sitetrace.it.com>
+ALERT_REPLY_TO_EMAIL=support@sitetrace.it.com
 ```
+
+### Resend / DMARC fix for `sitetrace.it.com`
+
+Resend support identified the current Gmail rejection as a likely DMARC configuration conflict, not a reputation issue.
+
+Do this in DNS:
+
+1. Keep the Resend SPF/DKIM records for `sitetrace.it.com`.
+2. Remove the TXT record at `_dmarc.sitetrace.it.com` that starts with:
+
+```txt
+v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com;
+```
+
+3. Send a test email from the SiteTrace dashboard.
+4. If Gmail still rejects the message, contact `it.com` support and ask them to loosen the parent DMARC policy for `sitetrace.it.com` from `p=reject` to `p=none`.
 
 For Slack and Microsoft Teams, create incoming webhook URLs and add either or both:
 

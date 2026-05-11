@@ -179,6 +179,8 @@ const copy = {
       lockedForPlan: 'Locked on this plan',
       lockedStatusPage: 'Status pages require Starter or Agency.',
       lockedAlerts: 'Email alerts require Starter or Agency.',
+      emailDnsTitle: 'Email deliverability action required',
+      emailDnsCopy: 'Resend identified a likely DMARC conflict. Remove the TXT record at _dmarc.sitetrace.it.com that starts with v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com. Keep Resend SPF/DKIM records. If Gmail still rejects mail, ask it.com support to loosen the parent DMARC policy from p=reject to p=none for sitetrace.it.com.',
       domainExpiry: 'Domain expiry',
       domainUnknown: 'Unknown'
     },
@@ -358,6 +360,8 @@ const copy = {
       lockedForPlan: 'Bloqueado en este plan',
       lockedStatusPage: 'Las status pages requieren Starter o Agency.',
       lockedAlerts: 'Las alertas por email requieren Starter o Agency.',
+      emailDnsTitle: 'Accion requerida para entrega de emails',
+      emailDnsCopy: 'Resend identifico un posible conflicto DMARC. Elimina el registro TXT en _dmarc.sitetrace.it.com que empieza con v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com. Conserva los registros SPF/DKIM de Resend. Si Gmail aun rechaza correos, pide a soporte de it.com relajar la politica DMARC padre de p=reject a p=none para sitetrace.it.com.',
       domainExpiry: 'Vencimiento dominio',
       domainUnknown: 'Desconocido'
     },
@@ -559,7 +563,7 @@ function applyLanguage() {
     setText('.agency-section .eyebrow', t('home.agencyEyebrow'));
     setText('.agency-section h2', t('home.agencyTitle'));
     setText('.agency-section .lead', t('home.agencyCopy'));
-    setAllText('.agency-section li', t('home.agencyPoints'));
+    setAllText('.agency-section li span', t('home.agencyPoints'));
     setText('.conversion-band .eyebrow', t('home.whyEyebrow'));
     setText('.conversion-band h2', t('home.whyTitle'));
     setText('.conversion-band p:not(.eyebrow)', t('home.whyCopy'));
@@ -766,6 +770,20 @@ function renderPaidFeaturePanel() {
         <div class="summary-pills">${items}</div>
       </div>
       <button class="button" type="button" data-dashboard-upgrade="starter">${escapeHtml(t('dashboard.upgradeStarter'))}</button>
+    </div>`;
+}
+
+function renderEmailDnsPanel() {
+  const target = document.getElementById('emailDnsPanel');
+  if (!target || !state.config || !state.config.email_dns_guidance) return;
+  const guidance = state.config.email_dns_guidance;
+  target.innerHTML = `
+    <div class="email-dns-panel">
+      <div>
+        <strong>${escapeHtml(t('dashboard.emailDnsTitle'))}</strong>
+        <p>${escapeHtml(t('dashboard.emailDnsCopy'))}</p>
+      </div>
+      <span>${escapeHtml(guidance.status || 'action_required')}</span>
     </div>`;
 }
 
@@ -1006,6 +1024,7 @@ function renderDashboard() {
   renderAlertStatus();
   renderPlanUsage();
   renderPaidFeaturePanel();
+  renderEmailDnsPanel();
   const testEmail = document.getElementById('testEmailBtn');
   if (testEmail) testEmail.disabled = !hasFeature('email_alerts');
   const form = document.getElementById('siteForm');
@@ -1059,7 +1078,8 @@ async function testAlertEmail() {
     const data = await response.json();
     if (!response.ok || data.status === 'error') {
       const reason = data.email && data.email.reason ? `: ${data.email.reason}` : '';
-      throw new Error(`${data.message || 'Test email failed'}${reason}`);
+      const dmarcHint = data.email_dns_guidance ? ` ${t('dashboard.emailDnsTitle')}` : '';
+      throw new Error(`${data.message || 'Test email failed'}${reason}${dmarcHint}`);
     }
     const emailId = data.email && data.email.id ? data.email.id : '';
     const event = data.delivery && data.delivery.last_event ? ` Event: ${data.delivery.last_event}.` : '';

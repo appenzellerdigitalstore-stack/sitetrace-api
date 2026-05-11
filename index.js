@@ -67,6 +67,13 @@ const PLAN_FEATURES = {
 };
 const DOMAIN_EXPIRY_WARNING_DAYS = Number(process.env.DOMAIN_EXPIRY_WARNING_DAYS || 30);
 const DOMAIN_EXPIRY_CRITICAL_DAYS = Number(process.env.DOMAIN_EXPIRY_CRITICAL_DAYS || 7);
+const EMAIL_DNS_GUIDANCE = {
+  status: 'action_required',
+  issue: 'Resend reports likely DMARC conflict for sitetrace.it.com.',
+  action: 'Remove the TXT record at _dmarc.sitetrace.it.com that starts with v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com. If Gmail still rejects mail, ask it.com support to loosen the parent DMARC policy from p=reject to p=none for sitetrace.it.com.',
+  recommended_from: ALERT_FROM_EMAIL,
+  resend_note: 'Keep SPF/DKIM records from Resend, but avoid duplicate or conflicting DMARC records on the custom domain.'
+};
 
 const requestCounts = new Map();
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
@@ -280,6 +287,19 @@ const messages = {
 
 function language(locale) {
   return locale === 'es' ? 'es' : 'en';
+}
+
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function emailHeaderValue(value) {
+  return String(value === undefined || value === null ? '' : value).replace(/[\r\n]+/g, ' ').trim();
 }
 
 function checkText(locale, key) {
@@ -640,21 +660,23 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
   }
 
   const statusLabel = status === 'resolved' ? 'back online' : status;
-  const subject = status === 'resolved'
+  const safeSiteName = escapeHtml(site.name);
+  const safeStatusLabel = escapeHtml(statusLabel);
+  const subject = emailHeaderValue(status === 'resolved'
     ? `SiteTrace account notification: ${site.name} is back online`
-    : `SiteTrace account notification for ${site.name}`;
+    : `SiteTrace account notification for ${site.name}`);
   const issues = importantIssues(analysis, 5);
   const issueRows = issues.map((issue) => `
-        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">${issue.title}</td><td style="padding:4px 0;">${issue.value || issue.level}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">${escapeHtml(issue.title)}</td><td style="padding:4px 0;">${escapeHtml(issue.value || issue.level)}</td></tr>
   `).join('');
   const html = `
     <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827;background:#ffffff;max-width:560px;">
       <h2 style="margin:0 0 12px;font-size:20px;">SiteTrace account notification</h2>
-      <p style="margin:0 0 16px;">The monitor <strong>${site.name}</strong> is currently <strong>${statusLabel}</strong>.</p>
+      <p style="margin:0 0 16px;">The monitor <strong>${safeSiteName}</strong> is currently <strong>${safeStatusLabel}</strong>.</p>
       <table role="presentation" style="border-collapse:collapse;margin:0 0 16px;">
-        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Score</td><td style="padding:4px 0;">${analysis.score}/100</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Status code</td><td style="padding:4px 0;">${analysis.status_code || '-'}</td></tr>
-        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Response time</td><td style="padding:4px 0;">${analysis.response_time || '-'}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Score</td><td style="padding:4px 0;">${escapeHtml(analysis.score)}/100</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Status code</td><td style="padding:4px 0;">${escapeHtml(analysis.status_code || '-')}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Response time</td><td style="padding:4px 0;">${escapeHtml(analysis.response_time || '-')}</td></tr>
         ${issueRows}
         ${incident && incident.duration_seconds ? `<tr><td style="padding:4px 16px 4px 0;color:#4b5563;">Duration</td><td style="padding:4px 0;">${Math.round(incident.duration_seconds / 60)} minutes</td></tr>` : ''}
       </table>
@@ -678,6 +700,9 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
       html,
       text,
       reply_to: ALERT_REPLY_TO_EMAIL,
+      headers: {
+        'X-Entity-Ref-ID': incident && incident.id ? `sitetrace-${incident.id}` : `sitetrace-${Date.now()}`
+      },
       tags: [
         { name: 'app', value: 'sitetrace' },
         { name: 'kind', value: status === 'resolved' ? 'incident_resolved' : 'incident_alert' }
@@ -721,7 +746,10 @@ async function sendPlainDiagnosticEmail({ to }) {
         '',
         'No action is required.'
       ].join('\n'),
-      reply_to: ALERT_REPLY_TO_EMAIL
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      headers: {
+        'X-Entity-Ref-ID': `sitetrace-test-${Date.now()}`
+      }
     })
   });
 
@@ -1284,6 +1312,7 @@ app.get('/config', (req, res) => {
     email_alerts_enabled: Boolean(RESEND_API_KEY),
     alert_from_email: ALERT_FROM_EMAIL,
     delivery_lookup_configured: Boolean(RESEND_READ_API_KEY && RESEND_READ_API_KEY !== RESEND_API_KEY),
+    email_dns_guidance: EMAIL_DNS_GUIDANCE,
     slack_alerts_enabled: Boolean(SLACK_WEBHOOK_URL),
     teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
@@ -1421,6 +1450,7 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
       status: 'error',
       message: 'Test email was not sent',
       email,
+      email_dns_guidance: EMAIL_DNS_GUIDANCE,
       email_alerts_enabled: Boolean(RESEND_API_KEY),
       alert_from_email: ALERT_FROM_EMAIL
     });
@@ -1438,7 +1468,8 @@ app.post('/api/test-alert-email', requireUser, async (req, res) => {
     email,
     delivery,
     to,
-    alert_from_email: ALERT_FROM_EMAIL
+    alert_from_email: ALERT_FROM_EMAIL,
+    email_dns_guidance: EMAIL_DNS_GUIDANCE
   });
 });
 
