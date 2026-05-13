@@ -4,127 +4,235 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Demo - SiteTrace</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body data-page="demo">
+
+  <!-- ── NAV ── -->
   <nav class="nav" id="mainNav">
     <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span><span>SiteTrace</span></a>
+      <a class="brand" href="/">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>
+        SiteTrace
+      </a>
       <div class="nav-links" id="navLinks">
         <a href="/pricing">Pricing</a>
-        <a class="active" href="/demo">Demo</a>
+        <a href="/demo" class="active">Demo</a>
         <a href="/api">How it works</a>
         <a href="/dashboard">Dashboard</a>
-        <a class="button small secondary" href="/signin">Sign in</a>
+      </div>
+      <div class="nav-controls">
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">
+          <svg viewBox="0 0 24 24" id="iconSun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg viewBox="0 0 24 24" id="iconMoon" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <div class="nav-sep"></div>
+        <a class="button ghost small" href="/signin">Sign in</a>
         <a class="button small" href="/signin">Get Started</a>
       </div>
-      <!-- Hamburger (mobile only) -->
       <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-menu">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-close" style="display:none">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
+        <svg viewBox="0 0 24 24" class="icon-menu"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg viewBox="0 0 24 24" class="icon-close" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
   </nav>
-  <main class="page-shell demo-page">
-    <div class="container">
-      <div class="section-head">
-        <p class="eyebrow">Live-style demo</p>
-        <h1>See how SiteTrace explains client website health.</h1>
-        <p>Explore sample monitors for a healthy site, a warning state, and a down incident before creating an account.</p>
+
+  <main class="page-shell">
+    <div class="container" style="max-width:1100px">
+
+      <!-- ── Page header ── -->
+      <div class="demo-header">
+        <div>
+          <h1>Client Sites Overview</h1>
+          <p class="text-muted">Demo dashboard showing sample client monitoring.</p>
+        </div>
+        <div class="demo-header-btns">
+          <a class="button secondary" href="/signin">Add Site</a>
+          <a class="button" href="/signin">Generate Report</a>
+        </div>
       </div>
-      <div id="demoRoot"></div>
+
+      <!-- ── Stats ── -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <h4>Total Sites</h4>
+          <div class="stat-val">3</div>
+        </div>
+        <div class="stat-card">
+          <h4>Critical Issues</h4>
+          <div class="stat-val red">1</div>
+        </div>
+        <div class="stat-card">
+          <h4>Avg Uptime</h4>
+          <div class="stat-val green">99.98%</div>
+        </div>
+      </div>
+
+      <!-- ── Site: Healthy ── -->
+      <div class="site-card">
+        <div class="site-card-main">
+          <div class="site-info">
+            <div class="site-globe green">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div>
+              <div class="site-name">
+                acmecorp.com
+                <span class="badge green">Healthy</span>
+              </div>
+              <div class="site-last">Last checked: 2 mins ago</div>
+            </div>
+          </div>
+          <div class="site-metrics">
+            <div class="site-metric">
+              <div class="site-metric-label">Health Score</div>
+              <div class="site-metric-val green">98</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">Response</div>
+              <div class="site-metric-val">120ms</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">SSL</div>
+              <div class="site-metric-val">245 days</div>
+            </div>
+          </div>
+          <a class="button ghost small" href="/signin">
+            Details
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- ── Site: Warning ── -->
+      <div class="site-card warning">
+        <div class="site-card-main">
+          <div class="site-info">
+            <div class="site-globe amber">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div>
+              <div class="site-name">
+                globex.io
+                <span class="badge amber">Warning</span>
+              </div>
+              <div class="site-last">Last checked: 5 mins ago</div>
+            </div>
+          </div>
+          <div class="site-metrics">
+            <div class="site-metric">
+              <div class="site-metric-label">Health Score</div>
+              <div class="site-metric-val amber">82</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">Response</div>
+              <div class="site-metric-val">450ms</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">SSL</div>
+              <div class="site-metric-val amber">14 days</div>
+            </div>
+          </div>
+          <a class="button ghost small" href="/signin">
+            Details
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </a>
+        </div>
+        <div class="site-alert amber">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span><strong>SSL Certificate Expiring Soon:</strong> Certificate expires in 14 days.</span>
+        </div>
+      </div>
+
+      <!-- ── Site: Critical ── -->
+      <div class="site-card critical">
+        <div class="site-card-main">
+          <div class="site-info">
+            <div class="site-globe red">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <div>
+              <div class="site-name">
+                soylent.co
+                <span class="badge red">Critical</span>
+              </div>
+              <div class="site-last">Last checked: 1 min ago</div>
+            </div>
+          </div>
+          <div class="site-metrics">
+            <div class="site-metric">
+              <div class="site-metric-label">Health Score</div>
+              <div class="site-metric-val red">45</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">Response</div>
+              <div class="site-metric-val red">Timeout</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">SSL</div>
+              <div class="site-metric-val">Valid</div>
+            </div>
+          </div>
+          <a class="button ghost small" href="/signin">
+            Details
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </a>
+        </div>
+        <div class="site-alert red">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          <span><strong>Site Down:</strong> Connection timed out after 10000ms.</span>
+        </div>
+      </div>
+
+      <!-- ── CTA ── -->
+      <div class="cta-band" style="margin-top:40px;">
+        <div>
+          <h2 style="font-size:1.4rem; margin-bottom:8px;">Use this as your sales demo.</h2>
+          <p style="margin:0;">A freelancer or agency can show this view to explain why proactive monitoring belongs in every maintenance plan.</p>
+        </div>
+        <div class="cta-band-btns">
+          <a class="button" href="/signin">Start with Agency</a>
+        </div>
+      </div>
+
     </div>
   </main>
-  <script src="/assets/app.js"></script>
 
-  <script>
-    // ── Mobile nav toggle ──
-    const navToggle = document.getElementById('navToggle');
-    const navLinks  = document.getElementById('navLinks');
-    const iconMenu  = navToggle && navToggle.querySelector('.icon-menu');
-    const iconClose = navToggle && navToggle.querySelector('.icon-close');
-
-    if (navToggle && navLinks) {
-      navToggle.addEventListener('click', () => {
-        const isOpen = navLinks.classList.toggle('open');
-        navToggle.setAttribute('aria-expanded', String(isOpen));
-        navToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
-        if (iconMenu)  iconMenu.style.display  = isOpen ? 'none'  : 'block';
-        if (iconClose) iconClose.style.display = isOpen ? 'block' : 'none';
-      });
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          navLinks.classList.remove('open');
-          navToggle.setAttribute('aria-expanded', 'false');
-          navToggle.setAttribute('aria-label', 'Open menu');
-          if (iconMenu)  iconMenu.style.display  = 'block';
-          if (iconClose) iconClose.style.display = 'none';
-        });
-      });
-    }
-    // ── Nav scroll shadow ──
-    const mainNav = document.getElementById('mainNav');
-    if (mainNav) {
-      window.addEventListener('scroll', () => {
-        mainNav.classList.toggle('scrolled', window.scrollY > 10);
-      }, { passive: true });
-    }
-  </script>
-
-  <!-- ── FOOTER ── -->
   <footer class="footer">
     <div class="container footer-grid">
-
       <div class="footer-brand">
-        <a class="brand" href="/" aria-label="SiteTrace">
-          <span class="brand-mark">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
-          </span>
-          <span>SiteTrace</span>
-        </a>
-        <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites. Find issues before they cost you leads.</p>
+        <a class="brand" href="/"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>SiteTrace</a>
+        <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites.</p>
       </div>
-
-      <div>
-        <h4 class="footer-heading">Product</h4>
-        <ul class="footer-list">
-          <li><a href="/#pricing">Pricing</a></li>
-          <li><a href="/demo">Demo</a></li>
-          <li><a href="/api">How it works</a></li>
-          <li><a href="/dashboard">Dashboard</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h4 class="footer-heading">Resources</h4>
-        <ul class="footer-list">
-          <li><a href="/api">API Reference</a></li>
-          <li><a href="/demo">Live Demo</a></li>
-          <li><a href="/pricing">Plans</a></li>
-        </ul>
-      </div>
-
-      <div>
-        <h4 class="footer-heading">Legal</h4>
-        <ul class="footer-list">
-          <li><a href="#">Privacy Policy</a></li>
-          <li><a href="#">Terms of Service</a></li>
-          <li><a href="#">Cookie Policy</a></li>
-        </ul>
-      </div>
-
+      <div><div class="footer-heading">Product</div><ul class="footer-list"><li><a href="/#pricing">Pricing</a></li><li><a href="/demo">Demo</a></li><li><a href="/api">How it works</a></li><li><a href="/dashboard">Dashboard</a></li></ul></div>
+      <div><div class="footer-heading">Resources</div><ul class="footer-list"><li><a href="/api">API Reference</a></li><li><a href="/demo">Live Demo</a></li><li><a href="/pricing">Plans</a></li></ul></div>
+      <div><div class="footer-heading">Legal</div><ul class="footer-list"><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li><li><a href="#">Cookie Policy</a></li></ul></div>
     </div>
     <div class="container footer-bottom">
       <span>&copy; 2026 SiteTrace. All rights reserved.</span>
       <span>Website health monitoring for agencies and site owners.</span>
     </div>
   </footer>
+
+  <script src="/assets/app.js"></script>
+  <script>
+    const navToggle = document.getElementById('navToggle');
+    const navLinks  = document.getElementById('navLinks');
+    if (navToggle && navLinks) {
+      const iM=navToggle.querySelector('.icon-menu'), iC=navToggle.querySelector('.icon-close');
+      navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});
+    }
+    const mainNav=document.getElementById('mainNav');
+    if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',scrollY>10),{passive:true});
+    const iS=document.getElementById('iconSun'),iMo=document.getElementById('iconMoon');
+    function applyT(t){if(iS&&iMo){iS.style.display=t==='night'?'block':'none';iMo.style.display=t==='night'?'none':'block';}}
+    applyT(document.documentElement.getAttribute('data-theme')||'day');
+    const tt=document.getElementById('themeToggle');
+    if(tt)tt.addEventListener('click',()=>{const n=(document.documentElement.getAttribute('data-theme')||'day')==='night'?'day':'night';document.documentElement.setAttribute('data-theme',n);localStorage.setItem('sitetrace_theme',n);applyT(n);});
+  </script>
 </body>
 </html>

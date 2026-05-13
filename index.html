@@ -16,11 +16,11 @@
   <!-- ── NAV ── -->
   <nav class="nav" id="mainNav">
     <div class="container nav-inner">
-      <a class="brand" href="/" aria-label="SiteTrace">
+      <a class="brand" href="/">
         <span class="brand-mark">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
         </span>
-        <span>SiteTrace</span>
+        SiteTrace
       </a>
 
       <div class="nav-links" id="navLinks">
@@ -28,21 +28,24 @@
         <a href="/demo">Demo</a>
         <a href="/api">How it works</a>
         <a href="/dashboard">Dashboard</a>
-        <a class="button small secondary" href="/signin">Sign in</a>
+      </div>
+
+      <div class="nav-controls">
+        <button class="icon-btn" id="langToggle" aria-label="Language" title="Language">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </button>
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle theme" title="Toggle theme">
+          <svg viewBox="0 0 24 24" class="icon-sun" id="iconSun"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <svg viewBox="0 0 24 24" class="icon-moon" id="iconMoon" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <div class="nav-sep"></div>
+        <a class="button ghost small" href="/signin">Sign in</a>
         <a class="button small" href="/signin">Get Started</a>
       </div>
 
-      <!-- Hamburger (mobile only) -->
       <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-menu">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-close" style="display:none">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
+        <svg viewBox="0 0 24 24" class="icon-menu"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg viewBox="0 0 24 24" class="icon-close" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
   </nav>
@@ -50,171 +53,195 @@
   <main>
 
     <!-- ── HERO ── -->
-    <header class="hero">
-      <div class="hero-blob" aria-hidden="true"></div>
-      <div class="hero-grid-bg" aria-hidden="true"></div>
-      <div class="container hero-center">
-        <div class="hero-copy">
-          <p class="eyebrow">Instant website audit plus monitoring</p>
+    <section class="hero">
+      <div class="container">
+        <div class="hero-inner">
+          <p class="eyebrow">Instant website audit + monitoring</p>
           <h1>Find SEO, uptime, SSL, and domain issues before they cost you leads.</h1>
-          <p class="lead">Run a free website health check in seconds. Then monitor client sites for silent changes, outages, slowdowns, expiring domains, and SEO basics that break quietly.</p>
-          <form class="analyzer" id="analyzeForm">
-            <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
-            <button class="button" id="analyzeBtn" type="submit">Check a site <span aria-hidden="true">-&gt;</span></button>
-          </form>
-          <div class="trust-row">
-            <span class="pill">Free instant audit</span>
-            <span class="pill">SEO + uptime + SSL + domain expiry</span>
-            <span class="pill">Upgrade for monitoring and history</span>
+          <p class="lead">Run a free website health check in seconds. Then monitor client sites for silent changes, outages, slowdowns, and SEO basics that break quietly.</p>
+
+          <div class="scanner-card" id="scannerCard">
+            <form class="scanner-form" id="analyzeForm">
+              <div class="scanner-input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <input id="urlInput" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" aria-label="Website URL">
+              </div>
+              <button class="button" id="analyzeBtn" type="submit">
+                Check a site
+                <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+            </form>
+            <div class="trust-row">
+              <span class="trust-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Free instant audit
+              </span>
+              <span class="trust-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                SEO + Uptime + SSL + Domain
+              </span>
+              <span class="trust-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Upgrade for monitoring
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-    </header>
-
-    <!-- ── RESULTS (populated by JS) ── -->
-    <section id="results" class="container result-area" aria-live="polite"></section>
-
-    <!-- ── AUDIT PREVIEW ── -->
-    <section class="audit-preview-section">
-      <div class="container">
-        <aside class="panel" aria-label="SiteTrace report preview">
-          <div class="panel-top">
-            <div><p class="eyebrow compact">Audit preview</p><strong>client-site.com</strong></div>
-            <div class="score-ring"><span>89</span></div>
-          </div>
-          <div class="metric-grid">
-            <div class="metric"><strong>243ms</strong><span>Response time</span></div>
-            <div class="metric"><strong>97d</strong><span>Domain expiry</span></div>
-            <div class="metric"><strong>3</strong><span>Issues to fix</span></div>
-          </div>
-          <div class="check-list">
-            <div class="check"><span class="dot"></span><div><p class="check-title">Site is reachable</p><p class="check-copy">Your server is responding normally.</p></div><span class="check-value">200</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title">Homepage meta changed</p><p class="check-copy">A weak snippet can lower clicks from search and shared links.</p></div><span class="check-value">42 chars</span></div>
-            <div class="check"><span class="dot warning"></span><div><p class="check-title">Security headers missing</p><p class="check-copy">Flag baseline trust and protection gaps before a client asks.</p></div><span class="check-value">2</span></div>
-          </div>
-        </aside>
       </div>
     </section>
 
+    <!-- ── RESULTS ── -->
+    <section id="results" class="container result-area" aria-live="polite" style="padding:0"></section>
+
     <!-- ── FEATURES ── -->
-    <section class="value-section">
+    <section style="background: var(--bg-subtle);">
       <div class="container">
         <div class="section-head">
-          <p class="eyebrow">Positioned for maintenance revenue</p>
-          <h2>Give every client site a simple health monitor.</h2>
-          <p>Agencies and freelancers can use SiteTrace to prove they are watching the details clients never check until something breaks.</p>
+          <h2>More than just a one-time SEO checker</h2>
+          <p>SiteTrace helps agencies and freelancers monitor websites continuously, so you're always the first to know when something breaks.</p>
         </div>
-        <div class="features">
-          <article class="feature">
-            <span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            </div>
             <h3>Silent issue alerts</h3>
-            <p>Know when a site is online but still risky: slow response, noindex, missing metadata, SSL trouble, or keyword changes.</p>
-          </article>
-          <article class="feature">
-            <span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+            <p>Get notified when a CMS update removes a title tag, a page becomes noindex, or a required phrase disappears from a client page.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            </div>
             <h3>Client-ready health score</h3>
-            <p>Turn technical checks into a plain score, issue list, and recent history that a non-technical client can understand.</p>
-          </article>
-          <article class="feature">
-            <span class="feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"/></svg></span>
+            <p>Generate easy-to-understand health reports that prove the value of your ongoing maintenance retainer to non-technical clients.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12h-4l-3 8L9 4l-3 8H2"/></svg>
+            </div>
             <h3>Agency-friendly monitoring</h3>
-            <p>Manage multiple sites, run checks on demand, publish status pages, and build recurring maintenance around proactive care.</p>
-          </article>
+            <p>Monitor dozens of client sites from a single dashboard. Catch downtime and SSL expiry before clients notice.</p>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- ── AGENCY ── -->
-    <section class="agency-section">
-      <div class="container agency-band">
-        <div>
-          <p class="eyebrow">For agencies</p>
-          <h2>Turn website maintenance into something clients can see.</h2>
-          <p class="lead">SiteTrace gives you the proof layer for recurring care: what changed, what is risky, when it happened, and what you did before the client noticed.</p>
+    <section>
+      <div class="container">
+        <div class="agency-grid">
+          <div class="agency-copy">
+            <p class="eyebrow">For agencies</p>
+            <h2>Turn website maintenance into something clients can see.</h2>
+            <p class="lead">SiteTrace gives you the proof layer for recurring care: what changed, what is risky, when it happened, and what you did before the client noticed.</p>
+            <ul class="check-list">
+              <li class="check-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Monitor every client site</strong> from one unified dashboard</span>
+              </li>
+              <li class="check-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Copy client-ready reports</strong> after each check to send in updates</span>
+              </li>
+              <li class="check-item">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Status pages and incidents</strong> to show proactive support</span>
+              </li>
+            </ul>
+            <a class="button" href="/demo">View Demo Dashboard</a>
+          </div>
+          <div class="mockup-card">
+            <div class="mockup-head">
+              <span>Client Sites Overview</span>
+              <span class="badge green">All Healthy</span>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-site"><span class="mockup-dot"></span>acmecorp.com</span>
+              <span class="mockup-meta">Score 98</span>
+              <span class="mockup-meta">120ms</span>
+              <button class="mockup-btn" type="button">Report</button>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-site"><span class="mockup-dot"></span>globex.io</span>
+              <span class="mockup-meta">Score 95</span>
+              <span class="mockup-meta">145ms</span>
+              <button class="mockup-btn" type="button">Report</button>
+            </div>
+            <div class="mockup-row">
+              <span class="mockup-site"><span class="mockup-dot"></span>soylent.co</span>
+              <span class="mockup-meta">Score 92</span>
+              <span class="mockup-meta">210ms</span>
+              <button class="mockup-btn" type="button">Report</button>
+            </div>
+          </div>
         </div>
-        <div class="client-overview-card">
-          <div class="overview-head"><strong>Client Sites Overview</strong><span class="status-pill online">All Healthy</span></div>
-          <div class="overview-row"><span><i></i>acmecorp.com</span><small>Score 98</small><small>120ms</small><button type="button">Report</button></div>
-          <div class="overview-row"><span><i></i>globex.io</span><small>Score 95</small><small>145ms</small><button type="button">Report</button></div>
-          <div class="overview-row"><span><i></i>soylent.co</span><small>Score 92</small><small>210ms</small><button type="button">Report</button></div>
+      </div>
+    </section>
+
+    <!-- ── WHY IT MATTERS ── -->
+    <section style="background: var(--bg-subtle);">
+      <div class="container">
+        <div class="why-band">
+          <p class="eyebrow">Why it matters</p>
+          <h2>A site can be live and still be losing business.</h2>
+          <p>Downtime is obvious. The expensive problems are often quieter: a CMS update removes a title, a page becomes noindex, SSL starts expiring, a homepage slows down, or a required phrase disappears from a client page.</p>
         </div>
-        <ul class="agency-list">
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg><span>Monitor every client site from one dashboard</span></li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg><span>Copy client-ready reports after each check</span></li>
-          <li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20 6-11 11-5-5"/></svg><span>Use status pages and incidents to show proactive support</span></li>
-        </ul>
       </div>
     </section>
 
     <!-- ── PRICING ── -->
     <section id="pricing">
       <div class="container">
-        <div class="section-head" style="margin: 0 auto 36px; text-align: center; max-width: 640px;">
+        <div class="section-head">
           <p class="eyebrow">Pricing</p>
           <h2>Simple, transparent pricing.</h2>
           <p>Start free, upgrade when you need automated monitoring and history.</p>
         </div>
-        <div class="pricing">
+        <div class="pricing-grid">
 
-          <!-- Free -->
-          <article class="price">
-            <p class="eyebrow compact">Validate</p>
-            <h3>Free</h3>
-            <strong>$0</strong>
-            <p>For one-time website health checks.</p>
-            <ul>
-              <li>Instant public audit</li>
-              <li>SEO, uptime, SSL, domain expiry, and security basics</li>
-              <li>Visual score with shareable recommendations</li>
-              <li>No saved monitors, history, or alerts</li>
+          <div class="price-card">
+            <div class="price-name">Free</div>
+            <div class="price-amount">$0<small>/mo</small></div>
+            <div class="price-desc">For individuals needing quick checks.</div>
+            <ul class="price-features">
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Manual website scans</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Uptime, SSL, SEO, domain &amp; security basics</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>1 monitored site</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>60-minute scheduled checks</li>
             </ul>
-            <a class="button secondary" href="/signin" style="margin-top:auto; text-align:center;">Get started free</a>
-          </article>
+            <a class="button secondary" href="/signin">Get started free</a>
+          </div>
 
-          <!-- Starter (highlighted) -->
-          <article class="price highlight">
-            <p class="eyebrow compact">Best first paid plan</p>
-            <h3>Starter</h3>
-            <strong>$19<small style="font-size:1rem;font-weight:500;color:var(--muted)">/mo</small></strong>
-            <p>For one business or a freelancer's core sites.</p>
-            <ul>
-              <li><b>5 monitored sites</b></li>
-              <li>Checks every <b>5 minutes</b></li>
-              <li>Email alerts and 30-day history</li>
-              <li>Public status pages and client-ready reports</li>
+          <div class="price-card highlight">
+            <div class="price-badge"><span class="badge green">Most Popular</span></div>
+            <div class="price-name">Starter</div>
+            <div class="price-amount">$19<small>/mo</small></div>
+            <div class="price-desc">For freelancers managing a few sites.</div>
+            <ul class="price-features">
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>5 monitored sites</strong></li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>5-minute</strong> scheduled checks</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Email alerts</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>30-day history</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Public status pages &amp; client reports</li>
             </ul>
-            <a class="button" href="/signin" style="margin-top:auto; text-align:center;">Start monitoring</a>
-          </article>
+            <a class="button" href="/signin">Start Free Trial</a>
+          </div>
 
-          <!-- Agency -->
-          <article class="price">
-            <p class="eyebrow compact">For recurring care</p>
-            <h3>Agency</h3>
-            <strong>$79<small style="font-size:1rem;font-weight:500;color:var(--muted)">/mo</small></strong>
-            <p>For teams managing client websites.</p>
-            <ul>
-              <li><b>50 monitored sites</b></li>
-              <li>Checks every <b>1 minute</b></li>
-              <li>90-day history, client reports, and status pages</li>
-              <li>Slack, Teams, webhooks, and API access</li>
+          <div class="price-card">
+            <div class="price-name">Agency</div>
+            <div class="price-amount">$79<small>/mo</small></div>
+            <div class="price-desc">For growing agencies and teams.</div>
+            <ul class="price-features">
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>50 monitored sites</strong></li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>1-minute</strong> scheduled checks</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Client-friendly reports</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Slack / Teams / webhooks</li>
+              <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>API access</li>
             </ul>
-            <a class="button secondary" href="/signin" style="margin-top:auto; text-align:center;">Upgrade to Agency</a>
-          </article>
+            <a class="button secondary" href="/signin">Start Free Trial</a>
+          </div>
 
         </div>
-        <p class="pricing-note"><strong>Launch focus:</strong> The free audit helps people validate a site now. Paid plans sell the ongoing protection: monitoring, alerts, history, and proof.</p>
-      </div>
-    </section>
-
-    <!-- ── WHY IT MATTERS / CTA ── -->
-    <section>
-      <div class="container conversion-band">
-        <div>
-          <p class="eyebrow">Why it matters</p>
-          <h2>A site can be live and still be losing business.</h2>
-          <p>Downtime is obvious. The expensive problems are often quieter: a CMS update removes a title, a page becomes noindex, SSL starts expiring, a homepage slows down, or a required phrase disappears from a client page.</p>
-        </div>
-        <a class="button secondary" href="/pricing">See full plans</a>
       </div>
     </section>
 
@@ -223,19 +250,15 @@
   <!-- ── FOOTER ── -->
   <footer class="footer">
     <div class="container footer-grid">
-
       <div class="footer-brand">
-        <a class="brand" href="/" aria-label="SiteTrace">
-          <span class="brand-mark">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
-          </span>
-          <span>SiteTrace</span>
+        <a class="brand" href="/">
+          <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>
+          SiteTrace
         </a>
         <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites. Find issues before they cost you leads.</p>
       </div>
-
       <div>
-        <h4 class="footer-heading">Product</h4>
+        <div class="footer-heading">Product</div>
         <ul class="footer-list">
           <li><a href="/#pricing">Pricing</a></li>
           <li><a href="/demo">Demo</a></li>
@@ -243,25 +266,22 @@
           <li><a href="/dashboard">Dashboard</a></li>
         </ul>
       </div>
-
       <div>
-        <h4 class="footer-heading">Resources</h4>
+        <div class="footer-heading">Resources</div>
         <ul class="footer-list">
           <li><a href="/api">API Reference</a></li>
           <li><a href="/demo">Live Demo</a></li>
           <li><a href="/pricing">Plans</a></li>
         </ul>
       </div>
-
       <div>
-        <h4 class="footer-heading">Legal</h4>
+        <div class="footer-heading">Legal</div>
         <ul class="footer-list">
           <li><a href="#">Privacy Policy</a></li>
           <li><a href="#">Terms of Service</a></li>
           <li><a href="#">Cookie Policy</a></li>
         </ul>
       </div>
-
     </div>
     <div class="container footer-bottom">
       <span>&copy; 2026 SiteTrace. All rights reserved.</span>
@@ -271,39 +291,47 @@
 
   <script src="/assets/app.js"></script>
   <script>
-    // ── Mobile nav toggle ──
+    // ── Mobile nav ──
     const navToggle = document.getElementById('navToggle');
     const navLinks  = document.getElementById('navLinks');
-    const iconMenu  = navToggle && navToggle.querySelector('.icon-menu');
-    const iconClose = navToggle && navToggle.querySelector('.icon-close');
-
     if (navToggle && navLinks) {
+      const iconMenu  = navToggle.querySelector('.icon-menu');
+      const iconClose = navToggle.querySelector('.icon-close');
       navToggle.addEventListener('click', () => {
-        const isOpen = navLinks.classList.toggle('open');
-        navToggle.setAttribute('aria-expanded', String(isOpen));
-        navToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
-        if (iconMenu)  iconMenu.style.display  = isOpen ? 'none'  : 'block';
-        if (iconClose) iconClose.style.display = isOpen ? 'block' : 'none';
+        const open = navLinks.classList.toggle('open');
+        navToggle.setAttribute('aria-expanded', String(open));
+        if (iconMenu)  iconMenu.style.display  = open ? 'none'  : 'block';
+        if (iconClose) iconClose.style.display = open ? 'block' : 'none';
       });
-
-      // Close menu when clicking a link
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          navLinks.classList.remove('open');
-          navToggle.setAttribute('aria-expanded', 'false');
-          navToggle.setAttribute('aria-label', 'Open menu');
-          if (iconMenu)  iconMenu.style.display  = 'block';
-          if (iconClose) iconClose.style.display = 'none';
-        });
-      });
+      navLinks.querySelectorAll('a').forEach(l => l.addEventListener('click', () => {
+        navLinks.classList.remove('open');
+        if (iconMenu)  iconMenu.style.display  = 'block';
+        if (iconClose) iconClose.style.display = 'none';
+      }));
     }
-
-    // ── Nav scroll shadow ──
+    // ── Nav scroll ──
     const mainNav = document.getElementById('mainNav');
-    if (mainNav) {
-      window.addEventListener('scroll', () => {
-        mainNav.classList.toggle('scrolled', window.scrollY > 10);
-      }, { passive: true });
+    if (mainNav) window.addEventListener('scroll', () => mainNav.classList.toggle('scrolled', scrollY > 10), {passive:true});
+
+    // ── Theme toggle ──
+    const themeToggle = document.getElementById('themeToggle');
+    const iconSun  = document.getElementById('iconSun');
+    const iconMoon = document.getElementById('iconMoon');
+    function applyThemeIcons(theme) {
+      if (!iconSun || !iconMoon) return;
+      iconSun.style.display  = theme === 'night' ? 'block' : 'none';
+      iconMoon.style.display = theme === 'night' ? 'none'  : 'block';
+    }
+    // Read current theme from html attribute (set by app.js)
+    const currentAttr = document.documentElement.getAttribute('data-theme') || 'day';
+    applyThemeIcons(currentAttr);
+    if (themeToggle) {
+      themeToggle.addEventListener('click', () => {
+        const next = (document.documentElement.getAttribute('data-theme') || 'day') === 'night' ? 'day' : 'night';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('sitetrace_theme', next);
+        applyThemeIcons(next);
+      });
     }
   </script>
 </body>
