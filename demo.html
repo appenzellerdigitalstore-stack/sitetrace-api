@@ -7,16 +7,29 @@
   <link rel="stylesheet" href="/assets/styles.css">
 </head>
 <body data-page="demo">
-  <nav class="nav">
+  <nav class="nav" id="mainNav">
     <div class="container nav-inner">
       <a class="brand" href="/" aria-label="SiteTrace"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span><span>SiteTrace</span></a>
-      <div class="nav-links">
+      <div class="nav-links" id="navLinks">
         <a href="/pricing">Pricing</a>
         <a class="active" href="/demo">Demo</a>
         <a href="/api">How it works</a>
         <a href="/dashboard">Dashboard</a>
         <a class="button small secondary" href="/signin">Sign in</a>
+        <a class="button small" href="/signin">Get Started</a>
       </div>
+      <!-- Hamburger (mobile only) -->
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-menu">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+        <svg viewBox="0 0 24 24" aria-hidden="true" class="icon-close" style="display:none">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
     </div>
   </nav>
   <main class="page-shell demo-page">
@@ -30,5 +43,88 @@
     </div>
   </main>
   <script src="/assets/app.js"></script>
+
+  <script>
+    // ── Mobile nav toggle ──
+    const navToggle = document.getElementById('navToggle');
+    const navLinks  = document.getElementById('navLinks');
+    const iconMenu  = navToggle && navToggle.querySelector('.icon-menu');
+    const iconClose = navToggle && navToggle.querySelector('.icon-close');
+
+    if (navToggle && navLinks) {
+      navToggle.addEventListener('click', () => {
+        const isOpen = navLinks.classList.toggle('open');
+        navToggle.setAttribute('aria-expanded', String(isOpen));
+        navToggle.setAttribute('aria-label', isOpen ? 'Close menu' : 'Open menu');
+        if (iconMenu)  iconMenu.style.display  = isOpen ? 'none'  : 'block';
+        if (iconClose) iconClose.style.display = isOpen ? 'block' : 'none';
+      });
+      navLinks.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          navLinks.classList.remove('open');
+          navToggle.setAttribute('aria-expanded', 'false');
+          navToggle.setAttribute('aria-label', 'Open menu');
+          if (iconMenu)  iconMenu.style.display  = 'block';
+          if (iconClose) iconClose.style.display = 'none';
+        });
+      });
+    }
+    // ── Nav scroll shadow ──
+    const mainNav = document.getElementById('mainNav');
+    if (mainNav) {
+      window.addEventListener('scroll', () => {
+        mainNav.classList.toggle('scrolled', window.scrollY > 10);
+      }, { passive: true });
+    }
+  </script>
+
+  <!-- ── FOOTER ── -->
+  <footer class="footer">
+    <div class="container footer-grid">
+
+      <div class="footer-brand">
+        <a class="brand" href="/" aria-label="SiteTrace">
+          <span class="brand-mark">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+          </span>
+          <span>SiteTrace</span>
+        </a>
+        <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites. Find issues before they cost you leads.</p>
+      </div>
+
+      <div>
+        <h4 class="footer-heading">Product</h4>
+        <ul class="footer-list">
+          <li><a href="/#pricing">Pricing</a></li>
+          <li><a href="/demo">Demo</a></li>
+          <li><a href="/api">How it works</a></li>
+          <li><a href="/dashboard">Dashboard</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-heading">Resources</h4>
+        <ul class="footer-list">
+          <li><a href="/api">API Reference</a></li>
+          <li><a href="/demo">Live Demo</a></li>
+          <li><a href="/pricing">Plans</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-heading">Legal</h4>
+        <ul class="footer-list">
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+          <li><a href="#">Cookie Policy</a></li>
+        </ul>
+      </div>
+
+    </div>
+    <div class="container footer-bottom">
+      <span>&copy; 2026 SiteTrace. All rights reserved.</span>
+      <span>Website health monitoring for agencies and site owners.</span>
+    </div>
+  </footer>
 </body>
 </html>
