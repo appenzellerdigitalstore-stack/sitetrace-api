@@ -1287,39 +1287,57 @@ function renderAlertStatus() {
   if (target) target.innerHTML = '';
 }
 
+function renderSidebarPlanUsage() {
+  const target = document.getElementById('sidebarPlanUsage');
+  if (!target || !state.limits) return;
+  const used = Number(state.usage && state.usage.sites !== undefined ? state.usage.sites : state.sites.length);
+  const max = Number.isFinite(Number(state.limits.sites)) ? Number(state.limits.sites) : 0;
+  const interval = Number(state.limits.interval_minutes || 60);
+  const reached = max > 0 && used >= max;
+  const cadence = interval > 0 ? `Every ${interval}m` : 'Manual scans';
+  const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
+  const upgrade = planUpgradeTarget();
+  target.innerHTML = `
+    <div class="plan-usage-card">
+      <div class="plan-usage-head">
+        <span style="text-transform:capitalize;">${escapeHtml(state.plan || 'free')}</span>
+        <span style="font-weight:400;color:var(--muted);font-size:.8rem;">${used}/${max} sites</span>
+      </div>
+      <div class="plan-usage-bar"><div class="plan-usage-fill${reached ? ' over' : ''}" style="width:${pct}%"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);">
+        <span>${escapeHtml(cadence)}</span>
+        ${upgrade ? `<button class="link-button small" type="button" data-dashboard-upgrade="${upgrade}" style="font-size:.78rem;">Upgrade</button>` : ''}
+      </div>
+      ${reached && upgrade ? `<p class="plan-usage-note" style="margin-top:6px;">${escapeHtml(t('dashboard.limitReached'))}</p>` : ''}
+    </div>`;
+}
+
 function renderDashboard() {
-  setText('.dashboard-grid .dash-card:nth-child(1) .muted', t('dashboard.plan'));
-  setText('.dashboard-grid .dash-card:nth-child(2) .muted', t('dashboard.sites'));
-  setText('.dashboard-grid .dash-card:nth-child(3) .muted', t('dashboard.lastCheck'));
-  document.getElementById('planValue').textContent = state.plan || (state.profile ? state.profile.plan : 'free');
-  document.getElementById('siteCount').textContent = state.sites.length;
-  const lastSite = state.sites.find((site) => site.last_checked_at);
-  document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
-  renderAlertStatus();
   renderAlertCenter();
   renderPlanUsage();
   renderPaidFeaturePanel();
   renderEmailDnsPanel();
-  const testEmail = document.getElementById('testEmailBtn');
-  if (testEmail) testEmail.disabled = true; // email alerts coming soon
-  const form = document.getElementById('siteForm');
-  if (form) {
-    form.querySelectorAll('input, button').forEach((element) => {
-      element.disabled = !hasFeature('monitored_sites');
-    });
-  }
+  renderSidebarPlanUsage();
+
   const list = document.getElementById('sitesList');
-  const listCount = document.getElementById('siteListCount');
-  if (listCount) listCount.textContent = state.sites.length;
+  if (!list) return;
+
   if (!state.sites.length) {
-    list.innerHTML = `<div class="empty">${escapeHtml(t('dashboard.noSites'))}</div>`;
+    list.innerHTML = `<div style="padding:10px 4px;font-size:.85rem;color:var(--muted);">${escapeHtml(t('dashboard.noSites'))}</div>`;
     renderSiteDetail(null);
     return;
   }
   list.innerHTML = state.sites.map((site) => {
     const active = site.id === state.selectedSiteId ? ' active' : '';
     const status = statusLabel(site.last_status);
-    return `<button class="site-list-item${active}" type="button" data-select="${site.id}"><span class="dot ${status === 'online' ? '' : status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${status}">${escapeHtml(localizedStatus(status))}</em></button>`;
+    const dotCls = status === 'online' ? '' : status;
+    return `<button class="db-site-item${active}" type="button" data-select="${site.id}">
+      <span class="dot ${dotCls}" style="flex-shrink:0;margin-top:1px;"></span>
+      <span class="db-site-item-info">
+        <span class="db-site-item-name">${escapeHtml(site.name)}</span>
+        <span class="db-site-item-url">${escapeHtml(site.url)}</span>
+      </span>
+    </button>`;
   }).join('');
   renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
 }
@@ -1554,13 +1572,43 @@ function initDemo() {
   renderDemo();
 }
 
+function syncContentHeader(site, status, reportText, reportLocked) {
+  const nameEl   = document.getElementById('dbSelectedSiteName');
+  const statusEl = document.getElementById('dbSelectedSiteStatus');
+  const copyBtn  = document.getElementById('copyReportBtn');
+  if (!site) {
+    if (nameEl)   nameEl.textContent = 'Select a site';
+    if (statusEl) { statusEl.style.display = 'none'; statusEl.className = 'db-status-badge'; statusEl.textContent = ''; }
+    if (copyBtn)  copyBtn.style.display = 'none';
+    return;
+  }
+  if (nameEl) nameEl.textContent = site.name;
+  if (statusEl) {
+    statusEl.style.display = '';
+    statusEl.className = `db-status-badge ${status}`;
+    statusEl.textContent = statusCopy(status);
+  }
+  if (copyBtn) {
+    if (reportLocked) {
+      copyBtn.style.display = 'none';
+    } else {
+      copyBtn.style.display = '';
+      copyBtn.dataset.copyClientReport = reportText;
+    }
+  }
+}
+
 function renderSiteDetail(site) {
   const detail = document.getElementById('siteDetail');
   if (!detail) return;
   detail.classList.remove('empty-state', 'is-loading');
   if (!site) {
+    syncContentHeader(null, null, null, true);
     detail.classList.add('empty-state');
-    detail.innerHTML = `<h2>${escapeHtml(t('dashboard.emptyTitle'))}</h2><p>${escapeHtml(t('dashboard.emptyCopy'))}</p>`;
+    detail.innerHTML = `
+      <div class="db-empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+      <h2>${escapeHtml(t('dashboard.emptyTitle'))}</h2>
+      <p>${escapeHtml(t('dashboard.emptyCopy'))}</p>`;
     return;
   }
 
@@ -1609,6 +1657,8 @@ function renderSiteDetail(site) {
   const alertsLocked = !hasFeature('in_app_alerts');
   const statusLocked = !hasFeature('status_pages');
   const reportLocked = !hasFeature('client_reports');
+
+  syncContentHeader(site, status, reportText, reportLocked);
 
   detail.innerHTML = `
     <div class="detail-hero">
@@ -1730,9 +1780,53 @@ function renderSiteDetail(site) {
 async function initDashboard() {
   if (page !== 'dashboard') return;
   await loadDashboard();
+
   document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
-  document.getElementById('testEmailBtn').addEventListener('click', testAlertEmail);
-  document.querySelector('.dashboard-main').addEventListener('click', async (event) => {
+
+  document.getElementById('signOutBtn').addEventListener('click', async () => {
+    if (state.supabase) await state.supabase.auth.signOut();
+    window.location.href = '/signin';
+  });
+
+  // Add Monitor button toggles the form
+  const addMonitorBtn  = document.getElementById('addMonitorBtn');
+  const addMonitorForm = document.getElementById('addMonitorForm');
+  const cancelAddBtn   = document.getElementById('cancelAddMonitor');
+  if (addMonitorBtn && addMonitorForm) {
+    addMonitorBtn.addEventListener('click', () => addMonitorForm.classList.toggle('hidden'));
+  }
+  if (cancelAddBtn && addMonitorForm) {
+    cancelAddBtn.addEventListener('click', () => addMonitorForm.classList.add('hidden'));
+  }
+
+  // Copy Client Report button in header
+  const copyReportBtn = document.getElementById('copyReportBtn');
+  if (copyReportBtn) {
+    copyReportBtn.addEventListener('click', async () => {
+      const reportData = copyReportBtn.dataset.copyClientReport;
+      if (!reportData) return;
+      await copyToClipboard(decodeURIComponent(reportData));
+      const originalInner = copyReportBtn.innerHTML;
+      copyReportBtn.textContent = t('common.copied');
+      window.setTimeout(() => { copyReportBtn.innerHTML = originalInner; }, 2200);
+    });
+  }
+
+  // Sidebar search filter
+  const searchInput = document.getElementById('siteSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      document.querySelectorAll('.db-site-item').forEach((btn) => {
+        const name = (btn.querySelector('.db-site-item-name') || btn).textContent.toLowerCase();
+        const url  = (btn.querySelector('.db-site-item-url')  || btn).textContent.toLowerCase();
+        btn.style.display = (!q || name.includes(q) || url.includes(q)) ? '' : 'none';
+      });
+    });
+  }
+
+  // Upgrade click handler (works anywhere in dashboard)
+  document.getElementById('dashboardView').addEventListener('click', async (event) => {
     const button = event.target.closest('[data-dashboard-upgrade]');
     if (!button) return;
     try {
@@ -1741,10 +1835,7 @@ async function initDashboard() {
       setDashboardMessage(error.message, 'error');
     }
   });
-  document.getElementById('signOutBtn').addEventListener('click', async () => {
-    if (state.supabase) await state.supabase.auth.signOut();
-    window.location.href = '/signin';
-  });
+
   document.getElementById('siteForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!hasFeature('monitored_sites')) {
@@ -1753,7 +1844,7 @@ async function initDashboard() {
     }
     const siteUrl = normalizePublicUrl(document.getElementById('siteUrl').value);
     if (!siteUrl) {
-      document.getElementById('siteDetail').innerHTML = `<div class="empty">${escapeHtml(t('dashboard.enterUrl'))}</div>`;
+      setDashboardMessage(t('dashboard.enterUrl'), 'error');
       return;
     }
     const payload = {
@@ -1773,9 +1864,11 @@ async function initDashboard() {
     if (created.features) state.features = created.features;
     if (created.usage) state.usage = created.usage;
     event.target.reset();
+    if (addMonitorForm) addMonitorForm.classList.add('hidden');
     await loadDashboard();
-    document.getElementById('siteDetail').insertAdjacentHTML('afterbegin', `<div class="empty subtle">${escapeHtml(t('dashboard.saved'))}</div>`);
+    setDashboardMessage(t('dashboard.saved'), 'success');
   });
+
   document.getElementById('sitesList').addEventListener('click', async (event) => {
     const selectId = event.target.closest('[data-select]') && event.target.closest('[data-select]').dataset.select;
     try {

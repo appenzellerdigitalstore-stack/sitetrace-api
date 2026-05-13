@@ -23,7 +23,6 @@
       <div class="nav-links" id="navLinks">
         <a href="/pricing">Pricing</a>
         <a href="/demo">Demo</a>
-        <a href="/api">How it works</a>
         <a href="/dashboard" class="active">Dashboard</a>
       </div>
       <div class="nav-controls">
@@ -36,116 +35,116 @@
     </div>
   </nav>
 
-  <main class="dashboard-shell">
-    <aside class="sidebar">
-      <a class="side-link active" href="/dashboard">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-        Overview
-      </a>
-      <a class="side-link" href="/pricing">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        Billing
-      </a>
-      <a class="side-link" href="/api">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        How it works
-      </a>
-    </aside>
+  <!-- Dashboard application shell -->
+  <div class="db-app">
 
-    <section class="dashboard-main">
-      <div id="setupWarning" class="card elevated hidden" style="padding:28px; margin-bottom:24px;">
-        <h3 style="margin-bottom:8px;">Supabase is not configured yet</h3>
-        <p style="color:var(--muted); margin:0;">Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
+    <!-- ── LEFT SIDEBAR ── -->
+    <aside class="db-sidebar" id="dbSidebar">
+
+      <!-- Search -->
+      <div class="db-search-wrap">
+        <svg viewBox="0 0 24 24" class="db-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="siteSearchInput" class="db-search-input" placeholder="Search sites..." autocomplete="off" aria-label="Search monitored sites">
       </div>
 
-      <div id="authRequired" class="hidden" style="text-align:center; padding:80px 0;">
-        <div style="max-width:400px; margin:0 auto;">
-          <div style="width:64px;height:64px;border-radius:50%;background:var(--bg-muted);display:grid;place-items:center;margin:0 auto 20px;">
-            <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <!-- Monitored sites list -->
+      <div class="db-section-label">Monitored Sites</div>
+      <div id="sitesList" class="db-sites-list">
+        <!-- Populated by app.js -->
+      </div>
+
+      <!-- Sidebar bottom: plan usage card -->
+      <div class="db-sidebar-bottom">
+        <div id="sidebarPlanUsage">
+          <!-- Populated by app.js -->
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── MAIN CONTENT ── -->
+    <div class="db-content">
+
+      <!-- Setup warning (no Supabase configured) -->
+      <div id="setupWarning" class="db-banner hidden">
+        <h3 style="margin-bottom:6px;">Supabase is not configured yet</h3>
+        <p style="color:var(--muted);margin:0;">Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
+      </div>
+
+      <!-- Auth required -->
+      <div id="authRequired" class="hidden db-auth-gate">
+        <div class="db-auth-inner">
+          <div class="db-auth-icon">
+            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           </div>
-          <h2 style="margin-bottom:10px;">Sign in required</h2>
-          <p style="color:var(--muted); margin-bottom:24px;">Use your SiteTrace account to manage monitored sites and check history.</p>
+          <h2>Sign in required</h2>
+          <p>Use your SiteTrace account to manage monitored sites and check history.</p>
           <a class="button" href="/signin">Sign in to continue</a>
         </div>
       </div>
 
-      <div id="dashboardView" class="hidden">
-        <div class="dashboard-head">
-          <div>
-            <p class="eyebrow">Website health command center</p>
-            <h1>Your monitored sites</h1>
-            <p class="text-muted" style="margin:6px 0 0; font-size:.95rem;">Track status, speed, SSL, SEO hygiene, incidents, and client-ready reports.</p>
+      <!-- Authenticated dashboard view -->
+      <div id="dashboardView" class="hidden db-dashboard-view">
+
+        <!-- Content header: selected site title + action buttons -->
+        <header class="db-content-header" id="dbContentHeader">
+          <div class="db-site-title" id="dbSiteTitle">
+            <svg viewBox="0 0 24 24" class="db-globe-icon"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="db-site-name" id="dbSelectedSiteName">Select a site</span>
+            <span class="db-status-badge" id="dbSelectedSiteStatus" style="display:none;"></span>
           </div>
-          <div class="head-actions">
-            <button class="button secondary small" id="testEmailBtn" type="button" title="Email alerts coming soon — alerts appear in your Alert Center" disabled>
-              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              Alerts
+          <div class="db-header-actions">
+            <button class="button secondary small" id="copyReportBtn" type="button" style="display:none;">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Client Report
             </button>
             <button class="button secondary small" id="refreshDashboardBtn" type="button">
-              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh
             </button>
+            <button class="button small" id="addMonitorBtn" type="button">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Monitor
+            </button>
           </div>
+        </header>
+
+        <!-- Add monitor form (hidden by default, toggled by button) -->
+        <div id="addMonitorForm" class="db-add-form hidden">
+          <form id="siteForm">
+            <input id="siteName" type="text" placeholder="Client or site name" required>
+            <input id="siteUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com or https://example.com" required>
+            <button class="button" type="submit">
+              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add monitor
+            </button>
+            <button class="button secondary" type="button" id="cancelAddMonitor">Cancel</button>
+          </form>
         </div>
 
-        <div id="dashboardMessage" class="message"></div>
-        <div id="planUsagePanel"></div>
+        <!-- Status messages and panels -->
+        <div id="dashboardMessage" class="message db-message"></div>
         <div id="paidFeaturePanel"></div>
+        <div id="planUsagePanel" style="display:none;"></div><!-- moved to sidebar -->
         <div id="emailDnsPanel"></div>
-        <div id="alertStatusPanel" class="alert-status-grid"></div>
-        <div id="alertCenterPanel"></div>
+        <div id="alertStatusPanel" style="display:none;"></div><!-- cleaned up -->
+        <div id="alertCenterPanel" class="db-alert-center-wrap"></div>
 
-        <!-- Stats row -->
-        <div class="dashboard-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px;">
-          <div class="dash-card">
-            <span class="muted" style="font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;">Plan</span>
-            <h3 id="planValue" style="font-size:1.4rem; margin-top:6px;">Free</h3>
+        <!-- Site detail content -->
+        <div id="siteDetail" class="db-site-detail empty-state">
+          <div class="db-empty-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           </div>
-          <div class="dash-card">
-            <span class="muted" style="font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;">Sites</span>
-            <h3 id="siteCount" style="font-size:1.4rem; margin-top:6px;">0</h3>
-          </div>
-          <div class="dash-card">
-            <span class="muted" style="font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em;">Last check</span>
-            <h3 id="lastCheckValue" style="font-size:1.4rem; margin-top:6px;">—</h3>
-          </div>
+          <h2>No monitor selected</h2>
+          <p>Choose a site from the left panel to see its health score, incidents, response history, and issue recommendations.</p>
         </div>
 
-        <!-- Add site form -->
-        <form id="siteForm" class="site-form" style="display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin-bottom:28px;">
-          <input id="siteName" type="text" placeholder="Client or site name" required>
-          <input id="siteUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com or https://example.com" required>
-          <button class="button" type="submit">
-            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add monitor
-          </button>
-        </form>
-
-        <div class="monitor-layout" style="display:grid; grid-template-columns:280px 1fr; gap:20px; min-height:400px;">
-          <aside class="site-list-panel">
-            <div class="panel-top compact-panel">
-              <strong style="font-size:.9rem;">Client sites</strong>
-              <span id="siteListCount" class="text-muted" style="font-size:.85rem;">0</span>
-            </div>
-            <div id="sitesList" class="site-list"></div>
-          </aside>
-
-          <section class="site-detail-panel">
-            <div id="siteDetail" class="site-detail empty-state" style="padding:48px 32px; text-align:center; color:var(--muted);">
-              <div style="width:64px;height:64px;border-radius:50%;background:var(--bg-muted);display:grid;place-items:center;margin:0 auto 16px;">
-                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              </div>
-              <h2 style="font-size:1.1rem; color:var(--text); margin-bottom:8px;">No monitor selected</h2>
-              <p style="font-size:.9rem; margin:0;">Choose a site from the left to see health, incidents, recommendations, and recent checks.</p>
-            </div>
-          </section>
-        </div>
-      </div>
-    </section>
-  </main>
+      </div><!-- /dashboardView -->
+    </div><!-- /db-content -->
+  </div><!-- /db-app -->
 
   <script src="/assets/app.js"></script>
   <script>
+    // Nav toggle
     const navToggle = document.getElementById('navToggle');
     const navLinks  = document.getElementById('navLinks');
     if (navToggle && navLinks) {
