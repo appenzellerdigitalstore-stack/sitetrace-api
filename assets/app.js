@@ -3,7 +3,7 @@ const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   : 'https://sitetrace-api.onrender.com';
 const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
-const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, features: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [] };
+const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, features: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [], alerts: [], alertsUnread: 0 };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const savedLocale = localStorage.getItem('sitetrace_locale');
@@ -59,7 +59,7 @@ const copy = {
       lead: 'Start with a free instant audit, then monitor the sites that matter with alerts, history, status pages, and agency-ready capacity.',
       cards: [
         ['Validate', 'Free', '$0', 'For one-time website health checks.', ['Instant public audit', 'SEO, uptime, SSL, domain expiry, and security basics', 'Visual score with shareable recommendations', 'No saved monitors, history, or alerts']],
-        ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', 'Checks every 5 minutes', 'Email alerts and 30-day history', 'Public status pages and client-ready reports']],
+        ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', 'Checks every 5 minutes', 'In-app alerts and 30-day history', 'Public status pages and client-ready reports']],
         ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Checks every 1 minute', '90-day history, client reports, and status pages', 'Slack, Teams, webhooks, and API access']]
       ],
       buttons: ['Start monitoring', 'Upgrade to Agency'],
@@ -120,20 +120,15 @@ const copy = {
       plan: 'Plan',
       sites: 'Sites',
       lastCheck: 'Last check',
-      alerts: ['Email alerts', 'From address', 'Recipient', 'Delivery lookup', 'Slack', 'Teams'],
-      alertValues: {
-        configured: 'Configured',
-        notConfigured: 'Not configured',
-        readKey: 'Read key configured',
-        sendOnly: 'Send-only key',
-        optional: 'Optional'
-      },
+      alertCenter: 'Alert Center',
+      alertCenterDesc: 'SiteTrace watches your website when you are not watching it.',
+      alertCenterEmpty: 'No alerts yet. Alerts appear here when a monitor detects an issue or recovery.',
+      alertMarkRead: 'Mark all read',
+      alertUnread: 'unread',
       noSites: 'No client sites monitored yet.',
       running: 'Checking uptime, speed, SEO basics, SSL, and security signals...',
       completed: 'Health check completed.',
-      emailSent: 'Incident email sent successfully.',
-      emailNotSent: 'Incident was recorded, but email was not sent:',
-      pendingIncident: 'First matching failure recorded. Run one more matching check to open an incident and send an alert.',
+      pendingIncident: 'First matching failure recorded. Run one more check to confirm and open an incident.',
       sendingTest: 'Sending test email...',
       noHistory: 'No check history yet.',
       noIssues: 'No open recommendations from the latest check.',
@@ -154,7 +149,7 @@ const copy = {
       keywordPlaceholder: 'optional text to monitor',
       maintenanceStart: 'Maintenance starts',
       maintenanceEnd: 'Maintenance ends',
-      emailAlerts: 'Email alerts',
+      emailAlerts: 'In-app alerts',
       alertDown: 'Notify when down',
       alertWarning: 'Notify on warnings',
       alertRecovery: 'Notify on recovery',
@@ -173,14 +168,12 @@ const copy = {
       limitReached: 'Monitor limit reached for this plan.',
       freeScanOnly: 'Free plan = instant audits only',
       paidFeaturesTitle: 'Upgrade to monitor sites continuously',
-      paidFeaturesCopy: 'Starter unlocks saved monitors, scheduled checks, email alerts, history, status pages, and client-ready reports. Agency adds higher capacity, webhooks, and API access.',
-      paidFeatureItems: ['Saved client monitors', 'Scheduled checks', 'Email alerts', 'History and incidents', 'Status pages', 'Reports for clients'],
+      paidFeaturesCopy: 'Starter unlocks saved monitors, scheduled checks, in-app alerts, history, status pages, and client-ready reports. Agency adds higher capacity, webhooks, and API access.',
+      paidFeatureItems: ['Saved client monitors', 'Scheduled checks', 'In-app Alert Center', 'History and incidents', 'Status pages', 'Reports for clients'],
       monitoringUnavailable: 'Monitoring is a paid feature. Use the homepage scanner for a free one-time audit.',
       lockedForPlan: 'Locked on this plan',
       lockedStatusPage: 'Status pages require Starter or Agency.',
-      lockedAlerts: 'Email alerts require Starter or Agency.',
-      emailDnsTitle: 'Email deliverability action required',
-      emailDnsCopy: 'Resend identified a likely DMARC conflict. Remove the TXT record at _dmarc.sitetrace.it.com that starts with v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com. Keep Resend SPF/DKIM records. If Gmail still rejects mail, ask it.com support to loosen the parent DMARC policy from p=reject to p=none for sitetrace.it.com.',
+      lockedAlerts: 'In-app alerts require Starter or Agency.',
       domainExpiry: 'Domain expiry',
       domainUnknown: 'Unknown'
     },
@@ -301,20 +294,15 @@ const copy = {
       plan: 'Plan',
       sites: 'Sitios',
       lastCheck: 'Ultimo check',
-      alerts: ['Alertas por email', 'Remitente', 'Destinatario', 'Consulta de entrega', 'Slack', 'Teams'],
-      alertValues: {
-        configured: 'Configurado',
-        notConfigured: 'No configurado',
-        readKey: 'Read key configurada',
-        sendOnly: 'Llave solo de envio',
-        optional: 'Opcional'
-      },
+      alertCenter: 'Centro de alertas',
+      alertCenterDesc: 'SiteTrace vigila tu sitio web cuando tú no lo estás mirando.',
+      alertCenterEmpty: 'Sin alertas aún. Las alertas aparecen aquí cuando un monitor detecta un problema o recuperación.',
+      alertMarkRead: 'Marcar todo leído',
+      alertUnread: 'sin leer',
       noSites: 'Aun no hay sitios de clientes monitoreados.',
       running: 'Revisando uptime, velocidad, SEO basico, SSL y seguridad...',
       completed: 'Check de salud completado.',
-      emailSent: 'Email de incidente enviado correctamente.',
-      emailNotSent: 'El incidente se registro, pero el email no se envio:',
-      pendingIncident: 'Primer fallo registrado. Corre otro check igual para abrir incidente y enviar alerta.',
+      pendingIncident: 'Primer fallo registrado. Corre otro check para confirmar y abrir un incidente.',
       sendingTest: 'Enviando email de prueba...',
       noHistory: 'Aun no hay historial de checks.',
       noIssues: 'No hay recomendaciones abiertas en el ultimo check.',
@@ -335,7 +323,7 @@ const copy = {
       keywordPlaceholder: 'texto opcional a monitorear',
       maintenanceStart: 'Inicio de mantenimiento',
       maintenanceEnd: 'Fin de mantenimiento',
-      emailAlerts: 'Alertas por email',
+      emailAlerts: 'Alertas en la app',
       alertDown: 'Avisar si cae',
       alertWarning: 'Avisar con warnings',
       alertRecovery: 'Avisar recuperacion',
@@ -354,14 +342,12 @@ const copy = {
       limitReached: 'Limite de monitores alcanzado para este plan.',
       freeScanOnly: 'Plan Free = auditorias instantaneas',
       paidFeaturesTitle: 'Sube de plan para monitorear sitios continuamente',
-      paidFeaturesCopy: 'Starter desbloquea monitores guardados, checks programados, alertas por email, historial, status pages y reportes para clientes. Agency agrega mas capacidad, webhooks y API.',
-      paidFeatureItems: ['Monitores de clientes', 'Checks programados', 'Alertas por email', 'Historial e incidentes', 'Status pages', 'Reportes para clientes'],
+      paidFeaturesCopy: 'Starter desbloquea monitores guardados, checks programados, alertas en la app, historial, status pages y reportes para clientes. Agency agrega mas capacidad, webhooks y API.',
+      paidFeatureItems: ['Monitores de clientes', 'Checks programados', 'Centro de alertas', 'Historial e incidentes', 'Status pages', 'Reportes para clientes'],
       monitoringUnavailable: 'El monitoreo es una funcion de pago. Usa el scanner del inicio para una auditoria gratis puntual.',
       lockedForPlan: 'Bloqueado en este plan',
       lockedStatusPage: 'Las status pages requieren Starter o Agency.',
-      lockedAlerts: 'Las alertas por email requieren Starter o Agency.',
-      emailDnsTitle: 'Accion requerida para entrega de emails',
-      emailDnsCopy: 'Resend identifico un posible conflicto DMARC. Elimina el registro TXT en _dmarc.sitetrace.it.com que empieza con v=DMARC1; p=none; rua=mailto:appenzeller.digitalstore@gmail.com. Conserva los registros SPF/DKIM de Resend. Si Gmail aun rechaza correos, pide a soporte de it.com relajar la politica DMARC padre de p=reject a p=none para sitetrace.it.com.',
+      lockedAlerts: 'Las alertas en la app requieren Starter o Agency.',
       domainExpiry: 'Vencimiento dominio',
       domainUnknown: 'Desconocido'
     },
@@ -809,17 +795,9 @@ function renderPaidFeaturePanel() {
 }
 
 function renderEmailDnsPanel() {
+  // Email DNS panel removed — alerts are now handled in-app via Alert Center
   const target = document.getElementById('emailDnsPanel');
-  if (!target || !state.config || !state.config.email_dns_guidance) return;
-  const guidance = state.config.email_dns_guidance;
-  target.innerHTML = `
-    <div class="email-dns-panel">
-      <div>
-        <strong>${escapeHtml(t('dashboard.emailDnsTitle'))}</strong>
-        <p>${escapeHtml(t('dashboard.emailDnsCopy'))}</p>
-      </div>
-      <span>${escapeHtml(guidance.status || 'action_required')}</span>
-    </div>`;
+  if (target) target.innerHTML = '';
 }
 
 function domainExpiryLabel(domainExpiry) {
@@ -1222,24 +1200,91 @@ async function loadDashboard() {
     state.selectedSiteId = state.sites.length ? state.sites[0].id : null;
   }
   if (state.selectedSiteId) await loadSelectedChecks();
+  await loadAlerts();
   renderDashboard();
 }
 
+function severityClass(severity) {
+  if (severity === 'critical') return 'down';
+  if (severity === 'high') return 'warning';
+  if (severity === 'info') return 'online';
+  return 'warning';
+}
+
+function alertIcon(type) {
+  if (type === 'resolved') return `<svg viewBox="0 0 24 24" class="icon-green"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+  if (type === 'down') return `<svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+  return `<svg viewBox="0 0 24 24" class="icon-amber"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+}
+
+async function loadAlerts() {
+  if (!state.session || !state.supabase) return [];
+  try {
+    const res = await fetch(apiPath('/api/alerts?limit=30'), { headers: authHeaders() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    state.alerts = data.alerts || [];
+    state.alertsUnread = data.unread || 0;
+    return state.alerts;
+  } catch (e) {
+    return [];
+  }
+}
+
+function renderAlertCenter() {
+  const target = document.getElementById('alertCenterPanel');
+  if (!target) return;
+  const alerts = state.alerts || [];
+  const unread = state.alertsUnread || 0;
+  const hasAlerts = alerts.length > 0;
+  target.innerHTML = `
+    <div class="alert-center-wrap">
+      <div class="alert-center-head">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <strong>${escapeHtml(t('dashboard.alertCenter'))}</strong>
+          ${unread > 0 ? `<span class="alert-badge">${unread}</span>` : ''}
+        </div>
+        ${hasAlerts ? `<button class="link-button small" id="markAlertsReadBtn" type="button">${escapeHtml(t('dashboard.alertMarkRead'))}</button>` : ''}
+      </div>
+      <p class="alert-center-tagline">${escapeHtml(t('dashboard.alertCenterDesc'))}</p>
+      <div class="alert-list">
+        ${hasAlerts
+          ? alerts.slice(0, 20).map((alert) => `
+            <div class="alert-row ${alert.read ? 'read' : 'unread'}" data-alert-id="${alert.id}">
+              <div class="alert-icon">${alertIcon(alert.type)}</div>
+              <div class="alert-body">
+                <div class="alert-title">${escapeHtml(alert.title)}</div>
+                <div class="alert-msg">${escapeHtml(alert.message)}</div>
+                <div class="alert-time">${formatDateTime(alert.created_at)}</div>
+              </div>
+              ${!alert.read ? '<span class="alert-unread-dot"></span>' : ''}
+            </div>`).join('')
+          : `<div class="alert-empty">${escapeHtml(t('dashboard.alertCenterEmpty'))}</div>`}
+      </div>
+    </div>`;
+
+  const markBtn = document.getElementById('markAlertsReadBtn');
+  if (markBtn) {
+    markBtn.addEventListener('click', async () => {
+      markBtn.disabled = true;
+      try {
+        await fetch(apiPath('/api/alerts/read-all'), { method: 'PATCH', headers: authHeaders() });
+        state.alerts = (state.alerts || []).map((a) => ({ ...a, read: true }));
+        state.alertsUnread = 0;
+        renderAlertCenter();
+      } catch (e) {
+        markBtn.disabled = false;
+      }
+    });
+  }
+}
+
 function renderAlertStatus() {
+  // Alert center is now the primary notification surface (see renderAlertCenter)
+  // This function kept for compatibility; alert status panel is hidden
   const target = document.getElementById('alertStatusPanel');
-  if (!target || !state.config) return;
-  const profileEmail = state.profile && state.profile.email ? state.profile.email : state.session.user.email;
-  const labels = t('dashboard.alerts');
-  const values = t('dashboard.alertValues');
-  const items = [
-    { label: labels[0], value: state.config.email_alerts_enabled ? values.configured : values.notConfigured, ok: state.config.email_alerts_enabled },
-    { label: labels[1], value: state.config.alert_from_email || '-', ok: state.config.email_alerts_enabled },
-    { label: labels[2], value: profileEmail || '-', ok: Boolean(profileEmail) },
-    { label: labels[3], value: state.config.delivery_lookup_configured ? values.readKey : values.sendOnly, ok: state.config.delivery_lookup_configured },
-    { label: labels[4], value: state.config.slack_alerts_enabled ? values.configured : values.optional, ok: state.config.slack_alerts_enabled },
-    { label: labels[5], value: state.config.teams_alerts_enabled ? values.configured : values.optional, ok: state.config.teams_alerts_enabled }
-  ];
-  target.innerHTML = items.map((item) => `<div class="alert-status-card"><span class="dot ${item.ok ? '' : 'pending'}"></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.value)}</small></div></div>`).join('');
+  if (target) target.innerHTML = '';
 }
 
 function renderDashboard() {
@@ -1251,11 +1296,12 @@ function renderDashboard() {
   const lastSite = state.sites.find((site) => site.last_checked_at);
   document.getElementById('lastCheckValue').textContent = lastSite ? new Date(lastSite.last_checked_at).toLocaleDateString() : '-';
   renderAlertStatus();
+  renderAlertCenter();
   renderPlanUsage();
   renderPaidFeaturePanel();
   renderEmailDnsPanel();
   const testEmail = document.getElementById('testEmailBtn');
-  if (testEmail) testEmail.disabled = !hasFeature('email_alerts');
+  if (testEmail) testEmail.disabled = true; // email alerts coming soon
   const form = document.getElementById('siteForm');
   if (form) {
     form.querySelectorAll('input, button').forEach((element) => {
@@ -1285,14 +1331,11 @@ async function runSiteCheck(siteId) {
   const response = await fetch(apiPath('/api/run-site-check'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ site_id: siteId, locale: currentLocale }) });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'Check failed');
-  const emailResult = data.incident && data.incident.notifications && data.incident.notifications.email;
   await loadDashboard();
-  if (emailResult && emailResult.sent) {
-    setDashboardMessage(t('dashboard.emailSent'), 'success');
-  } else if (emailResult && !emailResult.sent) {
-    setDashboardMessage(`${t('dashboard.emailNotSent')} ${emailResult.reason || 'unknown error'}`, 'error');
-  } else if (data.incident && data.incident.pending_confirmation) {
+  if (data.incident && data.incident.pending_confirmation) {
     setDashboardMessage(t('dashboard.pendingIncident'));
+  } else if (data.incident && data.incident.incident) {
+    setDashboardMessage(t('dashboard.completed') + ' Alert recorded in your Alert Center.', 'success');
   } else {
     setDashboardMessage(t('dashboard.completed'));
   }
@@ -1563,7 +1606,7 @@ function renderSiteDetail(site) {
 
   const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
   const reportText = encodeURIComponent(reportSummaryFromSite(site, checks));
-  const alertsLocked = !hasFeature('email_alerts');
+  const alertsLocked = !hasFeature('in_app_alerts');
   const statusLocked = !hasFeature('status_pages');
   const reportLocked = !hasFeature('client_reports');
 
@@ -1784,10 +1827,10 @@ async function initDashboard() {
       keyword_should_exist: true,
       maintenance_starts_at: document.getElementById('maintenanceStartInput').value ? new Date(document.getElementById('maintenanceStartInput').value).toISOString() : null,
       maintenance_ends_at: document.getElementById('maintenanceEndInput').value ? new Date(document.getElementById('maintenanceEndInput').value).toISOString() : null,
-      email_alerts_enabled: hasFeature('email_alerts') ? document.getElementById('emailAlertsInput').checked : false,
-      alert_on_down: hasFeature('email_alerts') ? document.getElementById('alertDownInput').checked : false,
-      alert_on_warning: hasFeature('email_alerts') ? document.getElementById('alertWarningInput').checked : false,
-      alert_on_recovery: hasFeature('email_alerts') ? document.getElementById('alertRecoveryInput').checked : false,
+      email_alerts_enabled: hasFeature('in_app_alerts') ? document.getElementById('emailAlertsInput').checked : false,
+      alert_on_down: hasFeature('in_app_alerts') ? document.getElementById('alertDownInput').checked : false,
+      alert_on_warning: hasFeature('in_app_alerts') ? document.getElementById('alertWarningInput').checked : false,
+      alert_on_recovery: hasFeature('in_app_alerts') ? document.getElementById('alertRecoveryInput').checked : false,
       status_page_enabled: hasFeature('status_pages') ? document.getElementById('statusPageInput').checked : false
     };
     const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });

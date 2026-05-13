@@ -77,9 +77,9 @@
             <p class="text-muted" style="margin:6px 0 0; font-size:.95rem;">Track status, speed, SSL, SEO hygiene, incidents, and client-ready reports.</p>
           </div>
           <div class="head-actions">
-            <button class="button secondary small" id="testEmailBtn" type="button">
-              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-              Test email
+            <button class="button secondary small" id="testEmailBtn" type="button" title="Email alerts coming soon — alerts appear in your Alert Center" disabled>
+              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              Alerts
             </button>
             <button class="button secondary small" id="refreshDashboardBtn" type="button">
               <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -93,6 +93,7 @@
         <div id="paidFeaturePanel"></div>
         <div id="emailDnsPanel"></div>
         <div id="alertStatusPanel" class="alert-status-grid"></div>
+        <div id="alertCenterPanel"></div>
 
         <!-- Stats row -->
         <div class="dashboard-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px;">

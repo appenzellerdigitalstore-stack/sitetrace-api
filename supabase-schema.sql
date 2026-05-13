@@ -129,6 +129,35 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
+create table if not exists public.alerts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  site_id uuid references public.sites(id) on delete cascade,
+  type text not null check (type in ('down', 'warning', 'resolved', 'ssl', 'domain', 'info')),
+  severity text not null default 'info' check (severity in ('critical', 'high', 'medium', 'info')),
+  title text not null,
+  message text not null,
+  read boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+alter table public.alerts enable row level security;
+
+drop policy if exists "alerts_select_own" on public.alerts;
+create policy "alerts_select_own"
+on public.alerts for select
+using (auth.uid() = user_id);
+
+drop policy if exists "alerts_update_own" on public.alerts;
+create policy "alerts_update_own"
+on public.alerts for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create index if not exists alerts_user_id_created_at_idx on public.alerts(user_id, created_at desc);
+create index if not exists alerts_site_id_idx on public.alerts(site_id);
+create index if not exists alerts_user_id_read_idx on public.alerts(user_id, read);
+
 create index if not exists sites_user_id_idx on public.sites(user_id);
 create index if not exists sites_public_slug_idx on public.sites(public_slug);
 create index if not exists checks_site_id_created_at_idx on public.checks(site_id, created_at desc);

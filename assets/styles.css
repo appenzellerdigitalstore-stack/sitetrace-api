@@ -1342,6 +1342,80 @@ pre { background: var(--bg-subtle); border: 1px solid var(--line); border-radius
 }
 .status-link { color: var(--blue); font-size: .85rem; word-break: break-all; }
 
+/* ══ Alert Center ════════════════════════════════════ */
+.alert-center-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.alert-center-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.alert-center-head strong { font-size: .95rem; }
+.alert-center-tagline {
+  font-size: .8rem;
+  color: var(--muted);
+  padding: 6px 18px 10px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.alert-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--red);
+  color: #fff;
+  border-radius: 99px;
+  font-size: .7rem;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  line-height: 1;
+}
+.alert-list { max-height: 320px; overflow-y: auto; }
+.alert-empty {
+  padding: 24px 18px;
+  font-size: .88rem;
+  color: var(--muted);
+  text-align: center;
+}
+.alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  transition: background .15s;
+}
+.alert-row:last-child { border-bottom: none; }
+.alert-row.unread { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+.alert-row:hover { background: var(--bg-muted); }
+.alert-icon { flex-shrink: 0; margin-top: 1px; }
+.alert-icon svg { width: 18px; height: 18px; fill: none; stroke-width: 2; stroke-linecap: round; }
+.icon-green { stroke: var(--green); }
+.icon-red   { stroke: var(--red); }
+.icon-amber { stroke: var(--amber); }
+.alert-body { flex: 1; min-width: 0; }
+.alert-title { font-size: .88rem; font-weight: 600; margin-bottom: 2px; }
+.alert-msg { font-size: .82rem; color: var(--muted); margin-bottom: 4px; line-height: 1.45; }
+.alert-time { font-size: .75rem; color: var(--muted); }
+.alert-unread-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+.link-button.small { font-size: .8rem; padding: 0; }
+
 /* ══ Responsive ══════════════════════════════════════ */
 @media (max-width: 1024px) {
   .dash-metrics { grid-template-columns: repeat(2,1fr); }

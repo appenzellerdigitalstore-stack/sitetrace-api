@@ -38,7 +38,8 @@ const PLAN_FEATURES = {
     instant_audit: true,
     monitored_sites: false,
     scheduled_checks: false,
-    email_alerts: false,
+    in_app_alerts: false,
+    email_alerts: false, // kept for future re-enable; currently disabled platform-wide
     status_pages: false,
     client_reports: false,
     webhooks: false,
@@ -48,7 +49,8 @@ const PLAN_FEATURES = {
     instant_audit: true,
     monitored_sites: true,
     scheduled_checks: true,
-    email_alerts: true,
+    in_app_alerts: true,
+    email_alerts: false, // kept for future re-enable; currently disabled platform-wide
     status_pages: true,
     client_reports: true,
     webhooks: false,
@@ -58,7 +60,8 @@ const PLAN_FEATURES = {
     instant_audit: true,
     monitored_sites: true,
     scheduled_checks: true,
-    email_alerts: true,
+    in_app_alerts: true,
+    email_alerts: false, // kept for future re-enable; currently disabled platform-wide
     status_pages: true,
     client_reports: true,
     webhooks: true,
@@ -968,6 +971,20 @@ async function loadProfileEmail(userId) {
   }
 }
 
+async function createInAppAlert(userId, siteId, type, severity, title, message) {
+  if (!supabaseAdmin || !userId) return null;
+  const { data, error } = await supabaseAdmin
+    .from('alerts')
+    .insert({ user_id: userId, site_id: siteId || null, type, severity, title, message })
+    .select('id')
+    .single();
+  if (error) {
+    console.error('createInAppAlert error:', error.message);
+    return null;
+  }
+  return data;
+}
+
 async function resolveOpenIncidents({ site, analysis }) {
   const { data: openIncidents } = await supabaseAdmin
     .from('incidents')
@@ -994,6 +1011,12 @@ async function resolveOpenIncidents({ site, analysis }) {
       .single();
 
     if (!error && updated) {
+      const durationMin = updated.duration_seconds ? Math.round(updated.duration_seconds / 60) : null;
+      await createInAppAlert(
+        site.user_id, site.id, 'resolved', 'info',
+        `${site.name} is back online`,
+        `The monitor recovered after ${durationMin != null ? `${durationMin} minute${durationMin !== 1 ? 's' : ''}` : 'a downtime window'}. Health score: ${analysis.score}/100.`
+      );
       const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
       resolved.push({ incident: updated, notifications });
     }
@@ -1062,7 +1085,17 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
   }
 
   const plan = await loadUserPlan(site.user_id);
-  const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident, features: planFeatures(plan) });
+  const features = planFeatures(plan);
+  const topIssue = importantIssues(analysis, 1)[0];
+  const alertSeverity = level === 'down' ? 'critical' : 'high';
+  const alertMsg = [
+    level === 'down' ? `${site.name} is down.` : `${site.name} has a warning.`,
+    topIssue ? `Detected: ${topIssue.title}.` : '',
+    `Health score: ${analysis.score}/100.`,
+    analysis.response_time ? `Response time: ${analysis.response_time}.` : ''
+  ].filter(Boolean).join(' ');
+  await createInAppAlert(site.user_id, site.id, level, alertSeverity, incident.title, alertMsg);
+  const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: level, analysis, incident, features });
   return { incident, notifications };
 }
 
@@ -1379,11 +1412,12 @@ app.get('/config', (req, res) => {
     supabase_url: SUPABASE_URL,
     supabase_anon_key: SUPABASE_ANON_KEY,
     billing_enabled: Boolean(stripe && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
-    alerts_enabled: Boolean(RESEND_API_KEY || SLACK_WEBHOOK_URL || TEAMS_WEBHOOK_URL),
-    email_alerts_enabled: Boolean(RESEND_API_KEY),
+    in_app_alerts_enabled: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY),
+    // Email alerts are disabled pending DNS resolution; kept for future re-enable
+    alerts_enabled: false,
+    email_alerts_enabled: false,
     alert_from_email: ALERT_FROM_EMAIL,
-    delivery_lookup_configured: Boolean(RESEND_READ_API_KEY && RESEND_READ_API_KEY !== RESEND_API_KEY),
-    email_dns_guidance: EMAIL_DNS_GUIDANCE,
+    delivery_lookup_configured: false,
     slack_alerts_enabled: Boolean(SLACK_WEBHOOK_URL),
     teams_alerts_enabled: Boolean(TEAMS_WEBHOOK_URL),
     plans: {
@@ -1495,53 +1529,44 @@ app.post('/api/sites', requireUser, async (req, res) => {
 });
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
-  const plan = await loadUserPlan(req.user.id);
-  const features = planFeatures(plan);
-  if (!features.email_alerts) {
-    return res.status(402).json({
-      status: 'error',
-      code: 'paid_alerts_required',
-      message: 'Email alerts are available on Starter and Agency plans.',
-      plan,
-      features
-    });
-  }
-
-  const to = req.user.email || await loadProfileEmail(req.user.id);
-  const email = await sendPlainDiagnosticEmail({ to }).catch((error) => ({ sent: false, reason: error.message }));
-
-  console.info('Test alert email result:', {
-    user_id: req.user.id,
-    to: to ? 'configured' : 'missing',
-    email
-  });
-
-  if (!email.sent) {
-    return res.status(502).json({
-      status: 'error',
-      message: 'Test email was not sent',
-      email,
-      email_dns_guidance: EMAIL_DNS_GUIDANCE,
-      email_alerts_enabled: Boolean(RESEND_API_KEY),
-      alert_from_email: ALERT_FROM_EMAIL
-    });
-  }
-
-  let delivery = null;
-  if (email.id) {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    delivery = await retrieveResendEmail(email.id).catch((error) => ({ error: error.message }));
-  }
-
+  // Email alerts are currently disabled platform-wide (deliverability configuration pending).
+  // In-app alerts are active. Email alerts will be re-enabled once domain DNS is resolved.
   res.json({
-    status: 'success',
-    message: 'Test email sent',
-    email,
-    delivery,
-    to,
-    alert_from_email: ALERT_FROM_EMAIL,
-    email_dns_guidance: EMAIL_DNS_GUIDANCE
+    status: 'coming_soon',
+    message: 'Email alerts are coming soon. Your in-app Alert Center is active — all incidents and recoveries appear there immediately.',
+    in_app_alerts_active: true
   });
+});
+
+app.get('/api/alerts', requireUser, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const { data: alerts, error } = await supabaseAdmin
+    .from('alerts')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  const unread = (alerts || []).filter((alert) => !alert.read).length;
+  res.json({ status: 'success', alerts: alerts || [], unread });
+});
+
+app.patch('/api/alerts/read-all', requireUser, async (req, res) => {
+  const { error } = await supabaseAdmin
+    .from('alerts')
+    .update({ read: true })
+    .eq('user_id', req.user.id)
+    .eq('read', false);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success' });
 });
 
 app.get('/api/email-status/:id', requireUser, async (req, res) => {
@@ -1625,8 +1650,8 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
     return res.status(402).json({ status: 'error', code: 'paid_status_required', message: 'Public status pages are available on Starter and Agency plans.', plan, features });
   }
 
-  if ((updates.email_alerts_enabled || updates.alert_on_down || updates.alert_on_warning || updates.alert_on_recovery) && !features.email_alerts) {
-    return res.status(402).json({ status: 'error', code: 'paid_alerts_required', message: 'Email alerts are available on Starter and Agency plans.', plan, features });
+  if ((updates.email_alerts_enabled || updates.alert_on_down || updates.alert_on_warning || updates.alert_on_recovery) && !features.in_app_alerts) {
+    return res.status(402).json({ status: 'error', code: 'paid_alerts_required', message: 'In-app alerts are available on Starter and Agency plans.', plan, features });
   }
 
   updates.updated_at = new Date().toISOString();
