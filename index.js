@@ -503,6 +503,75 @@ function calculateScore(checks) {
   return Math.round((earned / totalWeight) * 100);
 }
 
+function generateRecommendations(checks) {
+  const severityMap = { fail: 'critical', warning: 'high' };
+  const categoryMap = {
+    uptime: 'technical',
+    seo: 'metadata',
+    content: 'content',
+    security: 'technical',
+    domain: 'technical'
+  };
+  const whyItMatters = {
+    title: 'The page title is the most visible SEO signal in search results. A missing or poorly written title directly reduces click-through rates and rankings.',
+    meta_description: 'The meta description is the preview snippet shown under your link in search results. Without it, Google picks random text — usually hurting clicks.',
+    h1: 'The H1 is the main heading search engines use to understand what a page covers. Missing or multiple H1s confuse crawlers and weaken topical relevance.',
+    image_alt: 'Alt text helps search engines understand images and is required for screen readers. Missing alt text hurts both image SEO and accessibility compliance.',
+    canonical: 'Without a canonical tag, duplicate URL variations (http vs https, trailing slash, etc.) can compete against each other in search, splitting authority.',
+    viewport: 'Without a viewport meta tag, mobile browsers render the page at desktop width, creating a broken mobile experience and hurting Core Web Vitals.',
+    lang: 'The lang attribute tells browsers and screen readers what language to use. Missing it degrades accessibility and localization accuracy.',
+    open_graph: 'Open Graph tags control how your page looks when shared on LinkedIn, Facebook, Slack, and iMessage. Missing tags produce plain, unbranded previews.',
+    robots_indexing: 'A noindex directive tells every search engine to exclude this page from results. If unintentional, it silently kills organic traffic to this URL.',
+    structured_data: 'Structured data helps Google understand your content and can unlock rich results like star ratings, FAQ dropdowns, and event listings in search.',
+    word_count: 'Thin pages with little text signal low value to search engines and are often filtered out of competitive queries in favor of more thorough content.',
+    links: 'Internal links help search engines discover content and distribute authority across the site. A page with few links may be treated as an orphan.',
+    page_size: 'Heavy HTML responses slow down initial load time and can negatively impact Core Web Vitals scores, which are a confirmed Google ranking factor.',
+    favicon: 'A favicon increases brand recognition in browser tabs, bookmarks, and mobile home screens. Missing it makes the site look unfinished.',
+    status_code: 'Non-200 HTTP status codes indicate errors, broken redirects, or unreachable pages that hurt crawlability, indexing, and user experience.',
+    response_time: 'Slow server response directly increases bounce rates and is a known Google ranking signal. Under 1 second is ideal; over 3 seconds is a problem.',
+    https: 'HTTPS is required for user trust and browser security indicators. It is also a confirmed Google ranking signal and required for many browser APIs.',
+    ssl: 'An expired or misconfigured SSL certificate triggers full-page browser warnings that block visitors and immediately destroy trust and conversions.',
+    hsts: 'Without HSTS, users who navigate via HTTP can be intercepted before being redirected to HTTPS. HSTS closes this window for man-in-the-middle attacks.',
+    csp: 'A Content Security Policy is the primary defense against cross-site scripting (XSS) attacks, which can silently redirect users or steal form data.',
+    frame: 'Without frame protection, attackers can embed your page inside a hidden iframe and trick users into clicking buttons they cannot see (clickjacking).',
+    domain_expiry: 'An expired domain takes the site completely offline and can be registered by a third party — permanently losing your brand name, rankings, and email.'
+  };
+  const copyPasteFixes = {
+    title: '<title>Your Page Title – Brand Name</title>',
+    meta_description: '<meta name="description" content="A clear 70–160 character description of what this page offers.">',
+    canonical: '<link rel="canonical" href="https://yourdomain.com/this-page/">',
+    viewport: '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    lang: '<html lang="en">',
+    hsts: 'Strict-Transport-Security: max-age=31536000; includeSubDomains',
+    csp: "Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+    frame: 'X-Frame-Options: SAMEORIGIN',
+    structured_data: '{"@context":"https://schema.org","@type":"Organization","name":"Your Company","url":"https://yourdomain.com"}'
+  };
+
+  const severityOrder = { critical: 1, high: 2, medium: 3, low: 4 };
+  let priorityCounter = 1;
+
+  return checks
+    .filter((check) => check.level !== 'pass')
+    .sort((a, b) => {
+      const aS = severityOrder[severityMap[a.level] || 'medium'] || 3;
+      const bS = severityOrder[severityMap[b.level] || 'medium'] || 3;
+      return aS - bS;
+    })
+    .map((check) => ({
+      issueTitle: check.title,
+      severity: severityMap[check.level] || 'medium',
+      category: categoryMap[check.category] || 'technical',
+      plainEnglishExplanation: check.description,
+      whyItMatters: whyItMatters[check.id] || `This issue may negatively affect the site's ${check.category} performance.`,
+      recommendedFix: check.recommendation,
+      copyPasteFix: copyPasteFixes[check.id] || null,
+      priorityOrder: priorityCounter++,
+      checkId: check.id,
+      value: check.value
+    }));
+}
+
 function summarize(checks) {
   return checks.reduce((summary, check) => {
     summary[check.level] = (summary[check.level] || 0) + 1;
@@ -1145,6 +1214,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   addDomainExpiryCheck(checks, locale, domainExpiry);
 
   const score = calculateScore(checks);
+  const recommendations = generateRecommendations(checks);
 
   return {
     status: 'success',
@@ -1169,7 +1239,8 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     summary: summarize(checks),
     ssl,
     domain_expiry: domainExpiry,
-    checks
+    checks,
+    recommendations
   };
 }
 

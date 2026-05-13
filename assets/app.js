@@ -827,11 +827,101 @@ async function initSupabaseOnce() {
   }
 }
 
+function renderActionPlan(recommendations) {
+  if (!Array.isArray(recommendations) || !recommendations.length) {
+    return '<div class="action-plan-empty"><span class="level-badge pass">All clear</span><p>No issues detected. Keep monitoring for silent changes over time.</p></div>';
+  }
+  const criticals = recommendations.filter((r) => r.severity === 'critical');
+  const highs = recommendations.filter((r) => r.severity === 'high');
+  const renderGroup = (label, items, colorClass) => {
+    if (!items.length) return '';
+    return `<div class="ap-group"><div class="ap-group-head"><span class="ap-severity ${colorClass}">${escapeHtml(label)}</span><span class="ap-count">${items.length} item${items.length > 1 ? 's' : ''}</span></div>${items.map((rec) => `<div class="ap-item"><div class="ap-item-head"><strong>${escapeHtml(rec.issueTitle)}</strong><span class="ap-category">${escapeHtml(rec.category)}</span></div><div class="ap-item-body"><div class="ap-row"><span class="ap-label">What's wrong</span><p>${escapeHtml(rec.plainEnglishExplanation)}</p></div><div class="ap-row"><span class="ap-label">Why it matters</span><p>${escapeHtml(rec.whyItMatters)}</p></div><div class="ap-row"><span class="ap-label">How to fix it</span><p>${escapeHtml(rec.recommendedFix)}</p></div>${rec.copyPasteFix ? `<div class="ap-row"><span class="ap-label">Copy-paste fix</span><div class="ap-code-wrap"><code class="ap-code">${escapeHtml(rec.copyPasteFix)}</code><button class="ap-copy-btn" type="button" data-copy-fix="${escapeHtml(rec.copyPasteFix)}">Copy</button></div></div>` : ''}</div></div>`).join('')}</div>`;
+  };
+  return renderGroup('Critical', criticals, 'sev-critical') + renderGroup('Needs attention', highs, 'sev-high');
+}
+
+function renderClientReport(data) {
+  const checks = Array.isArray(data.checks) ? data.checks : [];
+  const recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+  const score = Number(data.score || data.seo_score || 0);
+  const scanDate = new Date().toLocaleString();
+  const url = data.final_url || data.analyzed_url || '';
+  const ssl = data.ssl;
+  const domain = data.domain_expiry;
+  const failCount = checks.filter((c) => c.level === 'fail').length;
+  const warnCount = checks.filter((c) => c.level === 'warning').length;
+  const passCount = checks.filter((c) => c.level === 'pass').length;
+  const scoreColor = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--amber)' : 'var(--red)';
+
+  const metaChecks = checks.filter((c) => c.category === 'seo');
+  const contentChecks = checks.filter((c) => c.category === 'content');
+  const techChecks = checks.filter((c) => ['uptime', 'security', 'domain'].includes(c.category));
+
+  const checkRow = (check) => `<tr class="rpt-check-row rpt-${check.level}"><td>${escapeHtml(check.title)}</td><td><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></td><td>${escapeHtml(String(check.value || ''))}</td><td>${escapeHtml(check.recommendation)}</td></tr>`;
+
+  const sectionTable = (items) => items.length ? `<table class="rpt-table"><thead><tr><th>Check</th><th>Status</th><th>Value</th><th>Recommendation</th></tr></thead><tbody>${items.map(checkRow).join('')}</tbody></table>` : '<p class="rpt-empty">No issues found in this area.</p>';
+
+  const recItems = recommendations.slice(0, 10).map((rec, i) => `<div class="rpt-rec-item"><div class="rpt-rec-head"><span class="rpt-rec-num">${i + 1}</span><div><strong>${escapeHtml(rec.issueTitle)}</strong><span class="ap-severity sev-${rec.severity}">${escapeHtml(rec.severity)}</span></div></div><p>${escapeHtml(rec.recommendedFix)}</p></div>`).join('');
+
+  return `<div class="client-report" id="clientReport">
+    <div class="rpt-header no-print-border">
+      <div class="rpt-header-brand">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>
+        <strong>SiteTrace</strong>
+        <span class="rpt-header-label">Website Health Report</span>
+      </div>
+      <div class="rpt-header-meta">
+        <span>${escapeHtml(url)}</span>
+        <span>Scanned: ${escapeHtml(scanDate)}</span>
+      </div>
+    </div>
+    <div class="rpt-score-row">
+      <div class="rpt-score-block">
+        <div class="rpt-score-ring" style="background:conic-gradient(${scoreColor} 0 ${score}%, var(--line) ${score}% 100%)"><span>${score}</span></div>
+        <div><strong>Overall Health Score</strong><p>${score >= 80 ? 'Good — keep monitoring' : score >= 60 ? 'Fair — some issues need attention' : 'Poor — critical issues found'}</p></div>
+      </div>
+      <div class="rpt-score-pills">
+        <div class="rpt-pill rpt-pill-fail"><strong>${failCount}</strong><span>Critical</span></div>
+        <div class="rpt-pill rpt-pill-warn"><strong>${warnCount}</strong><span>Warnings</span></div>
+        <div class="rpt-pill rpt-pill-pass"><strong>${passCount}</strong><span>Passing</span></div>
+      </div>
+    </div>
+    <div class="rpt-overview">
+      <div class="rpt-overview-card"><span class="rpt-ov-label">Response time</span><strong>${escapeHtml(data.response_time || '-')}</strong></div>
+      <div class="rpt-overview-card"><span class="rpt-ov-label">HTTP status</span><strong>${escapeHtml(String(data.status_code || '-'))}</strong></div>
+      <div class="rpt-overview-card"><span class="rpt-ov-label">Page size</span><strong>${data.page_size_bytes ? Math.round(data.page_size_bytes / 1024) + 'KB' : '-'}</strong></div>
+      <div class="rpt-overview-card"><span class="rpt-ov-label">Word count</span><strong>${escapeHtml(String(data.word_count || '-'))}</strong></div>
+      <div class="rpt-overview-card"><span class="rpt-ov-label">SSL expires</span><strong>${ssl && ssl.days_remaining !== null ? ssl.days_remaining + 'd' : '-'}</strong></div>
+      <div class="rpt-overview-card"><span class="rpt-ov-label">Domain expires</span><strong>${domain && domain.days_remaining !== null ? domain.days_remaining + 'd' : '-'}</strong></div>
+    </div>
+    <div class="rpt-section">
+      <h3 class="rpt-section-title">Priority Action Plan</h3>
+      ${recommendations.length ? recItems : '<p class="rpt-empty">No open issues found.</p>'}
+    </div>
+    <div class="rpt-section">
+      <h3 class="rpt-section-title">Metadata &amp; SEO</h3>
+      ${sectionTable(metaChecks)}
+    </div>
+    <div class="rpt-section">
+      <h3 class="rpt-section-title">Content</h3>
+      ${sectionTable(contentChecks)}
+    </div>
+    <div class="rpt-section">
+      <h3 class="rpt-section-title">Technical &amp; Security</h3>
+      ${sectionTable(techChecks)}
+    </div>
+    <div class="rpt-footer">
+      <p>Generated by SiteTrace — Website health monitoring for agencies and site owners. &copy; ${new Date().getFullYear()} SiteTrace</p>
+    </div>
+  </div>`;
+}
+
 function renderResults(data) {
   const target = document.getElementById('results');
   if (!target) return;
 
   const checks = Array.isArray(data.checks) ? data.checks : [];
+  const recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
   const failCount = checks.filter((check) => check.level === 'fail').length;
   const warningCount = checks.filter((check) => check.level === 'warning').length;
   const sorted = [...checks].sort((a, b) => ({ fail: 0, warning: 1, pass: 2 }[a.level] - { fail: 0, warning: 1, pass: 2 }[b.level]));
@@ -849,8 +939,101 @@ function renderResults(data) {
   const pageSizeKb = data.page_size_bytes ? `${Math.round(Number(data.page_size_bytes) / 1024)}KB` : '-';
 
   const reportText = encodeURIComponent(reportSummaryFromAnalysis(data));
-  target.innerHTML = `<div class="result-shell result-report"><div class="panel-top"><div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div><div class="result-actions"><button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button><div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div></div></div><div class="metric-grid report-metrics"><div class="metric"><strong>${score}/100</strong><span>Health score</span></div><div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div><div class="metric"><strong>${domainDays}</strong><span>Domain expiry</span></div><div class="metric"><strong>${pageSizeKb}</strong><span>Page size</span></div><div class="metric"><strong>${failCount}</strong><span>Critical</span></div><div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div></div><div class="result-summary-grid"><section class="priority-panel"><p class="eyebrow compact">Top fixes</p>${topIssueHtml}</section><section class="priority-panel"><p class="eyebrow compact">What was checked</p><div class="summary-pills"><span>${checks.filter((check) => check.category === 'uptime').length} uptime</span><span>${checks.filter((check) => check.category === 'seo').length} SEO</span><span>${checks.filter((check) => check.category === 'security').length} security</span><span>${checks.filter((check) => check.category === 'domain').length} domain</span><span>${checks.filter((check) => check.category === 'content').length} content</span></div></section></div><div class="result-categories">${grouped}</div></div>`;
+  const actionPlanHtml = renderActionPlan(recommendations);
+  const clientReportHtml = renderClientReport(data);
+
+  target.innerHTML = `
+    <div class="result-shell result-report">
+      <div class="panel-top">
+        <div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div>
+        <div class="result-actions">
+          <button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button>
+          <button class="button small secondary no-print" type="button" id="viewReportBtn">View full report</button>
+          <div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div>
+        </div>
+      </div>
+      <div class="metric-grid report-metrics">
+        <div class="metric"><strong>${score}/100</strong><span>Health score</span></div>
+        <div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div>
+        <div class="metric"><strong>${domainDays}</strong><span>Domain expiry</span></div>
+        <div class="metric"><strong>${pageSizeKb}</strong><span>Page size</span></div>
+        <div class="metric"><strong>${failCount}</strong><span>Critical</span></div>
+        <div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div>
+      </div>
+      <div class="result-summary-grid">
+        <section class="priority-panel">
+          <p class="eyebrow compact">Top fixes</p>
+          ${topIssueHtml}
+        </section>
+        <section class="priority-panel">
+          <p class="eyebrow compact">What was checked</p>
+          <div class="summary-pills">
+            <span>${checks.filter((c) => c.category === 'uptime').length} uptime</span>
+            <span>${checks.filter((c) => c.category === 'seo').length} SEO</span>
+            <span>${checks.filter((c) => c.category === 'security').length} security</span>
+            <span>${checks.filter((c) => c.category === 'domain').length} domain</span>
+            <span>${checks.filter((c) => c.category === 'content').length} content</span>
+          </div>
+        </section>
+      </div>
+      <div class="result-categories">${grouped}</div>
+    </div>
+
+    <div class="action-plan-shell no-print" id="actionPlanShell">
+      <div class="section-head" style="margin-bottom:20px;">
+        <p class="eyebrow compact">Action plan</p>
+        <h2 style="font-size:1.4rem; margin-bottom:6px;">What to fix and why</h2>
+        <p style="color:var(--muted); font-size:.9rem;">Each issue below includes a plain-English explanation, why it matters for the business, and a ready-to-use fix.</p>
+      </div>
+      ${actionPlanHtml}
+    </div>
+
+    <div class="client-report-shell" id="clientReportShell" style="display:none;">
+      <div class="rpt-controls no-print">
+        <button class="button small secondary" type="button" id="closeReportBtn">← Back to results</button>
+        <button class="button small" type="button" onclick="window.print()">
+          <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;display:inline-block;vertical-align:middle;margin-right:5px;"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print / Save as PDF
+        </button>
+      </div>
+      ${clientReportHtml}
+    </div>`;
+
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // View full report toggle
+  const viewBtn = document.getElementById('viewReportBtn');
+  const closeBtn = document.getElementById('closeReportBtn');
+  const reportShell = document.getElementById('clientReportShell');
+  const scanShell = target.querySelector('.result-report');
+  const actionShell = document.getElementById('actionPlanShell');
+  if (viewBtn) {
+    viewBtn.addEventListener('click', () => {
+      scanShell.style.display = 'none';
+      if (actionShell) actionShell.style.display = 'none';
+      reportShell.style.display = 'block';
+      reportShell.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      reportShell.style.display = 'none';
+      scanShell.style.display = '';
+      if (actionShell) actionShell.style.display = '';
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // Copy-paste fix buttons
+  target.addEventListener('click', (event) => {
+    const copyBtn = event.target.closest('[data-copy-fix]');
+    if (!copyBtn) return;
+    copyToClipboard(copyBtn.dataset.copyFix).then(() => {
+      const orig = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      window.setTimeout(() => { copyBtn.textContent = orig; }, 1800);
+    }).catch(() => {});
+  });
 }
 
 function renderLoadingSteps() {
@@ -1202,40 +1385,90 @@ const demoSites = [
   }
 ];
 
-function renderDemo(selectedIndex = 0) {
+function renderDemo() {
   const root = document.getElementById('demoRoot');
   if (!root) return;
-  const selected = demoSites[selectedIndex] || demoSites[0];
-  const issueHtml = selected.issues.map((issue) => `<div class="check compact-check"><span class="dot ${issue[0]}"></span><div><p class="check-title">${escapeHtml(issue[1])} <span class="level-badge ${issue[0]}">${escapeHtml(issue[0])}</span></p><p class="check-copy">${escapeHtml(issue[2])}</p></div></div>`).join('');
-  const historyHtml = selected.history.map((status) => `<span class="uptime-bar ${statusLabel(status)}" title="${escapeHtml(localizedStatus(status))}"></span>`).join('');
+
+  const criticalCount = demoSites.filter((s) => s.status === 'down').length;
+  const warningCount = demoSites.filter((s) => s.status === 'warning').length;
+  const avgUptime = '99.98';
+
+  const globeCls = (s) => s.status === 'online' ? 'green' : s.status === 'warning' ? 'amber' : 'red';
+  const badgeCls = (s) => s.status === 'online' ? 'green' : s.status === 'warning' ? 'amber' : 'red';
+  const scoreCls = (n) => n >= 90 ? 'green' : n >= 70 ? 'amber' : 'red';
+  const respCls = (ms) => !ms ? 'red' : ms > 1500 ? 'amber' : '';
+
+  const globeSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+  const warnSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+  const downSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+
+  const siteCardsHtml = demoSites.map((site) => {
+    const alertSvg = site.status === 'down' ? downSvg : warnSvg;
+    const alertRows = site.issues.map((issue) => `
+      <div class="site-alert ${issue[0]}">
+        ${alertSvg}
+        <div><strong>${escapeHtml(issue[1])}</strong> — ${escapeHtml(issue[2])}</div>
+      </div>`).join('');
+    return `
+      <div class="site-card ${site.status !== 'online' ? site.status : ''}">
+        <div class="site-card-main">
+          <div class="site-info">
+            <div class="site-globe ${globeCls(site)}">${globeSvg}</div>
+            <div>
+              <div class="site-name">${escapeHtml(site.name)} <span class="badge ${badgeCls(site)}">${escapeHtml(localizedStatus(site.status))}</span></div>
+              <div class="site-last">${currentLocale === 'es' ? 'Último check hace' : 'Last checked'} ${escapeHtml(site.lastCheck)} ${currentLocale === 'es' ? '' : 'ago'}</div>
+            </div>
+          </div>
+          <div class="site-metrics">
+            <div class="site-metric">
+              <div class="site-metric-label">${escapeHtml(t('demo.score'))}</div>
+              <div class="site-metric-val ${scoreCls(site.score)}">${site.score}/100</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">${escapeHtml(t('demo.response'))}</div>
+              <div class="site-metric-val ${respCls(site.response)}">${site.response ? site.response + 'ms' : '—'}</div>
+            </div>
+            <div class="site-metric">
+              <div class="site-metric-label">SSL</div>
+              <div class="site-metric-val ${site.status === 'down' ? 'red' : 'green'}">${site.status === 'down' ? 'Error' : 'Valid'}</div>
+            </div>
+          </div>
+          <button class="button small secondary demo-details-btn" type="button">${currentLocale === 'es' ? 'Detalles' : 'Details'}</button>
+        </div>
+        ${alertRows}
+      </div>`;
+  }).join('');
+
   root.innerHTML = `
-    <div class="demo-layout">
-      <aside class="site-list-panel demo-list">
-        <div class="panel-top compact-panel"><strong>${escapeHtml(t('demo.select'))}</strong></div>
-        <div class="site-list">
-          ${demoSites.map((site, index) => `<button class="site-list-item${index === selectedIndex ? ' active' : ''}" type="button" data-demo-site="${index}"><span class="dot ${site.status === 'online' ? '' : site.status}"></span><span><strong>${escapeHtml(site.name)}</strong><small>${escapeHtml(site.url)}</small></span><em class="level-badge ${site.status}">${escapeHtml(localizedStatus(site.status))}</em></button>`).join('')}
-        </div>
-      </aside>
-      <section class="site-detail-panel">
-        <div class="site-detail">
-          <div class="detail-hero">
-            <div><p class="eyebrow compact">${escapeHtml(t('demo.current'))}</p><h2>${escapeHtml(selected.name)}</h2><p class="muted">${escapeHtml(selected.url)}</p></div>
-            <span class="status-pill ${selected.status}"><span class="dot ${selected.status === 'online' ? '' : selected.status}"></span>${escapeHtml(statusCopy(selected.status))}</span>
-          </div>
-          <div class="detail-metrics">
-            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.score'))}</span><h3>${selected.score}/100</h3></div>
-            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.response'))}</span><h3>${selected.response ? `${selected.response}ms` : '-'}</h3></div>
-            <div class="dash-card"><span class="muted">${escapeHtml(t('demo.lastCheck'))}</span><h3>${escapeHtml(selected.lastCheck)}</h3></div>
-          </div>
-          <div class="uptime-strip">${historyHtml}</div>
-          <div class="detail-grid">
-            <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('demo.issues'))}</strong></div><div class="check-list">${issueHtml}</div></div>
-            <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('demo.history'))}</strong></div><div class="timeline">${selected.history.map((status, index) => `<div class="timeline-row"><span class="dot ${status === 'online' ? '' : status}"></span><div><strong>${escapeHtml(localizedStatus(status))}</strong><small>${index + 1} ${currentLocale === 'es' ? 'check reciente' : 'recent check'}</small></div></div>`).join('')}</div></div>
-          </div>
-        </div>
-      </section>
+    <div class="demo-header">
+      <div>
+        <h1 style="font-size:clamp(1.6rem,3vw,2rem); margin-bottom:6px;">${currentLocale === 'es' ? 'Resumen de sitios' : 'Client Sites Overview'}</h1>
+        <p class="text-muted" style="margin:0; font-size:.95rem;">${currentLocale === 'es' ? 'Monitorea y gestiona todos los sitios de clientes desde un lugar.' : 'Monitor and manage all client websites from one place.'}</p>
+      </div>
+      <div class="demo-header-btns">
+        <a class="button secondary small" href="/signin">${currentLocale === 'es' ? 'Agregar sitio' : 'Add Site'}</a>
+        <a class="button small" href="/signin">${currentLocale === 'es' ? 'Generar reporte' : 'Generate Report'}</a>
+      </div>
     </div>
-    <div class="conversion-band demo-cta">
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <h4>${currentLocale === 'es' ? 'Total de sitios' : 'Total Sites'}</h4>
+        <div class="stat-val">${demoSites.length}</div>
+      </div>
+      <div class="stat-card">
+        <h4>${currentLocale === 'es' ? 'Problemas críticos' : 'Critical Issues'}</h4>
+        <div class="stat-val ${criticalCount > 0 ? 'red' : 'green'}">${criticalCount}</div>
+      </div>
+      <div class="stat-card">
+        <h4>${currentLocale === 'es' ? 'Uptime promedio' : 'Avg Uptime'}</h4>
+        <div class="stat-val green">${avgUptime}%</div>
+      </div>
+    </div>
+
+    ${siteCardsHtml}
+
+    <div class="conversion-band demo-cta" style="margin-top:32px;">
       <div><p class="eyebrow">${escapeHtml(t('demo.ctaTitle'))}</p><p>${escapeHtml(t('demo.ctaCopy'))}</p></div>
       <a class="button secondary" href="/pricing">${escapeHtml(t('demo.ctaButton'))}</a>
     </div>`;
@@ -1244,10 +1477,6 @@ function renderDemo(selectedIndex = 0) {
 function initDemo() {
   if (page !== 'demo') return;
   renderDemo();
-  document.getElementById('demoRoot').addEventListener('click', (event) => {
-    const button = event.target.closest('[data-demo-site]');
-    if (button) renderDemo(Number(button.dataset.demoSite));
-  });
 }
 
 function renderSiteDetail(site) {
@@ -1263,8 +1492,7 @@ function renderSiteDetail(site) {
   const checks = state.selectedChecks || [];
   const latest = checks[0];
   const lastDown = checks.find((check) => check.status === 'down');
-  const incidents = checks.filter((check) => check.status === 'down').length;
-  const warnings = checks.filter((check) => check.status === 'warning').length;
+  const downChecks = checks.filter((check) => check.status === 'down');
   const averageResponse = checks.filter((check) => Number(check.response_time_ms) > 0);
   const avgMs = averageResponse.length
     ? `${Math.round(averageResponse.reduce((sum, check) => sum + Number(check.response_time_ms || 0), 0) / averageResponse.length)}ms`
@@ -1277,13 +1505,30 @@ function renderSiteDetail(site) {
     : [];
 
   const issueHtml = importantChecks.length
-    ? importantChecks.map((check) => `<div class="check compact-check"><span class="dot ${check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('')
+    ? importantChecks.map((check) => `<div class="issue-row"><svg viewBox="0 0 24 24" class="icon-${check.level === 'fail' ? 'red' : 'amber'}"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><strong>${escapeHtml(check.title)}</strong><p class="meta">${escapeHtml(check.recommendation)}</p></div><span class="time"><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></span></div>`).join('')
     : `<div class="empty subtle">${escapeHtml(t('dashboard.noIssues'))}</div>`;
 
+  const incidentRowsHtml = downChecks.length
+    ? downChecks.slice(0, 8).map((check) => `<div class="incident-row"><svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div><strong>Downtime detected</strong><p class="meta">HTTP ${check.status_code || 'unreachable'} · Score ${check.score || '-'}/100</p></div><span class="time">${formatDateTime(check.created_at)}</span></div>`).join('')
+    : `<div class="empty subtle">No incidents in recent checks.</div>`;
+
   const historyHtml = checks.length
-    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(localizedStatus(check.status))}</strong><small>${formatDateTime(check.created_at)} - ${check.score || '-'} / 100 - ${check.response_time_ms || '-'}ms - HTTP ${check.status_code || 'unreachable'}</small></div></div>`).join('')
+    ? checks.slice(0, 12).map((check) => `<div class="timeline-row"><span class="dot ${check.status === 'online' ? '' : check.status}"></span><div><strong>${escapeHtml(localizedStatus(check.status))}</strong><small>${formatDateTime(check.created_at)} · ${check.score || '-'}/100 · ${check.response_time_ms || '-'}ms · HTTP ${check.status_code || 'unreachable'}</small></div></div>`).join('')
     : `<div class="empty subtle">${escapeHtml(t('dashboard.firstCheck'))}</div>`;
+
   const bars = checks.slice(0, 24).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
+
+  // Response-time bar chart
+  const chartChecks = checks.slice(0, 12).filter((c) => Number(c.response_time_ms) > 0).reverse();
+  const maxResp = chartChecks.length ? Math.max(...chartChecks.map((c) => Number(c.response_time_ms))) : 1;
+  const respChartHtml = chartChecks.length
+    ? `<div class="response-chart">${chartChecks.map((c) => {
+        const h = Math.max(4, Math.round((Number(c.response_time_ms) / maxResp) * 100));
+        const cls = c.status === 'down' ? 'down' : Number(c.response_time_ms) > 1500 ? 'slow' : '';
+        return `<div class="resp-bar-col" title="${c.response_time_ms}ms"><div class="resp-bar ${cls}" style="height:${h}%"></div></div>`;
+      }).join('')}</div>`
+    : `<div class="empty subtle" style="padding:12px 20px;">No response data yet.</div>`;
+
   const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
   const reportText = encodeURIComponent(reportSummaryFromSite(site, checks));
   const alertsLocked = !hasFeature('email_alerts');
@@ -1305,37 +1550,105 @@ function renderSiteDetail(site) {
       <button class="button secondary" type="button" data-refresh-detail="${site.id}">${escapeHtml(t('dashboard.refresh'))}</button>
       <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
     </div>
-    <div class="detail-metrics">
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.currentHealth'))}</span><h3>${escapeHtml(localizedStatus(status))}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.domainExpiry'))}</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('demo.response'))}</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.lastCheck'))}</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.sinceDown'))}</span><h3>${formatDurationSince(lastDown && lastDown.created_at)}</h3></div>
-      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.recentIncidents'))}</span><h3>${incidents} down - ${warnings} warn</h3></div>
+
+    <div class="detail-tabs" id="detailTabs">
+      <button class="detail-tab active" type="button" data-tab="overview">Overview</button>
+      <button class="detail-tab" type="button" data-tab="incidents">${escapeHtml(t('dashboard.recentIncidents'))}</button>
+      <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
+      <button class="detail-tab" type="button" data-tab="settings">${escapeHtml(t('dashboard.settings'))}</button>
     </div>
-    <div class="uptime-strip">${bars || '<span class="muted">No uptime samples yet.</span>'}</div>
-    <form class="monitor-settings" id="monitorSettingsForm">
-      <div class="settings-head"><strong>${escapeHtml(t('dashboard.settings'))}</strong><span class="muted">${escapeHtml(t('dashboard.settingsCopy'))}</span></div>
-      <label><span>${escapeHtml(t('dashboard.keyword'))}</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="${escapeHtml(t('dashboard.keywordPlaceholder'))}"></label>
-      <label><span>${escapeHtml(t('dashboard.maintenanceStart'))}</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
-      <label><span>${escapeHtml(t('dashboard.maintenanceEnd'))}</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
-      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
-      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
-      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
-      <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
-      <label class="toggle-row ${statusLocked ? 'locked-control' : ''}"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''} ${statusLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
-      ${alertsLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedAlerts'))}</div>` : ''}
-      ${statusLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedStatusPage'))}</div>` : ''}
-      ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
-      <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
-    </form>
-    <div class="detail-grid">
-      <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('dashboard.latestIssues'))}</strong></div><div class="check-list">${issueHtml}</div></div>
-      <div class="panel flat-panel"><div class="panel-top"><strong>${escapeHtml(t('dashboard.recentChecks'))}</strong></div><div class="timeline">${historyHtml}</div></div>
+
+    <!-- Overview -->
+    <div class="detail-tab-panel" data-panel="overview">
+      <div class="detail-metrics" style="grid-template-columns:repeat(3,1fr);">
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3>${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
+      </div>
+      <div class="uptime-strip">${bars || '<span class="muted" style="padding:0 4px;font-size:.85rem;">No checks yet.</span>'}</div>
+      <div class="response-chart-wrap">
+        <div class="response-chart-head">
+          <span>Response time trend</span>
+          <span style="font-size:.78rem;color:var(--muted);">last ${chartChecks.length} checks</span>
+        </div>
+        ${respChartHtml}
+      </div>
+      <div class="detail-grid">
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>${escapeHtml(t('dashboard.latestIssues'))}</span>
+            <svg viewBox="0 0 24 24" class="icon-amber"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          ${issueHtml}
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>${escapeHtml(t('dashboard.recentIncidents'))}</span>
+            <svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          ${incidentRowsHtml}
+        </div>
+      </div>
+    </div>
+
+    <!-- Incidents -->
+    <div class="detail-tab-panel hidden" data-panel="incidents">
+      <div style="padding:20px;">
+        <div class="detail-panel">
+          <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.recentIncidents'))}</span></div>
+          ${incidentRowsHtml}
+        </div>
+        <div style="margin-top:16px; font-size:.85rem; color:var(--muted);">
+          Domain expiry: <strong>${escapeHtml(domainExpiryLabel(domainExpiry))}</strong> &nbsp;·&nbsp;
+          Since last down: <strong>${formatDurationSince(lastDown && lastDown.created_at)}</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Checks -->
+    <div class="detail-tab-panel hidden" data-panel="checks">
+      <div class="panel flat-panel" style="margin:16px; border-radius:var(--radius);">
+        <div class="panel-top"><strong>${escapeHtml(t('dashboard.recentChecks'))}</strong></div>
+        <div class="timeline">${historyHtml}</div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="detail-tab-panel hidden" data-panel="settings">
+      <form class="monitor-settings" id="monitorSettingsForm" style="padding:20px 24px; display:grid; gap:16px;">
+        <div class="settings-head">
+          <strong>${escapeHtml(t('dashboard.settings'))}</strong>
+          <span class="muted" style="font-size:.85rem;">${escapeHtml(t('dashboard.settingsCopy'))}</span>
+        </div>
+        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.keyword'))}</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="${escapeHtml(t('dashboard.keywordPlaceholder'))}"></label>
+        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.maintenanceStart'))}</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
+        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.maintenanceEnd'))}</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
+        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
+        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
+        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
+        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
+        <label class="toggle-row ${statusLocked ? 'locked-control' : ''}"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''} ${statusLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
+        ${alertsLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedAlerts'))}</div>` : ''}
+        ${statusLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedStatusPage'))}</div>` : ''}
+        ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
+        <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
+      </form>
     </div>`;
+
+  // Tab switching
+  const tabsEl = document.getElementById('detailTabs');
+  if (tabsEl) {
+    tabsEl.addEventListener('click', (e) => {
+      const tab = e.target.closest('.detail-tab');
+      if (!tab) return;
+      const panelName = tab.dataset.tab;
+      tabsEl.querySelectorAll('.detail-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      detail.querySelectorAll('.detail-tab-panel').forEach((p) => {
+        p.classList.toggle('hidden', p.dataset.panel !== panelName);
+      });
+    });
+  }
 }
 
 async function initDashboard() {
