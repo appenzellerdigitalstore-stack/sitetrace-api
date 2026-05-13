@@ -414,16 +414,27 @@ section { padding: 88px 0; }
 .pricing-note strong { color: var(--text); }
 
 /* ── Result area ── */
-.result-area { margin: 0; padding: 0; }
+.result-area { margin: 0; padding: 32px 0 56px; }
 .result-shell {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden;
+  max-width: 960px; margin: 0 auto 28px;
 }
 .panel-top {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
   padding: 18px 22px; border-bottom: 1px solid var(--line);
-  background: var(--bg-subtle);
+  background: var(--bg-subtle); flex-wrap: wrap;
 }
+.result-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.result-summary-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 0; border-bottom: 1px solid var(--line);
+}
+.result-summary-grid .priority-panel {
+  padding: 20px 22px; border-right: 1px solid var(--line);
+}
+.result-summary-grid .priority-panel:last-child { border-right: 0; }
+.result-categories { padding: 16px; }
 .score-ring {
   width: 80px; aspect-ratio: 1; border-radius: 50%;
   display: grid; place-items: center; position: relative;
@@ -825,17 +836,17 @@ pre { background: var(--bg-subtle); border: 1px solid var(--line); border-radius
 .status-pill.warning { color: var(--amber); border-color: rgba(245,158,11,.25); background: var(--amber-dim); }
 .status-pill.down    { color: var(--red);   border-color: rgba(239,68,68,.25);  background: var(--red-dim); }
 .detail-metrics {
-  display: grid; grid-template-columns: repeat(3,1fr);
+  display: grid; grid-template-columns: repeat(4,1fr);
   padding: 16px 20px; gap: 12px; border-bottom: 1px solid var(--line);
 }
 .detail-metrics .dash-card { padding: 14px 18px; }
 
 /* ── Uptime bars ── */
 .uptime-strip {
-  display: flex; gap: 3px; padding: 14px 24px;
-  border-bottom: 1px solid var(--line);
+  display: flex; gap: 3px; padding: 12px 20px;
+  border-bottom: 1px solid var(--line); align-items: center;
 }
-.uptime-bar { flex: 1; height: 24px; border-radius: 3px; background: var(--line); }
+.uptime-bar { flex: 1; height: 6px; border-radius: 99px; background: var(--line); }
 .uptime-bar.online  { background: var(--green); }
 .uptime-bar.warning { background: var(--amber); }
 .uptime-bar.down    { background: var(--red); }
@@ -1254,14 +1265,20 @@ pre { background: var(--bg-subtle); border: 1px solid var(--line); border-radius
 
 /* ══ Print styles (Phase 4) ══════════════════════════ */
 @media print {
-  /* hide everything except the report */
-  body > *:not(#results) { display: none !important; }
+  /* Hide nav, footer, and everything in main EXCEPT #results */
+  nav, .nav, footer, .footer { display: none !important; }
+  main > *:not(#results) { display: none !important; }
+
+  /* Inside #results, hide scan/action-plan, show only the client report */
   #results > .result-report,
   #results > .action-plan-shell,
-  #results > .client-report-shell .rpt-controls { display: none !important; }
-  #results > .client-report-shell { display: block !important; }
-  .no-print, .nav, .footer, #viewReportBtn, #closeReportBtn, .rpt-controls { display: none !important; }
+  .rpt-controls, #viewReportBtn, #closeReportBtn,
+  .no-print { display: none !important; }
+
+  #results { padding: 0 !important; }
+  .client-report-shell { display: block !important; }
   .client-report { max-width: 100%; }
+
   .rpt-table { page-break-inside: auto; }
   .rpt-table tr { page-break-inside: avoid; }
   .rpt-section { page-break-inside: avoid; }
@@ -1328,6 +1345,7 @@ pre { background: var(--bg-subtle); border: 1px solid var(--line); border-radius
 /* ══ Responsive ══════════════════════════════════════ */
 @media (max-width: 1024px) {
   .dash-metrics { grid-template-columns: repeat(2,1fr); }
+  .detail-metrics { grid-template-columns: repeat(2,1fr); }
 }
 @media (max-width: 900px) {
   .features-grid, .pricing-grid, .stats-grid  { grid-template-columns: 1fr; }
