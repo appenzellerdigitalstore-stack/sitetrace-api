@@ -1946,6 +1946,9 @@ function renderSidebarPlanUsage() {
 
 function renderDashboard() {
   renderAlertCenter();
+  // Keep alert center hidden unless alerts panel is active
+  const _acp = document.getElementById('alertCenterPanel');
+  if (_acp && state.dashboardPanel !== 'alerts') _acp.style.display = 'none';
   renderPlanUsage();
   renderPaidFeaturePanel();
   renderEmailDnsPanel();
@@ -2939,9 +2942,9 @@ function renderSiteDetail(site) {
 
     <!-- Overview -->
     <div class="detail-tab-panel" data-panel="overview">
-      <div style="margin-bottom:16px;">
-        <h2 style="margin:0 0 4px;font-size:1.15rem;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
-        <p style="margin:0;font-size:.85rem;color:var(--muted);">${escapeHtml(t('dashboard.websiteHealthSubtitle'))}</p>
+      <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);">
+        <h2 style="margin:0 0 6px;font-size:1.2rem;font-weight:700;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
+        <p style="margin:0;font-size:.88rem;color:var(--muted);">${escapeHtml(t('dashboard.websiteHealthSubtitle'))}</p>
       </div>
       <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);">
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
@@ -3121,6 +3124,10 @@ function buildSettingsForm(site) {
 function renderPanel(panelName) {
   state.dashboardPanel = panelName;
 
+  // Show/hide the persistent alertCenterPanel — only visible on alerts panel
+  const acp = document.getElementById('alertCenterPanel');
+  if (acp) acp.style.display = panelName === 'alerts' ? '' : 'none';
+
   // Update sidebar active state
   document.querySelectorAll('.db-nav-item').forEach(el => el.classList.remove('db-nav-item-active'));
   const navMap = { overview: 'navOverview', alerts: 'navAlerts', 'scan-history': 'navScanHistory', reports: 'navReports', 'api-access': 'navApiAccess', settings: 'navSettings' };
@@ -3219,12 +3226,9 @@ function renderPanel(panelName) {
         const td = e.target.closest('[data-history-idx]');
         if (!td) return;
         const idx = Number(td.dataset.historyIdx);
-        if (e.target.classList.contains('sh-view-btn')) {
-          renderPanel('overview');
-          window.scrollTo(0, 0);
-        } else if (e.target.classList.contains('sh-dl-btn')) {
-          const histSite = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
-          if (histSite && historyChecks[idx]) generateClientReport(histSite, [historyChecks[idx]], state.plan);
+        const histSite = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
+        if ((e.target.classList.contains('sh-view-btn') || e.target.classList.contains('sh-dl-btn')) && histSite && historyChecks[idx]) {
+          generateClientReport(histSite, [historyChecks[idx]], state.plan);
         }
       });
     }
@@ -3275,8 +3279,8 @@ function renderPanel(panelName) {
         const td = e.target.closest('[data-history-idx]');
         if (!td) return;
         const idx = Number(td.dataset.historyIdx);
-        if (e.target.classList.contains('sh-dl-btn')) {
-          if (site && checks[idx + 1]) generateClientReport(site, [checks[idx + 1]], state.plan);
+        if ((e.target.classList.contains('sh-dl-btn') || e.target.classList.contains('sh-view-btn')) && site && checks[idx + 1]) {
+          generateClientReport(site, [checks[idx + 1]], state.plan);
         }
       });
     }
@@ -3399,6 +3403,13 @@ async function initDashboard() {
     runAuditBtn.addEventListener('click', async () => {
       const siteId = runAuditBtn.dataset.run;
       if (!siteId) return;
+      // Check cooldown via localStorage
+      const stored = localStorage.getItem('st_last_scan_' + siteId);
+      if (stored) {
+        const elapsed = Date.now() - Number(stored);
+        const cooldownMs = planIntervalMinutes() * 60 * 1000;
+        if (elapsed < cooldownMs) return; // still on cooldown — button should already be disabled but double-check
+      }
       runAuditBtn.disabled = true;
       try { await runSiteCheck(siteId); } catch (e) { setDashboardMessage(e.message, 'error'); }
     });
@@ -3521,7 +3532,22 @@ async function initDashboard() {
     const refreshId = action.dataset.refreshDetail;
     const deleteId = action.dataset.delete;
     try {
-      if (runId) await runSiteCheck(runId);
+      if (runId) {
+        // Cooldown gate — prevent running if still within plan interval
+        const _stored = localStorage.getItem('st_last_scan_' + runId);
+        if (_stored) {
+          const _elapsed = Date.now() - Number(_stored);
+          const _cooldownMs = planIntervalMinutes() * 60 * 1000;
+          if (_elapsed < _cooldownMs) {
+            const _rem = Math.ceil((_cooldownMs - _elapsed) / 1000);
+            const _mm = String(Math.floor(_rem / 60)).padStart(2, '0');
+            const _ss = String(_rem % 60).padStart(2, '0');
+            setDashboardMessage('Scan cooldown active. Next scan in ' + _mm + ':' + _ss + '.', 'error');
+            return;
+          }
+        }
+        await runSiteCheck(runId);
+      }
       if (refreshId) {
         state.selectedSiteId = refreshId;
         await loadSelectedChecks();
