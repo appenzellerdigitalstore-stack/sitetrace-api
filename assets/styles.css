@@ -2269,3 +2269,124 @@ details[open] .scan-breakdown-chevron { transform: rotate(180deg); }
   font-size: .83rem; color: var(--muted);
 }
 .audit-cta-left { display: flex; align-items: flex-start; gap: 8px; flex: 1; line-height: 1.45; }
+
+/* ── Scan breakdown v2 — category grouped ── */
+.scan-breakdown-body { padding: 0; }
+
+.scan-cat-group { border-bottom: 1px solid var(--line); }
+.scan-cat-group:last-child { border-bottom: none; }
+
+.scan-cat-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 8px 16px; font-size: .78rem; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase;
+  background: var(--bg-subtle); color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.scan-cat-head.scan-cat-fail { color: var(--red);   background: color-mix(in srgb, var(--red)   5%, var(--bg-subtle)); }
+.scan-cat-head.scan-cat-warn,
+.scan-cat-head.scan-cat-warning { color: var(--amber); background: color-mix(in srgb, var(--amber) 5%, var(--bg-subtle)); }
+.scan-cat-head.scan-cat-pass { color: var(--green); background: color-mix(in srgb, var(--green) 4%, var(--bg-subtle)); }
+
+.scan-check-row2 {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 16px; border-bottom: 1px solid var(--line);
+  font-size: .84rem; transition: background .1s;
+}
+.scan-check-row2:last-child { border-bottom: none; }
+.scan-check-row2:hover { background: var(--bg-subtle); }
+
+.scan-check-icon2 {
+  flex-shrink: 0; margin-top: 1px;
+}
+.scan-check-icon2.lvl-pass    { color: var(--green); }
+.scan-check-icon2.lvl-warn,
+.scan-check-icon2.lvl-warning { color: var(--amber); }
+.scan-check-icon2.lvl-fail    { color: var(--red);   }
+
+.scan-check-body { flex: 1; min-width: 0; }
+
+.scan-check-title-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.scan-check-title {
+  font-weight: 500; font-size: .85rem; flex: 1;
+}
+.scan-check-value {
+  font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--text); background: var(--bg-subtle);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 1px 7px; white-space: nowrap; flex-shrink: 0;
+}
+.scan-check-desc {
+  margin: 4px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.45;
+}
+.scan-check-fix {
+  margin: 4px 0 0; font-size: .78rem; color: var(--muted); line-height: 1.45;
+}
+.scan-check-fix strong { color: var(--text); }
+
+/* ── Rich issue rows (Latest silent issues panel) ── */
+.rich-issue-row {
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+  transition: background .1s;
+}
+.rich-issue-row:last-child { border-bottom: none; }
+.rich-issue-row:hover { background: var(--bg-subtle); }
+
+.rich-issue-top {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.rich-issue-icon { flex-shrink: 0; display: flex; }
+.rich-issue-icon.lvl-fail  { color: var(--red);   }
+.rich-issue-icon.lvl-warn,
+.rich-issue-icon.lvl-warning { color: var(--amber); }
+
+.rich-issue-title { font-size: .86rem; font-weight: 600; flex: 1; min-width: 0; }
+.rich-issue-desc {
+  margin: 3px 0 2px; font-size: .78rem; color: var(--muted);
+  line-height: 1.5; padding-left: 23px;
+}
+.rich-issue-fix {
+  margin: 3px 0 0; font-size: .78rem; color: var(--muted);
+  line-height: 1.5; padding-left: 23px;
+}
+.rich-issue-fix strong { color: var(--text); }
+
+/* ── Rich incident rows ── */
+.rich-incident-row {
+  padding: 12px 16px; border-bottom: 1px solid var(--line);
+  transition: background .1s;
+}
+.rich-incident-row:last-child { border-bottom: none; }
+.rich-incident-row:hover { background: var(--bg-subtle); }
+
+.rich-incident-top {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px; font-size: .86rem;
+}
+.rich-incident-time {
+  margin-left: auto; font-size: .75rem;
+  color: var(--muted); white-space: nowrap;
+}
+.rich-incident-meta {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding-left: 23px; margin-bottom: 5px;
+}
+.rich-meta-chip {
+  font-size: .75rem; font-weight: 600;
+  background: var(--bg-subtle); border: 1px solid var(--line);
+  border-radius: 5px; padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.rich-incident-issues {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding-left: 23px;
+}
+.rich-incident-issue-tag {
+  font-size: .72rem; color: var(--red);
+  background: color-mix(in srgb, var(--red) 8%, var(--bg-subtle));
+  border: 1px solid color-mix(in srgb, var(--red) 20%, var(--line));
+  border-radius: 4px; padding: 2px 7px;
+}

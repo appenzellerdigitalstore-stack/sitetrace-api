@@ -81,9 +81,9 @@
               <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh ping
             </button>
-            <button class="button secondary small" id="copyReportBtn" type="button" style="display:none;">
-              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy report
+            <button class="button secondary small" id="copyReportBtn" type="button" style="display:none;" title="Generate a PDF-ready client report">
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              Download report
             </button>
             <button class="button secondary small" id="refreshDashboardBtn" type="button">
               <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -144,7 +144,4 @@
     const navToggle=document.getElementById('navToggle'),navLinks=document.getElementById('navLinks');
     if(navToggle&&navLinks){const iM=navToggle.querySelector('.icon-menu'),iC=navToggle.querySelector('.icon-close');navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});}
     const mainNav=document.getElementById('mainNav');
-    if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',scrollY>10),{passive:true});
-  </script>
-</body>
-</html>
+    if(mainNav)window.addEventLi

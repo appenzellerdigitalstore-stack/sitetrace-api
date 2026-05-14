@@ -439,6 +439,365 @@ function reportSummaryFromAnalysis(data) {
   return lines.join('\n');
 }
 
+// ── Client PDF Report Generator ───────────────────────────────────────────────
+function generateClientReport(site, checks) {
+  const latest      = checks[0] || {};
+  const latestResult= latest.result || {};
+  const allChecks   = Array.isArray(latestResult.checks) ? latestResult.checks : [];
+  const domainExpiry= latestResult.domain_expiry || null;
+  const issues      = allChecks.filter(c => c.level !== 'pass');
+  const downChecks  = checks.filter(c => c.status === 'down');
+  const recentChecks= checks.slice(0, 15);
+  const status      = statusLabel(site.last_status);
+  const scoreColor  = site.last_score >= 80 ? '#16a34a' : site.last_score >= 60 ? '#d97706' : '#dc2626';
+
+  // Live ping stats from current session
+  const chart       = state.livePingChart;
+  const pingPts     = chart ? chart.points.filter(p => p.ms !== null) : [];
+  const pingCur     = chart && chart.points.length ? chart.points[chart.points.length - 1] : null;
+  const pingAvg     = pingPts.length ? Math.round(pingPts.reduce((s, p) => s + p.ms, 0) / pingPts.length) : null;
+  const pingMin     = pingPts.length ? Math.min(...pingPts.map(p => p.ms)) : null;
+  const pingMax     = pingPts.length ? Math.max(...pingPts.map(p => p.ms)) : null;
+  const pingTimeouts= chart ? chart.points.filter(p => p.status === 'timeout' || p.status === 'error').length : 0;
+  const hasPing     = pingPts.length > 0;
+
+  // Uptime %
+  const uptimePct   = checks.length
+    ? ((checks.filter(c => c.status !== 'down').length / checks.length) * 100).toFixed(1) + '%'
+    : '–';
+
+  // Average response from stored checks
+  const respChecks  = checks.filter(c => Number(c.response_time_ms) > 0);
+  const avgResp     = respChecks.length
+    ? Math.round(respChecks.reduce((s, c) => s + Number(c.response_time_ms), 0) / respChecks.length) + 'ms'
+    : site.last_response_time_ms ? site.last_response_time_ms + 'ms' : '–';
+
+  // Domain/SSL info
+  const domainStr   = domainExpiry && domainExpiry.days_remaining != null
+    ? `${domainExpiry.days_remaining}d remaining`
+    : site.last_score != null ? 'See scan details' : '–';
+
+  // Category grouping for scan breakdown
+  const catIcon = {
+    domain: '🌐', ssl: '🔒', seo: '🔍', uptime: '📡', performance: '⚡', keyword: '👁'
+  };
+  const catLabel = {
+    domain: 'Domain', ssl: 'SSL Certificate', seo: 'SEO',
+    uptime: 'Uptime & Status', performance: 'Performance', keyword: 'Keyword Monitor'
+  };
+  const byCategory = {};
+  allChecks.forEach(c => {
+    const cat = c.category || 'other';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(c);
+  });
+  const levelOrder = { fail: 0, warn: 1, warning: 1, pass: 2 };
+  const sortedCats = Object.keys(byCategory).sort((a, b) => {
+    const worst = arr => Math.min(...arr.map(c => levelOrder[c.level] ?? 2));
+    return worst(byCategory[a]) - worst(byCategory[b]);
+  });
+
+  const levelCol = { fail: '#dc2626', warn: '#d97706', warning: '#d97706', pass: '#16a34a' };
+  const levelBg  = { fail: '#fef2f2', warn: '#fffbeb', warning: '#fffbeb', pass: '#f0fdf4' };
+  const levelBdr = { fail: '#fecaca', warn: '#fde68a', warning: '#fde68a', pass: '#bbf7d0' };
+
+  const now = new Date().toLocaleString();
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SiteTrace Report — ${escapeHtml(site.name)}</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #1a1a2e; background: #fff; line-height: 1.5; }
+  @media print {
+    body { font-size: 11px; }
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    section { page-break-inside: avoid; }
+  }
+
+  /* Layout */
+  .report-wrap { max-width: 820px; margin: 0 auto; padding: 40px 32px; }
+
+  /* Header */
+  .report-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #6366f1; padding-bottom: 20px; margin-bottom: 28px; }
+  .report-brand { display: flex; align-items: center; gap: 10px; }
+  .report-brand-mark { width: 36px; height: 36px; background: #6366f1; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .report-brand-mark svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
+  .report-brand-name { font-size: 1.3rem; font-weight: 800; color: #1a1a2e; letter-spacing: -.02em; }
+  .report-brand-tag { font-size: .7rem; color: #6366f1; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+  .report-meta { text-align: right; font-size: .75rem; color: #64748b; line-height: 1.8; }
+  .report-meta strong { color: #1a1a2e; font-size: .9rem; display: block; margin-bottom: 2px; }
+
+  /* Status pill */
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-top: 4px; }
+  .status-pill.online  { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+  .status-pill.down    { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+  .status-pill.warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Section */
+  section { margin-bottom: 28px; }
+  .section-title { font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+
+  /* Metric grid */
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+  .metric-label { font-size: .68rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+  .metric-value { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+
+  /* Ping row */
+  .ping-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .ping-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
+  .ping-label { font-size: .65rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+  .ping-value { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* Issue rows */
+  .issue-list { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .issue-row { display: flex; align-items: flex-start; gap: 10px; padding: 11px 14px; border-bottom: 1px solid #e2e8f0; }
+  .issue-row:last-child { border-bottom: none; }
+  .issue-badge { flex-shrink: 0; font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-top: 1px; }
+  .issue-body { flex: 1; }
+  .issue-title { font-weight: 600; font-size: .85rem; margin-bottom: 2px; }
+  .issue-desc  { font-size: .75rem; color: #64748b; margin-bottom: 2px; line-height: 1.4; }
+  .issue-fix   { font-size: .75rem; color: #475569; line-height: 1.4; }
+  .issue-fix strong { color: #1a1a2e; }
+  .issue-value { flex-shrink: 0; font-size: .72rem; font-weight: 700; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 7px; white-space: nowrap; }
+  .empty-note { padding: 14px; text-align: center; color: #94a3b8; font-size: .82rem; background: #f8fafc; border-radius: 10px; border: 1px solid #e2e8f0; }
+
+  /* Incidents */
+  .incident-row { padding: 11px 14px; border-bottom: 1px solid #e2e8f0; }
+  .incident-row:last-child { border-bottom: none; }
+  .incident-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-weight: 600; font-size: .85rem; }
+  .incident-time { margin-left: auto; font-size: .72rem; color: #64748b; }
+  .chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: .7rem; font-weight: 600; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
+
+  /* Recent checks table */
+  table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+  th { background: #f8fafc; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; padding: 8px 10px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .td-status { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+
+  /* Scan breakdown */
+  .cat-group { margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .cat-head { display: flex; align-items: center; gap: 7px; padding: 8px 14px; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .check-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #f1f5f9; }
+  .check-row:last-child { border-bottom: none; }
+  .check-icon { flex-shrink: 0; width: 14px; height: 14px; margin-top: 1px; }
+  .check-body { flex: 1; }
+  .check-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .check-title { font-size: .83rem; font-weight: 500; }
+  .check-val { font-size: .7rem; font-weight: 700; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 1px 6px; }
+  .check-desc { margin-top: 3px; font-size: .74rem; color: #64748b; line-height: 1.4; }
+  .check-fix  { margin-top: 2px; font-size: .74rem; color: #475569; line-height: 1.4; }
+  .lvl-badge  { flex-shrink: 0; font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; margin-top: 1px; }
+
+  /* Footer */
+  .report-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; font-size: .7rem; color: #94a3b8; }
+
+  /* Print button */
+  .print-bar { background: #6366f1; color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 10px 32px; margin-bottom: 0; }
+  .print-bar span { font-size: .85rem; font-weight: 600; }
+  .print-btn { background: #fff; color: #6366f1; border: none; border-radius: 6px; padding: 7px 20px; font-size: .85rem; font-weight: 700; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="print-bar no-print">
+  <span>📄 SiteTrace Client Report — ready to save as PDF</span>
+  <button class="print-btn" onclick="window.print()">Save as PDF</button>
+</div>
+
+<div class="report-wrap">
+
+  <!-- Header -->
+  <div class="report-header">
+    <div class="report-brand">
+      <div class="report-brand-mark">
+        <svg viewBox="0 0 24 24"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+      </div>
+      <div>
+        <div class="report-brand-name">SiteTrace</div>
+        <div class="report-brand-tag">Website Health Report</div>
+      </div>
+    </div>
+    <div class="report-meta">
+      <strong>${escapeHtml(site.name)}</strong>
+      ${escapeHtml(site.url)}<br>
+      Generated: ${now}<br>
+      <span class="status-pill ${status}"><span class="status-dot"></span>${status === 'online' ? 'Healthy Right Now' : status === 'down' ? 'Currently Down' : 'Warning'}</span>
+    </div>
+  </div>
+
+  <!-- Health Overview -->
+  <section>
+    <div class="section-title">Health Overview</div>
+    <div class="metric-grid">
+      <div class="metric-card">
+        <div class="metric-label">Health Score</div>
+        <div class="metric-value" style="color:${scoreColor};">${site.last_score ? site.last_score + '/100' : '–'}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Uptime Sample</div>
+        <div class="metric-value">${uptimePct}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Avg Response</div>
+        <div class="metric-value">${avgResp}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">SSL / Domain</div>
+        <div class="metric-value" style="font-size:1rem;">${escapeHtml(domainStr)}</div>
+      </div>
+    </div>
+  </section>
+
+  ${hasPing ? `
+  <!-- Live Response Monitoring -->
+  <section>
+    <div class="section-title">Live Response Time (this session)</div>
+    <div class="ping-grid">
+      <div class="ping-card">
+        <div class="ping-label">Current</div>
+        <div class="ping-value" style="color:${pingCur && pingCur.ms < 400 ? '#16a34a' : pingCur && pingCur.ms < 800 ? '#d97706' : '#dc2626'};">${pingCur && pingCur.ms != null ? pingCur.ms + 'ms' : 'Timeout'}</div>
+      </div>
+      <div class="ping-card">
+        <div class="ping-label">Average</div>
+        <div class="ping-value">${pingAvg != null ? pingAvg + 'ms' : '–'}</div>
+      </div>
+      <div class="ping-card">
+        <div class="ping-label">Min</div>
+        <div class="ping-value" style="color:#16a34a;">${pingMin != null ? pingMin + 'ms' : '–'}</div>
+      </div>
+      <div class="ping-card">
+        <div class="ping-label">Max</div>
+        <div class="ping-value">${pingMax != null ? pingMax + 'ms' : '–'}</div>
+      </div>
+      <div class="ping-card">
+        <div class="ping-label">Timeouts</div>
+        <div class="ping-value" style="color:${pingTimeouts > 0 ? '#dc2626' : '#16a34a'};">${pingTimeouts}</div>
+      </div>
+    </div>
+  </section>` : ''}
+
+  <!-- Issues Found -->
+  <section>
+    <div class="section-title">Issues Found — ${issues.length ? issues.length + ' item' + (issues.length > 1 ? 's' : '') : 'None'}</div>
+    ${issues.length ? `<div class="issue-list">${issues.map(c => `
+      <div class="issue-row">
+        <span class="issue-badge" style="background:${levelBg[c.level]};color:${levelCol[c.level]};border:1px solid ${levelBdr[c.level]};">${c.level}</span>
+        <div class="issue-body">
+          <div class="issue-title">${escapeHtml(c.title)}</div>
+          ${c.description ? `<div class="issue-desc">${escapeHtml(c.description)}</div>` : ''}
+          ${c.recommendation ? `<div class="issue-fix"><strong>Fix:</strong> ${escapeHtml(c.recommendation)}</div>` : ''}
+        </div>
+        ${c.value ? `<span class="issue-value">${escapeHtml(c.value)}</span>` : ''}
+      </div>`).join('')}</div>`
+    : '<div class="empty-note">✓ No issues found in the latest scan.</div>'}
+  </section>
+
+  <!-- Recent Incidents -->
+  <section>
+    <div class="section-title">Recent Incidents</div>
+    ${downChecks.length ? `<div class="issue-list">${downChecks.slice(0, 8).map(inc => {
+      const incIssues = inc.result && Array.isArray(inc.result.checks)
+        ? inc.result.checks.filter(c => c.level === 'fail').slice(0, 3) : [];
+      return `<div class="incident-row">
+        <div class="incident-top">
+          <span style="color:#dc2626;">●</span> Downtime detected
+          <span class="incident-time">${formatDateTime(inc.created_at)}</span>
+        </div>
+        <div class="chip-row">
+          <span class="chip">HTTP ${inc.status_code || 'unreachable'}</span>
+          ${inc.response_time_ms ? `<span class="chip">${inc.response_time_ms}ms</span>` : ''}
+          ${inc.score ? `<span class="chip">Score ${inc.score}/100</span>` : ''}
+          ${incIssues.map(i => `<span class="chip" style="color:#dc2626;">${escapeHtml(i.title)}</span>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}</div>`
+    : '<div class="empty-note">✓ No incidents in recent checks.</div>'}
+  </section>
+
+  <!-- Recent Checks -->
+  <section>
+    <div class="section-title">Recent Checks (last ${recentChecks.length})</div>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <table>
+        <thead><tr><th>Time</th><th>Status</th><th>Score</th><th>Response</th><th>HTTP</th></tr></thead>
+        <tbody>${recentChecks.map(c => {
+          const st = statusLabel(c.status);
+          const stCol = st === 'online' ? '#16a34a' : st === 'down' ? '#dc2626' : '#d97706';
+          const stBg  = st === 'online' ? '#f0fdf4' : st === 'down' ? '#fef2f2' : '#fffbeb';
+          return `<tr>
+            <td>${formatDateTime(c.created_at)}</td>
+            <td><span class="td-status" style="background:${stBg};color:${stCol};">${st}</span></td>
+            <td>${c.score ? c.score + '/100' : '–'}</td>
+            <td>${c.response_time_ms ? c.response_time_ms + 'ms' : '–'}</td>
+            <td>${c.status_code || '–'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Full Scan Breakdown -->
+  ${allChecks.length ? `
+  <section class="page-break">
+    <div class="section-title">Full Scan Breakdown — ${allChecks.length} checks · ${formatDateTime(latest.created_at)}</div>
+    ${sortedCats.map(cat => {
+      const catChecks = byCategory[cat].slice().sort((a,b) => (levelOrder[a.level]??2)-(levelOrder[b.level]??2));
+      const worst = catChecks[0]?.level || 'pass';
+      return `<div class="cat-group">
+        <div class="cat-head" style="color:${levelCol[worst] || '#64748b'};">
+          ${catIcon[cat] || '📋'} ${catLabel[cat] || cat}
+        </div>
+        ${catChecks.map(c => {
+          const isIssue = c.level === 'fail' || c.level === 'warn' || c.level === 'warning';
+          const icon = c.level === 'pass'
+            ? `<svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`
+            : c.level === 'fail'
+            ? `<svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`
+            : `<svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+          return `<div class="check-row">
+            ${icon}
+            <div class="check-body">
+              <div class="check-title-row">
+                <span class="check-title">${escapeHtml(c.title)}</span>
+                ${c.value ? `<span class="check-val">${escapeHtml(c.value)}</span>` : ''}
+                <span class="lvl-badge" style="background:${levelBg[c.level]||'#f1f5f9'};color:${levelCol[c.level]||'#64748b'};border:1px solid ${levelBdr[c.level]||'#e2e8f0'};">${c.level}</span>
+              </div>
+              ${c.description ? `<div class="check-desc">${escapeHtml(c.description)}</div>` : ''}
+              ${c.recommendation && isIssue ? `<div class="check-fix"><strong>Fix:</strong> ${escapeHtml(c.recommendation)}</div>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }).join('')}
+  </section>` : ''}
+
+  <!-- Footer -->
+  <div class="report-footer">
+    <span>Generated by SiteTrace · sitetrace.it.com</span>
+    <span>${escapeHtml(site.url)} · ${now}</span>
+  </div>
+
+</div>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — please allow pop-ups for this site to download reports.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  w.setTimeout(() => w.print(), 600);
+}
+
 function reportSummaryFromSite(site, checks) {
   const latest = checks[0] || {};
   const result = latest.result || {};
@@ -1886,7 +2245,6 @@ function syncContentHeader(site, status, reportText, reportLocked) {
   }
   if (copyBtn) {
     copyBtn.style.display = reportLocked ? 'none' : '';
-    if (!reportLocked) copyBtn.dataset.copyClientReport = reportText;
   }
   if (auditBtn) {
     auditBtn.style.display = '';
@@ -2199,14 +2557,57 @@ function renderSiteDetail(site) {
     : [];
 
   const issueHtml = importantChecks.length
-    ? importantChecks.map((check) => `<div class="issue-row"><svg viewBox="0 0 24 24" class="icon-${check.level === 'fail' ? 'red' : 'amber'}"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><strong>${escapeHtml(check.title)}</strong><p class="meta">${escapeHtml(check.recommendation)}</p></div><span class="time"><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></span></div>`).join('')
+    ? importantChecks.map((c) => `
+        <div class="rich-issue-row rich-issue-${c.level}">
+          <div class="rich-issue-top">
+            <span class="rich-issue-icon lvl-${c.level}">
+              ${c.level === 'fail'
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
+            </span>
+            <span class="rich-issue-title">${escapeHtml(c.title)}</span>
+            ${c.value ? `<span class="scan-check-value">${escapeHtml(c.value)}</span>` : ''}
+            <span class="level-badge ${c.level}" style="margin-left:auto;">${escapeHtml(c.level)}</span>
+          </div>
+          ${c.description ? `<p class="rich-issue-desc">${escapeHtml(c.description)}</p>` : ''}
+          ${c.recommendation ? `<p class="rich-issue-fix"><strong>How to fix:</strong> ${escapeHtml(c.recommendation)}</p>` : ''}
+        </div>`).join('')
     : `<div class="empty subtle">${escapeHtml(t('dashboard.noIssues'))}</div>`;
 
-  // Full scan breakdown (all checks from latest result, grouped by level)
+  // Full scan breakdown — grouped by category, showing value + description
   const allChecks = latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [];
   const failChecks = allChecks.filter(c => c.level === 'fail');
   const warnChecks = allChecks.filter(c => c.level === 'warn');
   const passChecks = allChecks.filter(c => c.level === 'pass');
+
+  const _catIcon = {
+    domain:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+    ssl:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+    seo:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    uptime:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><path d="M22 12h-4l-3 8L9 4l-3 8H2"/></svg>',
+    performance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+    keyword:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;flex-shrink:0"><path d="M1 6l11 12L23 6"/></svg>',
+  };
+  const _catLabel = { domain:'Domain', ssl:'SSL Certificate', seo:'SEO', uptime:'Uptime & Status', performance:'Performance', keyword:'Keyword Monitor' };
+  const _levelOrder = { fail: 0, warn: 1, warning: 1, pass: 2 };
+  const _checkIcon = (lvl) => lvl === 'pass'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>'
+    : lvl === 'fail'
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+
+  // Group checks by category, sort categories by worst level first
+  const _byCategory = {};
+  allChecks.forEach(c => {
+    const cat = c.category || 'other';
+    if (!_byCategory[cat]) _byCategory[cat] = [];
+    _byCategory[cat].push(c);
+  });
+  const _sortedCats = Object.keys(_byCategory).sort((a, b) => {
+    const worstLevel = (checks) => Math.min(...checks.map(c => _levelOrder[c.level] ?? 2));
+    return worstLevel(_byCategory[a]) - worstLevel(_byCategory[b]);
+  });
+
   const scanBreakdownHtml = allChecks.length ? `
     <details class="scan-breakdown" open>
       <summary class="scan-breakdown-head">
@@ -2215,29 +2616,59 @@ function renderSiteDetail(site) {
           ${failChecks.length ? `<span class="level-badge fail">${failChecks.length} fail</span>` : ''}
           ${warnChecks.length ? `<span class="level-badge warn">${warnChecks.length} warn</span>` : ''}
           ${passChecks.length ? `<span class="level-badge pass">${passChecks.length} pass</span>` : ''}
-          <span style="color:var(--muted);font-size:.8rem;margin-left:4px;">${formatDateTime(latest && latest.created_at)}</span>
+          <span style="color:var(--muted);font-size:.78rem;margin-left:4px;">${formatDateTime(latest && latest.created_at)}</span>
         </span>
         <svg class="scan-breakdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </summary>
       <div class="scan-breakdown-body">
-        ${[...failChecks, ...warnChecks, ...passChecks].map(c => `
-          <div class="scan-check-row scan-check-${c.level}">
-            <span class="scan-check-icon">
-              ${c.level === 'pass'
-                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>'
-                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
-            </span>
-            <div class="scan-check-text">
-              <strong>${escapeHtml(c.title)}</strong>
-              ${c.level !== 'pass' && c.recommendation ? `<p class="scan-check-rec">${escapeHtml(c.recommendation)}</p>` : ''}
+        ${_sortedCats.map(cat => {
+          const checks = _byCategory[cat].slice().sort((a,b) => (_levelOrder[a.level]??2) - (_levelOrder[b.level]??2));
+          const catWorst = checks[0]?.level || 'pass';
+          return `<div class="scan-cat-group">
+            <div class="scan-cat-head scan-cat-${catWorst}">
+              ${_catIcon[cat] || _catIcon.seo}
+              <span>${_catLabel[cat] || cat}</span>
             </div>
-            <span class="level-badge ${c.level}">${c.level}</span>
-          </div>`).join('')}
+            ${checks.map(c => {
+              const isIssue = c.level === 'fail' || c.level === 'warn' || c.level === 'warning';
+              return `<div class="scan-check-row2 scan-check-${c.level}">
+                <span class="scan-check-icon2 lvl-${c.level}">${_checkIcon(c.level)}</span>
+                <div class="scan-check-body">
+                  <div class="scan-check-title-row">
+                    <span class="scan-check-title">${escapeHtml(c.title)}</span>
+                    ${c.value ? `<span class="scan-check-value">${escapeHtml(c.value)}</span>` : ''}
+                  </div>
+                  ${c.description ? `<p class="scan-check-desc">${escapeHtml(c.description)}</p>` : ''}
+                  ${c.recommendation && isIssue ? `<p class="scan-check-fix"><strong>Fix:</strong> ${escapeHtml(c.recommendation)}</p>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+          </div>`;
+        }).join('')}
       </div>
     </details>` : '';
 
   const incidentRowsHtml = downChecks.length
-    ? downChecks.slice(0, 8).map((check) => `<div class="incident-row"><svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div><strong>Downtime detected</strong><p class="meta">HTTP ${check.status_code || 'unreachable'} · Score ${check.score || '-'}/100</p></div><span class="time">${formatDateTime(check.created_at)}</span></div>`).join('')
+    ? downChecks.slice(0, 8).map((inc) => {
+        const scoreColor = inc.score >= 80 ? 'var(--green)' : inc.score >= 60 ? 'var(--amber)' : 'var(--red)';
+        const respMs = inc.response_time_ms ? `${inc.response_time_ms}ms` : null;
+        const incIssues = inc.result && Array.isArray(inc.result.checks)
+          ? inc.result.checks.filter(c => c.level === 'fail').slice(0, 2)
+          : [];
+        return `<div class="rich-incident-row">
+          <div class="rich-incident-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            <strong>Downtime detected</strong>
+            <span class="rich-incident-time">${formatDateTime(inc.created_at)}</span>
+          </div>
+          <div class="rich-incident-meta">
+            <span class="rich-meta-chip">HTTP ${inc.status_code || 'unreachable'}</span>
+            ${respMs ? `<span class="rich-meta-chip">${respMs} response</span>` : ''}
+            ${inc.score ? `<span class="rich-meta-chip" style="color:${scoreColor};">Score ${inc.score}/100</span>` : ''}
+          </div>
+          ${incIssues.length ? `<div class="rich-incident-issues">${incIssues.map(i => `<span class="rich-incident-issue-tag">${escapeHtml(i.title)}</span>`).join('')}</div>` : ''}
+        </div>`;
+      }).join('')
     : `<div class="empty subtle">No incidents in recent checks.</div>`;
 
   const historyHtml = checks.length
@@ -2470,13 +2901,10 @@ async function initDashboard() {
   // Copy Client Report button in header
   const copyReportBtn = document.getElementById('copyReportBtn');
   if (copyReportBtn) {
-    copyReportBtn.addEventListener('click', async () => {
-      const reportData = copyReportBtn.dataset.copyClientReport;
-      if (!reportData) return;
-      await copyToClipboard(decodeURIComponent(reportData));
-      const originalInner = copyReportBtn.innerHTML;
-      copyReportBtn.textContent = t('common.copied');
-      window.setTimeout(() => { copyReportBtn.innerHTML = originalInner; }, 2200);
+    copyReportBtn.addEventListener('click', () => {
+      const site = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
+      if (!site) return;
+      generateClientReport(site, state.selectedChecks || []);
     });
   }
 
@@ -2585,19 +3013,13 @@ async function initDashboard() {
     }
   });
   document.getElementById('siteDetail').addEventListener('click', async (event) => {
-    const action = event.target.closest('[data-run], [data-copy-client-report], [data-refresh-detail], [data-delete]');
+    const action = event.target.closest('[data-run], [data-refresh-detail], [data-delete]');
     if (!action) return;
     const runId = action.dataset.run;
-    const copyReport = action.dataset.copyClientReport;
     const refreshId = action.dataset.refreshDetail;
     const deleteId = action.dataset.delete;
     try {
       if (runId) await runSiteCheck(runId);
-      if (copyReport) {
-        await copyToClipboard(decodeURIComponent(copyReport));
-        action.textContent = t('common.copied');
-        window.setTimeout(() => { action.textContent = t('common.copyReport'); }, 2200);
-      }
       if (refreshId) {
         state.selectedSiteId = refreshId;
         await loadSelectedChecks();
