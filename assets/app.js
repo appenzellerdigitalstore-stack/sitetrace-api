@@ -742,6 +742,79 @@ function hasFeature(name) {
   return Boolean(state.features && state.features[name]);
 }
 
+// ── Scan interval by plan ──────────────────────────────
+function planIntervalMinutes() {
+  const interval = state.limits && Number(state.limits.interval_minutes);
+  if (!interval || interval <= 0) return 60;
+  return interval;
+}
+
+function planIntervalLabel() {
+  const mins = planIntervalMinutes();
+  if (mins <= 1) return 'Every 1 min';
+  if (mins <= 5) return 'Every 5 min';
+  return `Every ${mins} min`;
+}
+
+// ── Scan timer / countdown ─────────────────────────────
+let scanCountdownInterval = null;
+
+function startScanCountdown(lastCheckedAt) {
+  if (scanCountdownInterval) clearInterval(scanCountdownInterval);
+  const countdownEl = document.getElementById('scanCountdown');
+  const lastScanEl  = document.getElementById('lastScanTime');
+  if (!countdownEl) return;
+
+  const intervalMs = planIntervalMinutes() * 60 * 1000;
+  const lastMs = lastCheckedAt ? new Date(lastCheckedAt).getTime() : Date.now() - intervalMs + 30000;
+  const nextMs = lastMs + intervalMs;
+
+  if (lastScanEl && lastCheckedAt) {
+    const d = new Date(lastCheckedAt);
+    lastScanEl.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: planIntervalMinutes() <= 1 ? '2-digit' : undefined });
+  }
+
+  const tick = () => {
+    const rem = nextMs - Date.now();
+    if (!document.getElementById('scanCountdown')) { clearInterval(scanCountdownInterval); return; }
+    if (rem <= 0) {
+      document.getElementById('scanCountdown').textContent = 'Scanning now…';
+      return;
+    }
+    const totalSec = Math.floor(rem / 1000);
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    const display = planIntervalMinutes() >= 60
+      ? `${mins}:${String(secs).padStart(2, '0')}`
+      : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    document.getElementById('scanCountdown').textContent = display;
+  };
+  tick();
+  scanCountdownInterval = setInterval(tick, 1000);
+}
+
+// ── Recent checks table ────────────────────────────────
+function renderRecentChecksTable(checks) {
+  if (!checks || !checks.length) {
+    return '<div class="empty subtle" style="padding:14px 20px;font-size:.85rem;">No checks recorded yet. Run a check to see history here.</div>';
+  }
+  const rows = checks.slice(0, 20).map((c) => {
+    const d = new Date(c.created_at);
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const statusCl = c.status === 'online' ? 'var(--green)' : c.status === 'down' ? 'var(--red)' : 'var(--amber)';
+    const issueCount = c.result && Array.isArray(c.result.checks) ? c.result.checks.filter((ch) => ch.level !== 'pass').length : '–';
+    return `<tr>
+      <td style="white-space:nowrap;">${timeStr}</td>
+      <td><span style="font-size:.76rem;color:var(--muted);">Scheduled</span></td>
+      <td><span class="dot ${c.status === 'online' ? '' : c.status}" style="width:7px;height:7px;display:inline-block;vertical-align:middle;margin-right:5px;"></span>${c.status}</td>
+      <td style="color:${c.score >= 80 ? 'var(--green)' : c.score >= 60 ? 'var(--amber)' : 'var(--red)'};">${c.score || '–'}/100</td>
+      <td>${c.response_time_ms ? c.response_time_ms + 'ms' : '–'}</td>
+      <td>${typeof issueCount === 'number' && issueCount > 0 ? `<span class="level-badge ${issueCount > 2 ? 'fail' : 'warning'}">${issueCount}</span>` : '<span class="level-badge pass">0</span>'}</td>
+    </tr>`;
+  }).join('');
+  return `<table class="checks-table"><thead><tr><th>Time</th><th>Trigger</th><th>Status</th><th>Score</th><th>Response</th><th>Issues</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 async function startUpgrade(plan) {
   if (!plan) return;
   const response = await fetch(apiPath('/billing/create-checkout-session'), {
@@ -920,130 +993,137 @@ function renderResults(data) {
   if (!target) return;
 
   const checks = Array.isArray(data.checks) ? data.checks : [];
-  const recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
-  const failCount = checks.filter((check) => check.level === 'fail').length;
-  const warningCount = checks.filter((check) => check.level === 'warning').length;
   const sorted = [...checks].sort((a, b) => ({ fail: 0, warning: 1, pass: 2 }[a.level] - { fail: 0, warning: 1, pass: 2 }[b.level]));
   const score = Number(data.score || data.seo_score || 0);
-  const topIssues = sorted.filter((check) => check.level !== 'pass').slice(0, 3);
-  const grouped = ['uptime', 'seo', 'security', 'domain', 'content'].map((category) => {
-    const categoryChecks = sorted.filter((check) => check.category === category);
-    if (!categoryChecks.length) return '';
-    return `<div class="result-category"><div class="result-category-head"><strong>${escapeHtml(category)}</strong><span>${categoryChecks.filter((check) => check.level !== 'pass').length} issues</span></div>${categoryChecks.map((check) => `<div class="check compact-check"><span class="dot ${check.level === 'pass' ? '' : check.level}"></span><div><p class="check-title">${escapeHtml(check.title)} <span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></p><p class="check-copy">${escapeHtml(check.description)}</p><p class="check-copy"><strong>Fix:</strong> ${escapeHtml(check.recommendation)}</p></div><span class="check-value">${escapeHtml(check.value)}</span></div>`).join('')}</div>`;
-  }).join('');
-  const topIssueHtml = topIssues.length
-    ? topIssues.map((check) => `<div class="priority-item"><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span><div><strong>${escapeHtml(check.title)}</strong><p>${escapeHtml(check.recommendation)}</p></div></div>`).join('')
-    : '<div class="priority-item"><span class="level-badge pass">pass</span><div><strong>No critical fixes found</strong><p>Keep monitoring for silent changes over time.</p></div></div>';
-  const domainDays = data.domain_expiry && data.domain_expiry.days_remaining !== null && data.domain_expiry.days_remaining !== undefined ? `${data.domain_expiry.days_remaining}d` : '-';
-  const pageSizeKb = data.page_size_bytes ? `${Math.round(Number(data.page_size_bytes) / 1024)}KB` : '-';
+  const failCount = checks.filter((c) => c.level === 'fail').length;
+  const warnCount  = checks.filter((c) => c.level === 'warning').length;
 
-  const reportText = encodeURIComponent(reportSummaryFromAnalysis(data));
-  const actionPlanHtml = renderActionPlan(recommendations);
-  const clientReportHtml = renderClientReport(data);
+  // Free tier: top 3 issues only
+  const topIssues = sorted.filter((c) => c.level !== 'pass').slice(0, 3);
+  const sslCheck   = checks.find((c) => c.category === 'domain' || c.title?.toLowerCase().includes('ssl'));
+  const domainDays = data.domain_expiry && data.domain_expiry.days_remaining != null ? `${data.domain_expiry.days_remaining}d` : '–';
+  const uptime     = checks.some((c) => c.category === 'uptime' && c.level === 'fail') ? 'Issue' : 'Online';
+  const sslStatus  = sslCheck && sslCheck.level === 'fail' ? 'Issue' : 'Valid';
+  const scoreColor = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--amber)' : 'var(--red)';
+
+  const topIssueHtml = topIssues.length
+    ? topIssues.map((c) => `
+      <div class="free-issue-row">
+        <svg viewBox="0 0 24 24" class="icon-${c.level === 'fail' ? 'red' : 'amber'}" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div>
+          <strong>${escapeHtml(c.title)}</strong>
+          <p style="margin:2px 0 0;font-size:.82rem;color:var(--muted);">${escapeHtml(c.recommendation)}</p>
+        </div>
+        <span class="level-badge ${c.level}" style="flex-shrink:0;">${escapeHtml(c.level)}</span>
+      </div>`)
+      .join('')
+    : `<div class="free-issue-row"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:var(--green);stroke-width:2;stroke-linecap:round;"><polyline points="20 6 9 17 4 12"/></svg><strong>No critical issues found — site looks healthy.</strong></div>`;
 
   target.innerHTML = `
-    <div class="result-shell result-report">
-      <div class="panel-top">
-        <div><p class="eyebrow compact">Website health report</p><strong>${escapeHtml(data.final_url || data.analyzed_url)}</strong></div>
-        <div class="result-actions">
-          <button class="button small secondary" type="button" data-share-report="${reportText}">${escapeHtml(t('common.shareReport'))}</button>
-          <button class="button small secondary no-print" type="button" id="viewReportBtn">View full report</button>
-          <div class="score-ring" style="background:conic-gradient(var(--green) 0 ${score}%, rgba(255,255,255,.14) ${score}% 100%);"><span>${score}</span></div>
+    <div class="free-result-shell">
+
+      <!-- Score header -->
+      <div class="free-result-header">
+        <div class="free-result-site">
+          <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span>${escapeHtml(data.final_url || data.analyzed_url)}</span>
         </div>
+        <p class="eyebrow compact" style="margin-bottom:4px;">Free website health check</p>
       </div>
-      <div class="metric-grid report-metrics">
-        <div class="metric"><strong>${score}/100</strong><span>Health score</span></div>
-        <div class="metric"><strong>${escapeHtml(data.response_time)}</strong><span>Response time</span></div>
-        <div class="metric"><strong>${domainDays}</strong><span>Domain expiry</span></div>
-        <div class="metric"><strong>${pageSizeKb}</strong><span>Page size</span></div>
-        <div class="metric"><strong>${failCount}</strong><span>Critical</span></div>
-        <div class="metric"><strong>${warningCount}</strong><span>Warnings</span></div>
-      </div>
-      <div class="result-summary-grid">
-        <section class="priority-panel">
-          <p class="eyebrow compact">Top fixes</p>
-          ${topIssueHtml}
-        </section>
-        <section class="priority-panel">
-          <p class="eyebrow compact">What was checked</p>
-          <div class="summary-pills">
-            <span>${checks.filter((c) => c.category === 'uptime').length} uptime</span>
-            <span>${checks.filter((c) => c.category === 'seo').length} SEO</span>
-            <span>${checks.filter((c) => c.category === 'security').length} security</span>
-            <span>${checks.filter((c) => c.category === 'domain').length} domain</span>
-            <span>${checks.filter((c) => c.category === 'content').length} content</span>
+
+      <!-- Score + basics -->
+      <div class="free-result-body">
+        <div class="free-score-block">
+          <div class="score-ring" style="background:conic-gradient(${scoreColor} 0 ${score}%, var(--bg-muted) ${score}% 100%);width:88px;height:88px;"><span style="font-size:1.5rem;">${score}</span></div>
+          <div>
+            <div style="font-size:1.1rem;font-weight:700;">Health Score</div>
+            <div style="font-size:.85rem;color:var(--muted);margin-top:2px;">${failCount} critical · ${warnCount} warnings</div>
           </div>
-        </section>
-      </div>
-      <div class="result-categories">${grouped}</div>
-    </div>
+        </div>
 
-    <div class="action-plan-shell no-print" id="actionPlanShell">
-      <div class="section-head" style="margin-bottom:20px;">
-        <p class="eyebrow compact">Action plan</p>
-        <h2 style="font-size:1.4rem; margin-bottom:6px;">What to fix and why</h2>
-        <p style="color:var(--muted); font-size:.9rem;">Each issue below includes a plain-English explanation, why it matters for the business, and a ready-to-use fix.</p>
-      </div>
-      ${actionPlanHtml}
-    </div>
+        <div class="free-basics-row">
+          <div class="free-basic-card">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:${uptime === 'Online' ? 'var(--green)' : 'var(--red)'};stroke-width:2;stroke-linecap:round;"><path d="M22 12h-4l-3 8L9 4l-3 8H2"/></svg>
+            <div>
+              <div class="free-basic-label">Uptime</div>
+              <div class="free-basic-val" style="color:${uptime === 'Online' ? 'var(--green)' : 'var(--red)'};">${uptime}</div>
+            </div>
+          </div>
+          <div class="free-basic-card">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:${sslStatus === 'Valid' ? 'var(--green)' : 'var(--red)'};stroke-width:2;stroke-linecap:round;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div>
+              <div class="free-basic-label">SSL</div>
+              <div class="free-basic-val" style="color:${sslStatus === 'Valid' ? 'var(--green)' : 'var(--red)'};">${sslStatus}</div>
+            </div>
+          </div>
+          <div class="free-basic-card">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+            <div>
+              <div class="free-basic-label">Domain</div>
+              <div class="free-basic-val">${domainDays}</div>
+            </div>
+          </div>
+          <div class="free-basic-card">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <div>
+              <div class="free-basic-label">Response</div>
+              <div class="free-basic-val">${escapeHtml(data.response_time || '–')}</div>
+            </div>
+          </div>
+        </div>
 
-    <div class="client-report-shell" id="clientReportShell" style="display:none;">
-      <div class="rpt-controls no-print">
-        <button class="button small secondary" type="button" id="closeReportBtn">← Back to results</button>
-        <button class="button small" type="button" id="printReportBtn">
-          <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;display:inline-block;vertical-align:middle;margin-right:5px;"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-          Save as PDF
-        </button>
+        <!-- Top 3 issues -->
+        <div class="free-issues-block">
+          <div class="free-section-head">
+            <strong>Top issues found</strong>
+            <span class="level-badge ${failCount > 0 ? 'fail' : warnCount > 0 ? 'warning' : 'pass'}">${failCount + warnCount} total</span>
+          </div>
+          ${topIssueHtml}
+        </div>
+
+        <!-- Locked: full breakdown -->
+        <div class="free-locked-section">
+          <div class="free-locked-inner">
+            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:8px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <strong>Full technical breakdown</strong>
+            <p>SEO, security headers, content checks, and ${checks.length - 3} more issues are hidden. Available in Starter.</p>
+          </div>
+        </div>
+
+        <!-- Locked: change history -->
+        <div class="free-locked-section">
+          <div class="free-locked-inner">
+            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:8px;"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+            <strong>Response time graph &amp; check history</strong>
+            <p>See how this site has performed over time. Available in Starter.</p>
+          </div>
+        </div>
+
+        <!-- Locked: client report -->
+        <div class="free-locked-section">
+          <div class="free-locked-inner">
+            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:8px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <strong>Client-ready report</strong>
+            <p>Share a professional health summary with clients. Available in Agency.</p>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="free-result-cta">
+          <div>
+            <strong>Start monitoring this site automatically</strong>
+            <p>Get alerts the moment something breaks, and show clients proof of active monitoring.</p>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <a class="button" href="/signin">Create free account</a>
+            <a class="button secondary" href="/pricing">See plans</a>
+          </div>
+        </div>
+
       </div>
-      ${clientReportHtml}
     </div>`;
 
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-  // View full report toggle
-  const viewBtn = document.getElementById('viewReportBtn');
-  const closeBtn = document.getElementById('closeReportBtn');
-  const reportShell = document.getElementById('clientReportShell');
-  const scanShell = target.querySelector('.result-report');
-  const actionShell = document.getElementById('actionPlanShell');
-  if (viewBtn) {
-    viewBtn.addEventListener('click', () => {
-      scanShell.style.display = 'none';
-      if (actionShell) actionShell.style.display = 'none';
-      reportShell.style.display = 'block';
-      reportShell.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  }
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      reportShell.style.display = 'none';
-      scanShell.style.display = '';
-      if (actionShell) actionShell.style.display = '';
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
-  }
-
-  // Print button — set document title to scanned URL so PDF filename is meaningful
-  const printBtn = document.getElementById('printReportBtn');
-  if (printBtn) {
-    printBtn.addEventListener('click', () => {
-      const prevTitle = document.title;
-      document.title = `SiteTrace Report — ${data.final_url || data.analyzed_url}`;
-      window.print();
-      window.setTimeout(() => { document.title = prevTitle; }, 1000);
-    });
-  }
-
-  // Copy-paste fix buttons
-  target.addEventListener('click', (event) => {
-    const copyBtn = event.target.closest('[data-copy-fix]');
-    if (!copyBtn) return;
-    copyToClipboard(copyBtn.dataset.copyFix).then(() => {
-      const orig = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      window.setTimeout(() => { copyBtn.textContent = orig; }, 1800);
-    }).catch(() => {});
-  });
 }
 
 function renderLoadingSteps() {
@@ -1478,98 +1558,296 @@ const demoSites = [
   }
 ];
 
+// ── Demo: simulated response-time bars for each site
+const demoRespBars = {
+  'Northstar Dental': [210,195,230,188,200,220,190,215,205,188,200,212],
+  'Atlas Roofing':    [1200,1400,1840,1650,1800,1920,1400,1600,1840,1700,1500,1840],
+  'Luma Studio':      [310,280,null,null,null,null,null,null,null,null,null,null]
+};
+const demoRecentChecks = {
+  'Northstar Dental': [
+    { time: '2:41 PM', trigger: 'Scheduled', status: 'online', score: 94, ms: 212, issues: 0 },
+    { time: '2:36 PM', trigger: 'Scheduled', status: 'online', score: 94, ms: 200, issues: 0 },
+    { time: '2:31 PM', trigger: 'Scheduled', status: 'online', score: 94, ms: 195, issues: 0 }
+  ],
+  'Atlas Roofing': [
+    { time: '2:38 PM', trigger: 'Scheduled', status: 'warning', score: 71, ms: 1840, issues: 2 },
+    { time: '2:33 PM', trigger: 'Scheduled', status: 'warning', score: 71, ms: 1700, issues: 2 },
+    { time: '2:28 PM', trigger: 'Scheduled', status: 'online', score: 82, ms: 950, issues: 1 }
+  ],
+  'Luma Studio': [
+    { time: '2:43 PM', trigger: 'Scheduled', status: 'down', score: 18, ms: null, issues: 2 },
+    { time: '2:38 PM', trigger: 'Scheduled', status: 'down', score: 18, ms: null, issues: 2 },
+    { time: '2:33 PM', trigger: 'Scheduled', status: 'down', score: 22, ms: null, issues: 2 }
+  ]
+};
+
+function demoBuildRespChart(bars) {
+  const valid = bars.filter(Boolean);
+  if (!valid.length) return '<div class="empty subtle" style="padding:20px;font-size:.85rem;">No response data — site is unreachable.</div>';
+  const max = Math.max(...valid);
+  return `<div class="response-chart" style="height:80px;">${bars.map((v, i) => {
+    const h = v ? Math.max(5, Math.round((v / max) * 100)) : 0;
+    const cls = !v ? 'down' : v > 1500 ? 'slow' : '';
+    return `<div class="resp-bar-col" title="${v ? v + 'ms' : 'down'}"><div class="resp-bar ${cls}" style="height:${h}%"></div></div>`;
+  }).join('')}</div>`;
+}
+
+function demoBuildRecentChecks(rows) {
+  return `<table class="checks-table">
+    <thead><tr><th>Time</th><th>Trigger</th><th>Status</th><th>Score</th><th>Response</th><th>Issues</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr>
+      <td>${r.time}</td>
+      <td><span style="font-size:.78rem;color:var(--muted);">${r.trigger}</span></td>
+      <td><span class="dot ${r.status === 'online' ? '' : r.status}" style="width:8px;height:8px;display:inline-block;vertical-align:middle;margin-right:5px;"></span>${r.status}</td>
+      <td style="color:${r.score >= 80 ? 'var(--green)' : r.score >= 60 ? 'var(--amber)' : 'var(--red)'};">${r.score}/100</td>
+      <td>${r.ms ? r.ms + 'ms' : '—'}</td>
+      <td>${r.issues > 0 ? `<span class="level-badge ${r.issues > 1 ? 'fail' : 'warning'}">${r.issues} issue${r.issues > 1 ? 's' : ''}</span>` : '<span class="level-badge pass">clear</span>'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+function renderDemoSiteDetail(site, root) {
+  const bars    = demoRespBars[site.name] || [];
+  const checks  = demoRecentChecks[site.name] || [];
+  const status  = site.status;
+  const statusLabel2 = status === 'online' ? 'Healthy' : status === 'warning' ? 'Warning' : 'Critical';
+  const uptime  = status === 'online' ? '99.99%' : status === 'warning' ? '98.2%' : '61.0%';
+  const avgMs   = bars.filter(Boolean).length ? Math.round(bars.filter(Boolean).reduce((a, b) => a + b, 0) / bars.filter(Boolean).length) + 'ms' : '–';
+  const ssl     = status === 'down' ? 'Error' : status === 'warning' ? '14 days' : '245 days';
+
+  const silentIssues = site.issues.filter((i) => i[0] !== 'fail' || site.status !== 'down').slice(0, 2);
+  const incidents    = site.status !== 'online'
+    ? [{ icon: 'red', text: site.issues[0] ? site.issues[0][1] : 'Issue detected', detail: site.issues[0] ? site.issues[0][2] : '' }]
+    : [
+      { icon: 'green', text: 'Resolved: SSL Certificate Renewed', detail: 'Certificate was successfully updated.' },
+      { icon: 'green', text: 'Resolved: Response Time Spike', detail: 'Response time returned to normal.' }
+    ];
+
+  root.innerHTML = `
+    <div class="demo-detail-view">
+      <button class="button secondary small" id="demoBackBtn" type="button" style="margin-bottom:20px;">← Back to overview</button>
+
+      <div class="db-content-header" style="margin-bottom:20px;">
+        <div class="db-site-title">
+          <svg viewBox="0 0 24 24" class="db-globe-icon"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="db-site-name">${escapeHtml(site.name)}</span>
+          <span class="db-status-badge ${status}">${statusLabel2}</span>
+        </div>
+        <div class="db-header-actions">
+          <span class="scan-interval-badge">Agency · Every 1 min</span>
+          <a class="button small" href="/signin">Start Monitoring</a>
+        </div>
+      </div>
+
+      <!-- Scan proof -->
+      <div class="scan-proof-bar" style="margin-bottom:20px;">
+        <span>Last scan: <strong>${checks[0] ? checks[0].time : '2:41 PM'}</strong></span>
+        <span>·</span>
+        <span>Next scan in <strong id="demoCountdown">00:38</strong></span>
+      </div>
+
+      <!-- 4 metric cards -->
+      <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="dash-card">
+          <span class="muted" style="font-size:.8rem;">Health Score</span>
+          <h3 style="color:${site.score >= 80 ? 'var(--green)' : site.score >= 60 ? 'var(--amber)' : 'var(--red)'};">${site.score}/100</h3>
+        </div>
+        <div class="dash-card">
+          <span class="muted" style="font-size:.8rem;">Uptime (30d)</span>
+          <h3>${uptime}</h3>
+        </div>
+        <div class="dash-card">
+          <span class="muted" style="font-size:.8rem;">Avg Response</span>
+          <h3>${avgMs}</h3>
+        </div>
+        <div class="dash-card">
+          <span class="muted" style="font-size:.8rem;">SSL / Domain</span>
+          <h3 style="color:${ssl === 'Error' ? 'var(--red)' : ssl.includes('14') ? 'var(--amber)' : 'var(--green)'};">${ssl}</h3>
+        </div>
+      </div>
+
+      <!-- Response time chart -->
+      <div class="response-chart-wrap" style="margin-bottom:20px;">
+        <div class="response-chart-head">
+          <span>Response Time</span>
+          <span style="font-size:.78rem;color:var(--muted);">24 hours ago → Now</span>
+        </div>
+        ${demoBuildRespChart(bars)}
+      </div>
+
+      <!-- Issues + Incidents -->
+      <div class="detail-grid" style="margin-bottom:20px;">
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>Latest Silent Issues</span>
+            <span class="level-badge ${silentIssues.length ? 'warning' : 'pass'}">${silentIssues.length} Open</span>
+          </div>
+          ${silentIssues.length
+            ? silentIssues.map((i) => `<div class="issue-row">
+                <svg viewBox="0 0 24 24" class="icon-${i[0] === 'fail' ? 'red' : 'amber'}"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <div><strong>${escapeHtml(i[1])}</strong><p class="meta">${escapeHtml(i[2])}</p></div>
+              </div>`).join('')
+            : '<div class="empty subtle" style="padding:16px 20px;">No silent issues detected.</div>'}
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>Recent Incidents</span>
+          </div>
+          ${incidents.map((inc) => `<div class="incident-row">
+            <svg viewBox="0 0 24 24" class="icon-${inc.icon}"><circle cx="12" cy="12" r="10"/>${inc.icon === 'green' ? '<polyline points="9 11 12 14 22 4"/>' : '<line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'}</svg>
+            <div><strong>${escapeHtml(inc.text)}</strong><p class="meta">${escapeHtml(inc.detail)}</p></div>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Recent checks table -->
+      <div class="detail-panel" style="margin-bottom:24px;">
+        <div class="detail-panel-head"><span>Recent Checks</span></div>
+        <div style="overflow-x:auto;padding:0 4px;">
+          ${demoBuildRecentChecks(checks)}
+        </div>
+      </div>
+
+      <!-- CTA -->
+      <div class="free-result-cta">
+        <div>
+          <strong>This is a demo — your real sites need real monitoring</strong>
+          <p>Create a free account and add your first monitor in under 60 seconds.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a class="button" href="/signin">Start monitoring free</a>
+          <a class="button secondary" href="/pricing">Compare plans</a>
+        </div>
+      </div>
+    </div>`;
+
+  // Live countdown demo
+  let remaining = 38;
+  const countdownEl = document.getElementById('demoCountdown');
+  const tick = () => {
+    remaining = remaining > 0 ? remaining - 1 : 59;
+    if (countdownEl) countdownEl.textContent = `00:${String(remaining).padStart(2, '0')}`;
+  };
+  const intervalId = setInterval(tick, 1000);
+
+  document.getElementById('demoBackBtn').addEventListener('click', () => {
+    clearInterval(intervalId);
+    renderDemo();
+  });
+}
+
 function renderDemo() {
   const root = document.getElementById('demoRoot');
   if (!root) return;
 
   const criticalCount = demoSites.filter((s) => s.status === 'down').length;
-  const warningCount = demoSites.filter((s) => s.status === 'warning').length;
   const avgUptime = '99.98';
 
-  const globeCls = (s) => s.status === 'online' ? 'green' : s.status === 'warning' ? 'amber' : 'red';
-  const badgeCls = (s) => s.status === 'online' ? 'green' : s.status === 'warning' ? 'amber' : 'red';
-  const scoreCls = (n) => n >= 90 ? 'green' : n >= 70 ? 'amber' : 'red';
-  const respCls = (ms) => !ms ? 'red' : ms > 1500 ? 'amber' : '';
-
-  const globeSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
-  const warnSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
-  const downSvg = `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+  const scoreCls = (n) => n >= 90 ? 'var(--green)' : n >= 70 ? 'var(--amber)' : 'var(--red)';
+  const respCls  = (ms) => !ms ? 'var(--red)' : ms > 1500 ? 'var(--amber)' : 'var(--text)';
+  const sslVal   = (s) => s.status === 'down' ? 'Error' : s.status === 'warning' ? '14 days' : '245 days';
+  const sslColor = (s) => s.status === 'down' ? 'var(--red)' : s.status === 'warning' ? 'var(--amber)' : 'var(--green)';
 
   const siteCardsHtml = demoSites.map((site) => {
-    const alertSvg = site.status === 'down' ? downSvg : warnSvg;
-    const alertRows = site.issues.map((issue) => `
-      <div class="site-alert ${issue[0]}">
-        ${alertSvg}
-        <div><strong>${escapeHtml(issue[1])}</strong> — ${escapeHtml(issue[2])}</div>
-      </div>`).join('');
+    const statusLabel2 = site.status === 'online' ? 'Healthy' : site.status === 'warning' ? 'Warning' : 'Critical';
+    const topIssue = site.issues[0];
+    const alertHtml = topIssue ? `
+      <div class="demo-site-alert ${topIssue[0]}">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><circle cx="12" cy="12" r="10"/>${topIssue[0] === 'fail' ? '<line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' : '<line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'}</svg>
+        <span><strong>${escapeHtml(topIssue[1])}:</strong> ${escapeHtml(topIssue[2])}</span>
+      </div>` : '';
+
     return `
-      <div class="site-card ${site.status !== 'online' ? site.status : ''}">
-        <div class="site-card-main">
-          <div class="site-info">
-            <div class="site-globe ${globeCls(site)}">${globeSvg}</div>
+      <div class="demo-site-card ${site.status !== 'online' ? site.status : ''}">
+        <div class="demo-site-row">
+          <div class="demo-site-identity">
+            <div class="demo-site-globe ${site.status}">
+              <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
             <div>
-              <div class="site-name">${escapeHtml(site.name)} <span class="badge ${badgeCls(site)}">${escapeHtml(localizedStatus(site.status))}</span></div>
-              <div class="site-last">${currentLocale === 'es' ? 'Último check hace' : 'Last checked'} ${escapeHtml(site.lastCheck)} ${currentLocale === 'es' ? '' : 'ago'}</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <strong style="font-size:.95rem;">${escapeHtml(site.name)}</strong>
+                <span class="db-status-badge ${site.status}">${statusLabel2}</span>
+              </div>
+              <div style="font-size:.78rem;color:var(--muted);margin-top:2px;">Last checked: ${site.lastCheck} ago</div>
             </div>
           </div>
-          <div class="site-metrics">
-            <div class="site-metric">
-              <div class="site-metric-label">${escapeHtml(t('demo.score'))}</div>
-              <div class="site-metric-val ${scoreCls(site.score)}">${site.score}/100</div>
+          <div class="demo-site-metrics">
+            <div class="demo-metric-col">
+              <div class="demo-metric-label">Health Score</div>
+              <div class="demo-metric-val" style="color:${scoreCls(site.score)};">${site.score}</div>
             </div>
-            <div class="site-metric">
-              <div class="site-metric-label">${escapeHtml(t('demo.response'))}</div>
-              <div class="site-metric-val ${respCls(site.response)}">${site.response ? site.response + 'ms' : '—'}</div>
+            <div class="demo-metric-col">
+              <div class="demo-metric-label">Response</div>
+              <div class="demo-metric-val" style="color:${respCls(site.response)};">${site.response ? site.response + 'ms' : 'Timeout'}</div>
             </div>
-            <div class="site-metric">
-              <div class="site-metric-label">SSL</div>
-              <div class="site-metric-val ${site.status === 'down' ? 'red' : 'green'}">${site.status === 'down' ? 'Error' : 'Valid'}</div>
+            <div class="demo-metric-col">
+              <div class="demo-metric-label">SSL</div>
+              <div class="demo-metric-val" style="color:${sslColor(site)};">${sslVal(site)}</div>
             </div>
           </div>
-          <button class="button small secondary demo-details-btn" type="button">${currentLocale === 'es' ? 'Detalles' : 'Details'}</button>
+          <button class="button small secondary" type="button" data-demo-detail="${site.name}" style="flex-shrink:0;">Details ↗</button>
         </div>
-        ${alertRows}
+        ${alertHtml}
       </div>`;
   }).join('');
 
   root.innerHTML = `
-    <div class="demo-header">
-      <div>
-        <h1 style="font-size:clamp(1.6rem,3vw,2rem); margin-bottom:6px;">${currentLocale === 'es' ? 'Resumen de sitios' : 'Client Sites Overview'}</h1>
-        <p class="text-muted" style="margin:0; font-size:.95rem;">${currentLocale === 'es' ? 'Monitorea y gestiona todos los sitios de clientes desde un lugar.' : 'Monitor and manage all client websites from one place.'}</p>
+    <div class="demo-overview">
+      <div class="demo-header">
+        <div>
+          <h1 style="font-size:clamp(1.5rem,3vw,2rem);margin-bottom:4px;">Client Sites Overview</h1>
+          <p style="color:var(--muted);margin:0;font-size:.9rem;">Demo dashboard showing sample client monitoring.</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <a class="button secondary small" href="/signin">Add Site</a>
+          <a class="button small" href="/signin">Generate Report</a>
+        </div>
       </div>
-      <div class="demo-header-btns">
-        <a class="button secondary small" href="/signin">${currentLocale === 'es' ? 'Agregar sitio' : 'Add Site'}</a>
-        <a class="button small" href="/signin">${currentLocale === 'es' ? 'Generar reporte' : 'Generate Report'}</a>
-      </div>
-    </div>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <h4>${currentLocale === 'es' ? 'Total de sitios' : 'Total Sites'}</h4>
-        <div class="stat-val">${demoSites.length}</div>
+      <div class="demo-stat-row">
+        <div class="demo-stat-card">
+          <div class="demo-stat-label">Total Sites</div>
+          <div class="demo-stat-val">${demoSites.length}</div>
+        </div>
+        <div class="demo-stat-card">
+          <div class="demo-stat-label">Critical Issues</div>
+          <div class="demo-stat-val" style="color:${criticalCount > 0 ? 'var(--red)' : 'var(--green)'};">${criticalCount}</div>
+        </div>
+        <div class="demo-stat-card">
+          <div class="demo-stat-label">Avg Uptime</div>
+          <div class="demo-stat-val" style="color:var(--green);">${avgUptime}%</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <h4>${currentLocale === 'es' ? 'Problemas críticos' : 'Critical Issues'}</h4>
-        <div class="stat-val ${criticalCount > 0 ? 'red' : 'green'}">${criticalCount}</div>
-      </div>
-      <div class="stat-card">
-        <h4>${currentLocale === 'es' ? 'Uptime promedio' : 'Avg Uptime'}</h4>
-        <div class="stat-val green">${avgUptime}%</div>
-      </div>
-    </div>
 
-    ${siteCardsHtml}
+      <div class="demo-sites-list">
+        ${siteCardsHtml}
+      </div>
 
-    <div class="conversion-band demo-cta" style="margin-top:32px;">
-      <div><p class="eyebrow">${escapeHtml(t('demo.ctaTitle'))}</p><p>${escapeHtml(t('demo.ctaCopy'))}</p></div>
-      <a class="button secondary" href="/pricing">${escapeHtml(t('demo.ctaButton'))}</a>
+      <div class="free-result-cta" style="margin-top:8px;">
+        <div>
+          <strong>Ready to protect your own client sites?</strong>
+          <p>Create a free account and add your first monitor in under 60 seconds.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <a class="button" href="/signin">Start free</a>
+          <a class="button secondary" href="/pricing">Compare plans</a>
+        </div>
+      </div>
     </div>`;
 }
 
 function initDemo() {
   if (page !== 'demo') return;
   renderDemo();
+  document.getElementById('demoRoot').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-demo-detail]');
+    if (!btn) return;
+    const siteName = btn.dataset.demoDetail;
+    const site = demoSites.find((s) => s.name === siteName);
+    if (site) renderDemoSiteDetail(site, document.getElementById('demoRoot'));
+  });
 }
 
 function syncContentHeader(site, status, reportText, reportLocked) {
@@ -1660,20 +1938,53 @@ function renderSiteDetail(site) {
 
   syncContentHeader(site, status, reportText, reportLocked);
 
-  detail.innerHTML = `
-    <div class="detail-hero">
-      <div>
-        <p class="eyebrow compact">${escapeHtml(t('dashboard.monitorEyebrow'))}</p>
-        <h2>${escapeHtml(site.name)}</h2>
-        <p class="muted">${escapeHtml(site.url)}</p>
+  // Free tier: show upgrade gate instead of full detail
+  if (state.plan === 'free' && !hasFeature('in_app_alerts')) {
+    detail.innerHTML = `
+      <div class="scan-proof-bar">
+        <span class="scan-interval-badge">Free · Every 60 min</span>
+        <span>Last scan: <strong id="lastScanTime">–</strong></span>
+        <span>·</span>
+        <span>Next scan in <strong id="scanCountdown">–</strong></span>
       </div>
-      <span class="status-pill ${status}"><span class="dot ${status === 'online' ? '' : status}"></span>${escapeHtml(statusCopy(status))}</span>
-    </div>
-    <div class="detail-actions">
-      <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
-      <button class="button secondary" type="button" ${reportLocked ? 'data-dashboard-upgrade="starter"' : `data-copy-client-report="${reportText}"`}>${escapeHtml(reportLocked ? t('dashboard.lockedForPlan') : t('common.copyReport'))}</button>
-      <button class="button secondary" type="button" data-refresh-detail="${site.id}">${escapeHtml(t('dashboard.refresh'))}</button>
-      <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
+      <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
+        <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
+      </div>
+      <div class="free-issues-block" style="margin-bottom:16px;">
+        <div class="free-section-head"><strong>Top issues</strong></div>
+        ${importantChecks.length ? importantChecks.slice(0,3).map((c) => `<div class="free-issue-row"><svg viewBox="0 0 24 24" class="icon-${c.level === 'fail' ? 'red' : 'amber'}" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><strong>${escapeHtml(c.title)}</strong><p style="margin:2px 0 0;font-size:.8rem;color:var(--muted);">${escapeHtml(c.recommendation)}</p></div><span class="level-badge ${c.level}">${c.level}</span></div>`).join('') : `<div class="free-issue-row">No critical issues.</div>`}
+      </div>
+      <div class="free-locked-section"><div class="free-locked-inner">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:6px;"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+        <strong>Response time graph &amp; full check history</strong>
+        <p>30-day monitoring graphs and incident timeline available in Starter.</p>
+        <button class="button small" type="button" data-dashboard-upgrade="starter" style="margin-top:10px;">Upgrade to Starter</button>
+      </div></div>
+      <div class="free-locked-section"><div class="free-locked-inner">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <strong>Client reports &amp; status pages</strong>
+        <p>Share professional health summaries with clients. Available in Agency.</p>
+        <button class="button small secondary" type="button" data-dashboard-upgrade="agency" style="margin-top:10px;">Upgrade to Agency</button>
+      </div></div>
+      <div class="detail-actions" style="margin-top:16px;">
+        <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
+        <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
+      </div>`;
+    startScanCountdown(site.last_checked_at);
+    return;
+  }
+
+  detail.innerHTML = `
+    <!-- Scan proof bar -->
+    <div class="scan-proof-bar">
+      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? 'Agency' : 'Starter')} · ${planIntervalLabel()}</span>
+      <span>Last scan: <strong id="lastScanTime">–</strong></span>
+      <span>·</span>
+      <span>Next scan in <strong id="scanCountdown">–</strong></span>
+      <button class="button small" type="button" data-run="${site.id}" style="margin-left:auto;">${escapeHtml(t('dashboard.runCheck'))}</button>
     </div>
 
     <div class="detail-tabs" id="detailTabs">
@@ -1733,9 +2044,11 @@ function renderSiteDetail(site) {
 
     <!-- Recent Checks -->
     <div class="detail-tab-panel hidden" data-panel="checks">
-      <div class="panel flat-panel" style="margin:16px; border-radius:var(--radius);">
-        <div class="panel-top"><strong>${escapeHtml(t('dashboard.recentChecks'))}</strong></div>
-        <div class="timeline">${historyHtml}</div>
+      <div class="detail-panel" style="margin:0 0 16px;">
+        <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.recentChecks'))}</span></div>
+        <div style="overflow-x:auto;padding:0 4px;">
+          ${renderRecentChecksTable(state.selectedChecks)}
+        </div>
       </div>
     </div>
 
@@ -1775,6 +2088,9 @@ function renderSiteDetail(site) {
       });
     });
   }
+
+  // Start live scan countdown
+  startScanCountdown(site.last_checked_at);
 }
 
 async function initDashboard() {
@@ -1982,12 +2298,16 @@ async function initBilling() {
   }));
 }
 
-initPreferences();
-applyLanguage();
-initNavSession().catch(renderError);
-initAnalyzer();
-initAuth().catch(renderError);
-initDashboard().catch(renderError);
-initDemo();
-initBilling().catch(renderError);
-initStatusPage().catch(renderError);
+async function init() {
+  initPreferences();
+  applyLanguage();
+  await initNavSession();
+  initAnalyzer();
+  initDemo();
+  await initAuth();
+  await initDashboard();
+  await initStatusPage();
+  await initBilling();
+}
+
+init();
