@@ -1926,12 +1926,19 @@ class LivePingChart {
   }
 
   async _poll() {
+    const start = performance.now();
+    const ac    = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 6000);
     try {
-      const r = await fetch(`/api/ping?url=${encodeURIComponent(this.url)}`, { headers: authHeaders() });
-      const d = await r.json();
-      this._push({ ms: typeof d.ms === 'number' ? d.ms : null, status: d.status || 'error', t: d.ts ? new Date(d.ts) : new Date() });
-    } catch {
-      this._push({ ms: null, status: 'error', t: new Date() });
+      // Ping directly from browser — no-cors avoids CORS errors, works on any site
+      await fetch(this.url, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ac.signal });
+      clearTimeout(timer);
+      const ms = Math.round(performance.now() - start);
+      this._push({ ms, status: 'ok', t: new Date() });
+    } catch (err) {
+      clearTimeout(timer);
+      const ms = Math.round(performance.now() - start);
+      this._push({ ms: err.name === 'AbortError' ? null : ms, status: err.name === 'AbortError' ? 'timeout' : 'error', t: new Date() });
     }
   }
 
@@ -2258,7 +2265,6 @@ function renderSiteDetail(site) {
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
         <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
       </div>
-      <div class="uptime-strip">${bars || '<span class="muted" style="padding:0 4px;font-size:.85rem;">No checks yet.</span>'}</div>
       <div class="live-ping-wrap">
         <div class="live-ping-head">
           <span>Live Response Time</span>
