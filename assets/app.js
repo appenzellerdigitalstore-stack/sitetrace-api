@@ -1976,7 +1976,13 @@ function renderDashboard() {
       <div class="db-site-card-url">${escapeHtml(site.url)}</div>
     </button>`;
   }).join('');
-  renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
+  // Preserve whatever panel the user was on — don't always reset to overview
+  const currentPanel = state.dashboardPanel || 'overview';
+  if (currentPanel === 'overview') {
+    renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
+  } else {
+    renderPanel(currentPanel);
+  }
 }
 
 async function runSiteCheck(siteId) {
@@ -2413,14 +2419,12 @@ function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
   const nameEl      = document.getElementById('dbSelectedSiteName');
   const statusEl    = document.getElementById('dbSelectedSiteStatus');
   const copyBtn     = document.getElementById('copyReportBtn');
-  const auditBtn    = document.getElementById('runAuditBtn');
   const pingRefresh = document.getElementById('refreshPingBtn');
 
   if (!site) {
     if (nameEl)      nameEl.textContent = 'Select a site';
     if (statusEl)    { statusEl.style.display = 'none'; statusEl.className = 'db-status-badge'; statusEl.textContent = ''; }
     if (copyBtn)     copyBtn.style.display = 'none';
-    if (auditBtn)    { auditBtn.style.display = 'none'; auditBtn.dataset.run = ''; }
     if (pingRefresh) pingRefresh.style.display = 'none';
     return;
   }
@@ -2432,11 +2436,6 @@ function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
   }
   if (copyBtn) {
     copyBtn.style.display = reportLocked ? 'none' : '';
-  }
-  if (auditBtn) {
-    auditBtn.style.display = '';
-    auditBtn.dataset.run = site.id;
-    auditBtn.disabled = true; // countdown controls re-enabling
   }
   if (pingRefresh) pingRefresh.style.display = '';
 }
@@ -3127,6 +3126,9 @@ function renderPanel(panelName) {
   // Show/hide the persistent alertCenterPanel — only visible on alerts panel
   const acp = document.getElementById('alertCenterPanel');
   if (acp) acp.style.display = panelName === 'alerts' ? '' : 'none';
+  // Restore siteDetail visibility when leaving alerts panel
+  const _sd = document.getElementById('siteDetail');
+  if (_sd && panelName !== 'alerts') _sd.style.display = '';
 
   // Update sidebar active state
   document.querySelectorAll('.db-nav-item').forEach(el => el.classList.remove('db-nav-item-active'));
@@ -3151,46 +3153,11 @@ function renderPanel(panelName) {
   if (panelName === 'alerts') {
     if (dbSiteTitle) dbSiteTitle.querySelector('.db-site-name') && (dbSiteTitle.querySelector('.db-site-name').textContent = t('dashboard.alertCenter'));
     syncContentHeader(null, null, null, true);
-    // Restore site name in header if site selected
-    const nameEl = document.getElementById('dbSelectedSiteName');
-    if (site && nameEl) nameEl.textContent = site.name;
-    const alerts = state.alerts || [];
-    const unread = state.alertsUnread || 0;
     detail.classList.remove('empty-state', 'is-loading');
-    const hasAlerts = alerts.length > 0;
-    detail.innerHTML = '<div class="alert-center-wrap">' +
-      '<div class="alert-center-head">' +
-      '<div style="display:flex;align-items:center;gap:8px;">' +
-      '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
-      '<strong>' + escapeHtml(t('dashboard.alertCenter')) + '</strong>' +
-      (unread > 0 ? '<span class="alert-badge">' + unread + '</span>' : '') +
-      '</div>' +
-      (hasAlerts ? '<button class="link-button small" id="markAlertsReadBtn2" type="button">' + escapeHtml(t('dashboard.alertMarkRead')) + '</button>' : '') +
-      '</div>' +
-      '<p class="alert-center-tagline">' + escapeHtml(t('dashboard.alertCenterDesc')) + '</p>' +
-      '<div class="alert-list">' +
-      (hasAlerts
-        ? alerts.slice(0, 20).map(alert => '<div class="alert-row ' + (alert.read ? 'read' : 'unread') + '" data-alert-id="' + alert.id + '">' +
-            '<div class="alert-icon">' + alertIcon(alert.type) + '</div>' +
-            '<div class="alert-body"><div class="alert-title">' + escapeHtml(alert.title) + '</div>' +
-            '<div class="alert-msg">' + escapeHtml(alert.message) + '</div>' +
-            '<div class="alert-time">' + formatDateTime(alert.created_at) + '</div></div>' +
-            (!alert.read ? '<span class="alert-unread-dot"></span>' : '') +
-            '</div>').join('')
-        : '<div class="alert-empty">' + escapeHtml(t('dashboard.alertCenterEmpty')) + '</div>') +
-      '</div></div>';
-    const markBtn2 = document.getElementById('markAlertsReadBtn2');
-    if (markBtn2) {
-      markBtn2.addEventListener('click', async () => {
-        markBtn2.disabled = true;
-        try {
-          await fetch(apiPath('/api/alerts/read-all'), { method: 'PATCH', headers: authHeaders() });
-          state.alerts = (state.alerts || []).map(a => ({ ...a, read: true }));
-          state.alertsUnread = 0;
-          renderPanel('alerts');
-        } catch (e) { markBtn2.disabled = false; }
-      });
-    }
+    // Alert Center lives entirely in #alertCenterPanel (shown above siteDetail).
+    // Clear siteDetail so there's no duplication.
+    detail.innerHTML = '';
+    detail.style.display = 'none';
     return;
   }
 
@@ -3369,7 +3336,8 @@ async function initDashboard() {
   if (page !== 'dashboard') return;
   await loadDashboard();
 
-  document.getElementById('refreshDashboardBtn').addEventListener('click', loadDashboard);
+  const _rdb = document.getElementById('refreshDashboardBtn');
+  if (_rdb) _rdb.addEventListener('click', loadDashboard);
 
   document.getElementById('signOutBtn').addEventListener('click', async () => {
     if (state.supabase) await state.supabase.auth.signOut();
@@ -3394,24 +3362,6 @@ async function initDashboard() {
       const site = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
       if (!site) return;
       generateClientReport(site, state.selectedChecks || [], state.plan);
-    });
-  }
-
-  // Run Audit button (header)
-  const runAuditBtn = document.getElementById('runAuditBtn');
-  if (runAuditBtn) {
-    runAuditBtn.addEventListener('click', async () => {
-      const siteId = runAuditBtn.dataset.run;
-      if (!siteId) return;
-      // Check cooldown via localStorage
-      const stored = localStorage.getItem('st_last_scan_' + siteId);
-      if (stored) {
-        const elapsed = Date.now() - Number(stored);
-        const cooldownMs = planIntervalMinutes() * 60 * 1000;
-        if (elapsed < cooldownMs) return; // still on cooldown — button should already be disabled but double-check
-      }
-      runAuditBtn.disabled = true;
-      try { await runSiteCheck(siteId); } catch (e) { setDashboardMessage(e.message, 'error'); }
     });
   }
 
