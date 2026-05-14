@@ -1823,3 +1823,39 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log('SiteTrace API listening on port ' + PORT);
 });
+
+// ── Public Client Report endpoint ──────────────────────────────────────────
+app.get('/public/report/:slug', async (req, res) => {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Not configured' });
+  }
+  const { data: site, error } = await supabaseAdmin
+    .from('sites')
+    .select('id, name, url, last_status, last_score, last_response_time_ms, last_checked_at, public_slug, status_page_enabled')
+    .eq('public_slug', req.params.slug)
+    .single();
+
+  if (error || !site) {
+    return res.status(404).json({ status: 'error', message: 'Report not found' });
+  }
+
+  const { data: checks } = await supabaseAdmin
+    .from('checks')
+    .select('status, score, status_code, response_time_ms, created_at, result')
+    .eq('site_id', site.id)
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const { data: incidents } = await supabaseAdmin
+    .from('incidents')
+    .select('status, title, created_at, resolved_at, duration_seconds')
+    .eq('site_id', site.id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  res.json({ status: 'success', site, checks: checks || [], incidents: incidents || [] });
+});
+
+app.get('/report/:slug', (req, res) => {
+  res.sendFile(path.join(__dirname, 'report.html'));
+});

@@ -175,7 +175,23 @@ const copy = {
       lockedStatusPage: 'Status pages require Starter or Agency.',
       lockedAlerts: 'In-app alerts require Starter or Agency.',
       domainExpiry: 'Domain expiry',
-      domainUnknown: 'Unknown'
+      domainUnknown: 'Unknown',
+      lastScan: 'Last scan',
+      nextScan: 'Next scan in',
+      overview: 'Overview',
+      liveResponse: 'Live Response Time',
+      runFullAudit: 'Run full audit',
+      sitesUsed: 'sites',
+      addNewSite: 'Add new site',
+      cancelBtn: 'Cancel',
+      issuesFound: 'Issues Found',
+      noIssuesFound: 'No issues found in the latest scan.',
+      scanBreakdown: 'Full Scan Breakdown',
+      noChecksYet: 'No checks run yet.',
+      noIncidentsYet: 'No incidents recorded.',
+      planFree: 'Free',
+      planStarter: 'Starter',
+      planAgency: 'Agency'
     },
     signin: {
       eyebrow: 'Customer access',
@@ -349,7 +365,23 @@ const copy = {
       lockedStatusPage: 'Las status pages requieren Starter o Agency.',
       lockedAlerts: 'Las alertas en la app requieren Starter o Agency.',
       domainExpiry: 'Vencimiento dominio',
-      domainUnknown: 'Desconocido'
+      domainUnknown: 'Desconocido',
+      lastScan: 'Ultimo escaneo',
+      nextScan: 'Proximo escaneo en',
+      overview: 'Resumen',
+      liveResponse: 'Respuesta en vivo',
+      runFullAudit: 'Auditoria completa',
+      sitesUsed: 'sitios',
+      addNewSite: 'Agregar sitio',
+      cancelBtn: 'Cancelar',
+      issuesFound: 'Problemas encontrados',
+      noIssuesFound: 'Sin problemas en el ultimo escaneo.',
+      scanBreakdown: 'Desglose del escaneo',
+      noChecksYet: 'Aun no hay escaneos.',
+      noIncidentsYet: 'Sin incidentes registrados.',
+      planFree: 'Gratis',
+      planStarter: 'Starter',
+      planAgency: 'Agencia'
     },
     signin: {
       eyebrow: 'Acceso de cliente',
@@ -2222,7 +2254,7 @@ function initDemo() {
   });
 }
 
-function syncContentHeader(site, status, reportText, reportLocked) {
+function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
   const nameEl      = document.getElementById('dbSelectedSiteName');
   const statusEl    = document.getElementById('dbSelectedSiteStatus');
   const copyBtn     = document.getElementById('copyReportBtn');
@@ -2688,13 +2720,14 @@ function renderSiteDetail(site) {
       }).join('')}</div>`
     : `<div class="empty subtle" style="padding:12px 20px;">No response data yet.</div>`;
 
-  const publicUrl = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
+  const publicUrl  = site.public_slug ? `${window.location.origin}/status/${site.public_slug}` : '';
+  const reportUrl  = site.public_slug ? `${window.location.origin}/report/${site.public_slug}` : '';
   const reportText = encodeURIComponent(reportSummaryFromSite(site, checks));
   const alertsLocked = !hasFeature('in_app_alerts');
   const statusLocked = !hasFeature('status_pages');
   const reportLocked = !hasFeature('client_reports');
 
-  syncContentHeader(site, status, reportText, reportLocked);
+  syncContentHeader(site, status, reportText, reportLocked, reportUrl);
 
   // Free tier: show upgrade gate instead of full detail
   if (state.plan === 'free' && !hasFeature('in_app_alerts')) {
@@ -2738,14 +2771,14 @@ function renderSiteDetail(site) {
   detail.innerHTML = `
     <!-- Scan proof bar -->
     <div class="scan-proof-bar">
-      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? 'Agency' : 'Starter')} · ${planIntervalLabel()}</span>
-      <span>Last scan: <strong id="lastScanTime">–</strong></span>
+      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? t('dashboard.planAgency') : state.plan === 'starter' ? t('dashboard.planStarter') : t('dashboard.planFree'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.max_sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
+      <span>${escapeHtml(t('dashboard.lastScan'))}: <strong id="lastScanTime">–</strong></span>
       <span>·</span>
-      <span>Next scan in <strong id="scanCountdown">–</strong></span>
+      <span>${escapeHtml(t('dashboard.nextScan'))} <strong id="scanCountdown">–</strong></span>
     </div>
 
     <div class="detail-tabs" id="detailTabs">
-      <button class="detail-tab active" type="button" data-tab="overview">Overview</button>
+      <button class="detail-tab active" type="button" data-tab="overview">${escapeHtml(t('dashboard.overview'))}</button>
       <button class="detail-tab" type="button" data-tab="incidents">${escapeHtml(t('dashboard.recentIncidents'))}</button>
       <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
       <button class="detail-tab" type="button" data-tab="settings">${escapeHtml(t('dashboard.settings'))}</button>
@@ -2761,7 +2794,7 @@ function renderSiteDetail(site) {
       </div>
       <div class="live-ping-wrap">
         <div class="live-ping-head">
-          <span>Live Response Time</span>
+          <span>${escapeHtml(t('dashboard.liveResponse'))}</span>
           <span class="live-ping-badge"><span class="live-dot-blink"></span>Live</span>
           <span style="font-size:.78rem;color:var(--muted);margin-left:auto;">Pinging every 2s · independent of scans</span>
         </div>
@@ -2795,7 +2828,7 @@ function renderSiteDetail(site) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;color:var(--muted)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           <span>Issues are from the last scheduled scan. Run a full audit to get the latest SEO, SSL and performance results.</span>
         </div>
-        <button class="button small" id="auditCtaBtn" type="button" data-run="${site.id}">Run full audit</button>
+        <button class="button small" id="auditCtaBtn" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runFullAudit'))}</button>
       </div>
       ${scanBreakdownHtml}
     </div>
@@ -2842,6 +2875,11 @@ function renderSiteDetail(site) {
         ${alertsLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedAlerts'))}</div>` : ''}
         ${statusLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedStatusPage'))}</div>` : ''}
         ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
+        ${site.public_slug ? `<div style="margin-top:10px;padding:10px 14px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;">
+          <div style="font-size:.7rem;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">📊 Client Report Link</div>
+          <a class="status-link" href="/report/${site.public_slug}" target="_blank" rel="noopener" style="color:#6366f1;">${window.location.origin}/report/${site.public_slug}</a>
+          <button type="button" onclick="navigator.clipboard.writeText('${window.location.origin}/report/${site.public_slug}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy link',2000)})" style="margin-left:10px;font-size:.72rem;font-weight:700;background:#6366f1;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;">Copy link</button>
+        </div>` : ''}
         <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
       </form>
     </div>`;
