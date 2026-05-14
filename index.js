@@ -1569,6 +1569,26 @@ app.patch('/api/alerts/read-all', requireUser, async (req, res) => {
   res.json({ status: 'success' });
 });
 
+app.get('/api/ping', requireUser, async (req, res) => {
+  const url = (req.query.url || '').trim();
+  if (!url || !/^https?:\/\//i.test(url)) {
+    return res.status(400).json({ error: 'Invalid url' });
+  }
+  const start = Date.now();
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const r = await fetch(url, { method: 'HEAD', signal: controller.signal, redirect: 'follow' });
+    clearTimeout(timer);
+    const ms = Date.now() - start;
+    return res.json({ ms, httpStatus: r.status, status: r.ok ? 'ok' : 'warn', ts: new Date().toISOString() });
+  } catch (err) {
+    const ms = Date.now() - start;
+    const timedOut = err.name === 'AbortError' || ms >= 5900;
+    return res.json({ ms: timedOut ? null : ms, httpStatus: null, status: timedOut ? 'timeout' : 'error', ts: new Date().toISOString() });
+  }
+});
+
 app.get('/api/email-status/:id', requireUser, async (req, res) => {
   const delivery = await retrieveResendEmail(req.params.id).catch((error) => ({ error: error.message }));
   if (!delivery || delivery.error) {

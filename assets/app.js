@@ -1876,7 +1876,263 @@ function syncContentHeader(site, status, reportText, reportLocked) {
   }
 }
 
+
+// ── LivePingChart ─────────────────────────────────────────────────────────────
+// Real-time canvas ping chart. Polls /api/ping every 2s independently of scans.
+class LivePingChart {
+  constructor(canvas, opts = {}) {
+    this.canvas    = canvas;
+    this.ctx       = canvas.getContext('2d');
+    this.url       = opts.url || '';
+    this.maxPts    = opts.maxPts   || 120;   // 4 min at 2s
+    this.pollMs    = opts.pollMs   || 2000;
+    this.threshold = opts.threshold|| 800;
+    this.points    = [];   // { ms:number|null, status:string, t:Date }
+    this._timer    = null;
+    this._raf      = null;
+    this._pulse    = 0;
+    this._ro       = null;
+  }
+
+  start() {
+    this._resize();
+    if (typeof ResizeObserver !== 'undefined') {
+      this._ro = new ResizeObserver(() => this._resize());
+      if (this.canvas.parentElement) this._ro.observe(this.canvas.parentElement);
+    }
+    this._poll();
+    this._timer = setInterval(() => this._poll(), this.pollMs);
+    this._frame();
+  }
+
+  stop() {
+    if (this._timer)  clearInterval(this._timer);
+    if (this._raf)    cancelAnimationFrame(this._raf);
+    if (this._ro)     this._ro.disconnect();
+    this._timer = this._raf = null;
+  }
+
+  _resize() {
+    const parent = this.canvas.parentElement;
+    if (!parent) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w   = parent.clientWidth || 600;
+    const h   = 190;
+    this.canvas.width  = w * dpr;
+    this.canvas.height = h * dpr;
+    this.canvas.style.width  = w + 'px';
+    this.canvas.style.height = h + 'px';
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  async _poll() {
+    try {
+      const r = await fetch(`/api/ping?url=${encodeURIComponent(this.url)}`, { headers: authHeaders() });
+      const d = await r.json();
+      this._push({ ms: typeof d.ms === 'number' ? d.ms : null, status: d.status || 'error', t: d.ts ? new Date(d.ts) : new Date() });
+    } catch {
+      this._push({ ms: null, status: 'error', t: new Date() });
+    }
+  }
+
+  _push(pt) {
+    this.points.push(pt);
+    if (this.points.length > this.maxPts) this.points.shift();
+    this._updateStats();
+  }
+
+  _updateStats() {
+    const valid    = this.points.filter(p => p.ms !== null).map(p => p.ms);
+    const cur      = this.points.length ? this.points[this.points.length - 1] : null;
+    const timeouts = this.points.filter(p => p.status === 'timeout' || p.status === 'error').length;
+    const fmt      = ms => ms === null ? 'Timeout' : ms + 'ms';
+    const col      = ms => ms === null ? 'var(--red)' : ms < 400 ? 'var(--green)' : ms < 800 ? 'var(--amber)' : 'var(--red)';
+
+    const set = (id, text, color) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent  = text;
+      if (color !== undefined) el.style.color = color;
+    };
+
+    set('lpCurrent', cur ? fmt(cur.ms) : '–',  cur ? col(cur.ms) : '');
+    set('lpAvg',  valid.length ? fmt(Math.round(valid.reduce((a,b)=>a+b,0)/valid.length)) : '–');
+    set('lpMin',  valid.length ? fmt(Math.min(...valid)) : '–');
+    set('lpMax',  valid.length ? fmt(Math.max(...valid)) : '–');
+    set('lpTO',   String(timeouts), timeouts > 0 ? 'var(--red)' : '');
+  }
+
+  _msColorHex(ms) {
+    if (ms === null || ms >= 800) return '#ef4444';
+    if (ms >= 400)                return '#f59e0b';
+    return '#22c55e';
+  }
+
+  _frame() {
+    this._raf    = requestAnimationFrame(() => this._frame());
+    this._pulse  = (this._pulse + 0.07) % (Math.PI * 2);
+    this._draw();
+  }
+
+  _draw() {
+    const ctx    = this.ctx;
+    const dpr    = window.devicePixelRatio || 1;
+    const W      = this.canvas.width  / dpr;
+    const H      = this.canvas.height / dpr;
+    const PAD    = { top: 20, right: 18, bottom: 30, left: 46 };
+    const cW     = W - PAD.left - PAD.right;
+    const cH     = H - PAD.top  - PAD.bottom;
+    const pts    = this.points;
+
+    ctx.clearRect(0, 0, W, H);
+
+    if (!pts.length) {
+      ctx.fillStyle = 'rgba(148,163,184,0.5)';
+      ctx.font      = '12px Inter,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Pinging…', W / 2, H / 2);
+      return;
+    }
+
+    const valid  = pts.filter(p => p.ms !== null).map(p => p.ms);
+    const maxVal = valid.length ? Math.max(Math.max(...valid) * 1.2, 300) : 500;
+    const range  = maxVal;
+
+    const offset = this.maxPts - pts.length;
+    const xOf    = i  => PAD.left + ((offset + i) / (this.maxPts - 1)) * cW;
+    const yOf    = ms => PAD.top  + cH - (ms / range) * cH;
+
+    // Grid lines + Y labels
+    ctx.font      = '10px Inter,sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    [0, 0.25, 0.5, 0.75, 1].forEach(f => {
+      const val = Math.round(f * maxVal);
+      const y   = PAD.top + cH - f * cH;
+      ctx.fillStyle   = 'rgba(148,163,184,0.45)';
+      ctx.fillText(val + 'ms', PAD.left - 5, y);
+      ctx.save();
+      ctx.setLineDash([3, 5]);
+      ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+      ctx.restore();
+    });
+
+    // Threshold line
+    if (this.threshold <= maxVal) {
+      const ty = yOf(this.threshold);
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = 'rgba(239,68,68,0.4)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath(); ctx.moveTo(PAD.left, ty); ctx.lineTo(PAD.left + cW, ty); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle   = 'rgba(239,68,68,0.5)';
+      ctx.textAlign   = 'left';
+      ctx.fillText('⚠ ' + this.threshold + 'ms', PAD.left + 4, ty - 6);
+    }
+
+    // Build coords
+    const coords = pts.map((p, i) => ({
+      x: xOf(i), y: p.ms !== null ? yOf(p.ms) : null, ms: p.ms, status: p.status
+    }));
+
+    // Determine colour from last valid point
+    const lastValid = [...pts].reverse().find(p => p.ms !== null);
+    const col       = this._msColorHex(lastValid ? lastValid.ms : null);
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+    const [r,g,b] = [parseInt(col.slice(1,3),16), parseInt(col.slice(3,5),16), parseInt(col.slice(5,7),16)];
+    grad.addColorStop(0,   `rgba(${r},${g},${b},0.40)`);
+    grad.addColorStop(0.55,`rgba(${r},${g},${b},0.12)`);
+    grad.addColorStop(1,   `rgba(${r},${g},${b},0.00)`);
+
+    const drawSmooth = (fill) => {
+      let inPath = false;
+      ctx.beginPath();
+      for (let i = 0; i < coords.length; i++) {
+        const c = coords[i];
+        if (c.y === null) {
+          if (inPath && fill) { ctx.lineTo(coords[i-1].x, PAD.top + cH); ctx.closePath(); }
+          inPath = false;
+          continue;
+        }
+        if (!inPath) {
+          if (fill) ctx.moveTo(c.x, PAD.top + cH);
+          ctx[fill ? 'lineTo' : 'moveTo'](c.x, c.y);
+          inPath = true;
+        } else {
+          const prev = coords.slice(0, i).reverse().find(p => p.y !== null);
+          if (prev) {
+            const mx = (prev.x + c.x) / 2;
+            ctx.bezierCurveTo(mx, prev.y, mx, c.y, c.x, c.y);
+          } else ctx.lineTo(c.x, c.y);
+        }
+      }
+      if (inPath && fill) {
+        const last = [...coords].reverse().find(c => c.y !== null);
+        if (last) { ctx.lineTo(last.x, PAD.top + cH); ctx.closePath(); }
+      }
+    };
+
+    // Fill
+    ctx.save();
+    drawSmooth(true);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+
+    // Stroke
+    ctx.save();
+    drawSmooth(false);
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = 2;
+    ctx.lineJoin    = 'round';
+    ctx.lineCap     = 'round';
+    ctx.stroke();
+    ctx.restore();
+
+    // Pulsing dot on latest valid point
+    const lc = [...coords].reverse().find(c => c.y !== null);
+    if (lc) {
+      const pulse = 0.5 + 0.5 * Math.sin(this._pulse);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lc.x, lc.y, 7 + pulse * 5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r},${g},${b},${0.18 * pulse})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(lc.x, lc.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth   = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // X axis time labels
+    ctx.fillStyle    = 'rgba(148,163,184,0.5)';
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font         = '10px Inter,sans-serif';
+    if (pts.length >= 3) {
+      [0, 0.5, 1].forEach(f => {
+        const idx = Math.round(f * (pts.length - 1));
+        const x   = xOf(idx);
+        const lbl = pts[idx].t.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        ctx.fillText(lbl, x, H - 4);
+      });
+    }
+  }
+}
 function renderSiteDetail(site) {
+  // Stop any running live ping chart before re-rendering
+  if (state.livePingChart) { state.livePingChart.stop(); state.livePingChart = null; }
+
   const detail = document.getElementById('siteDetail');
   if (!detail) return;
   detail.classList.remove('empty-state', 'is-loading');
@@ -2003,12 +2259,20 @@ function renderSiteDetail(site) {
         <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
       </div>
       <div class="uptime-strip">${bars || '<span class="muted" style="padding:0 4px;font-size:.85rem;">No checks yet.</span>'}</div>
-      <div class="response-chart-wrap">
-        <div class="response-chart-head">
-          <span>Response Time</span>
-          <span style="font-size:.78rem;color:var(--muted);">${chartChecks.length ? '24 hours ago → Now' : 'no data yet'}</span>
+      <div class="live-ping-wrap">
+        <div class="live-ping-head">
+          <span>Live Response Time</span>
+          <span class="live-ping-badge"><span class="live-dot-blink"></span>Live</span>
+          <span style="font-size:.78rem;color:var(--muted);margin-left:auto;">Pinging every 2s · independent of scans</span>
         </div>
-        ${respChartHtml}
+        <canvas id="livePingCanvas" class="live-ping-canvas"></canvas>
+        <div class="live-ping-stats">
+          <div class="live-ping-stat"><span class="muted">Current</span><strong id="lpCurrent">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Average</span><strong id="lpAvg">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Min</span><strong id="lpMin">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Max</span><strong id="lpMax">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Timeouts</span><strong id="lpTO">0</strong></div>
+        </div>
       </div>
       <div class="detail-grid">
         <div class="detail-panel">
@@ -2091,6 +2355,14 @@ function renderSiteDetail(site) {
 
   // Start live scan countdown
   startScanCountdown(site.last_checked_at);
+
+  // Mount live ping chart (independent of scheduled scans)
+  if (state.livePingChart) { state.livePingChart.stop(); state.livePingChart = null; }
+  const pingCanvas = document.getElementById('livePingCanvas');
+  if (pingCanvas) {
+    state.livePingChart = new LivePingChart(pingCanvas, { url: site.url });
+    state.livePingChart.start();
+  }
 }
 
 async function initDashboard() {
