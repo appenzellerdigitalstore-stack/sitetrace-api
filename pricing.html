@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing - SiteTrace</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script>(function(){var t=localStorage.getItem('sitetrace_theme');if(t==='night')document.documentElement.setAttribute('data-theme','night');}());</script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body data-page="pricing">
+
+  <!-- ── NAV ── -->
+  <nav class="nav" id="mainNav">
+    <div class="container nav-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>
+        SiteTrace
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a href="/pricing" class="active">Pricing</a>
+        <a href="/demo">Demo</a>
+        <a href="/api">How it works</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/signin">Sign in</a>
+      </div>
+      <div class="nav-controls">
+        <a class="button small" href="/signin">Get Started</a>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" class="icon-menu"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg viewBox="0 0 24 24" class="icon-close" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <main class="page-shell pricing-page">
+    <div class="container">
+
+      <!-- ── Page header ── -->
+      <div style="text-align:center; max-width:680px; margin:0 auto 56px;">
+        <p class="eyebrow">Pricing</p>
+        <h1 style="font-size:clamp(2rem,4.5vw,3rem); margin-bottom:16px;">Simple, honest pricing.</h1>
+        <p class="lead" style="margin:0 auto;">Start with a free instant audit, then protect the sites that matter with ongoing monitoring, alerts, history, and client-ready reports.</p>
+      </div>
+
+      <!-- ── Pricing cards ── -->
+      <div class="pricing-grid">
+
+        <!-- Free -->
+        <div class="price-card">
+          <div class="price-badge"><span class="badge blue">Free forever</span></div>
+          <div class="price-name">Free</div>
+          <div class="price-amount">$0</div>
+          <div class="price-desc">One-time health checks. No account required for scans.</div>
+          <ul class="price-features">
+            <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Instant audit (top 3 issues shown)</li>
+            <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Uptime, SSL, domain &amp; SEO basics</li>
+            <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>1 monitored site</li>
+            <li><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><strong>Checks every 60 minutes</strong></li>
+            <li style="color:var(--muted);opacity:.6;"><svg viewBox="0 0 24 24" style="color:var(--muted)"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>No graphs or full history</li>
+            <li style="color:var(--muted);opacity:.6;"><svg viewBox="0 0 24 24" style="color:var(--muted)"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>No client reports or alerts</li>
+          </ul>
+          <a class="button secondary" href="/">Try Free Audit</a>
+        </div>
+
+        <!-- Starter (highlighted) -->
+        <div class="price-card highlight">
+          <div class="price-badge"><span class="badge green">Most popular</span></div>
+          <div class="price-name">Starter</div>
+          <div class="price-amount">$19<small>/mo</small></div>
+          <div class="price-desc">For one business or a freelancer's core client sites.</div>
+          <ul class="price-features">
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>5 monitored sites</strong>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Checks every <strong>5 minutes</strong>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              In-app alerts on downtime &amp; SSL expiry
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              30-day check history
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Public status pages
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Client-ready PDF reports
+            </li>
+          </ul>
+          <button class="button" data-upgrade="starter">Start monitoring</button>
+        </div>
+
+        <!-- Agency -->
+        <div class="price-card">
+          <div class="price-badge"><span class="badge blue">For teams</span></div>
+          <div class="price-name">Agency</div>
+          <div class="price-amount">$79<small>/mo</small></div>
+          <div class="price-desc">For agencies managing many client websites at once.</div>
+          <ul class="price-features">
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              <strong>50 monitored sites</strong>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Checks every <strong>1 minute</strong>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              90-day history &amp; incident timeline
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Slack, Teams &amp; webhook notifications
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              API access for custom integrations
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              Branded white-label reports
+            </li>
+          </ul>
+          <button class="button secondary" data-upgrade="agency">Upgrade to Agency</button>
+        </div>
+
+      </div>
+
+      <!-- Pricing note -->
+      <div class="pricing-note" style="margin-top:20px;">
+        <strong>Launch note:</strong> Paid plans are in early access — pricing is locked in for life if you join now. Cancel any time, no questions asked.
+      </div>
+
+      <!-- ── Free vs Paid split ── -->
+      <div class="plan-split-band" style="margin-top:56px;">
+        <div>
+          <h2>Scan free. Monitor paid.</h2>
+          <p style="color:var(--muted); margin-top:10px; font-size:1rem; line-height:1.7;">Free answers "what's wrong right now?" Paid answers "what changed, who was alerted, and what proof can I show the client?"</p>
+        </div>
+        <div class="plan-split-items">
+          <div class="plan-split-item">
+            <h4>Free</h4>
+            <ul>
+              <li>Instant audit</li>
+              <li>Visual health score</li>
+              <li>Fix recommendations</li>
+              <li>No account needed</li>
+            </ul>
+          </div>
+          <div class="plan-split-item">
+            <h4>Paid</h4>
+            <ul>
+              <li>Scheduled monitoring</li>
+              <li>Incident alerts</li>
+              <li>Full check history</li>
+              <li>Client reports &amp; status pages</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── CTA ── -->
+      <div class="cta-band" style="margin-top:56px;">
+        <div>
+          <h2 style="font-size:1.4rem; margin-bottom:8px;">Not sure which plan?</h2>
+          <p style="margin:0;">Start free — no signup needed. Upgrade when you're ready for ongoing monitoring.</p>
+        </div>
+        <div class="cta-band-btns">
+          <a class="button secondary" href="/">Try Free Audit</a>
+          <a class="button" href="/signin">Start Monitoring</a>
+        </div>
+      </div>
+
+      <div id="pageMessage" class="message" style="margin-top:16px;"></div>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>SiteTrace</a>
+        <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites.</p>
+      </div>
+      <div><div class="footer-heading">Product</div><ul class="footer-list"><li><a href="/#pricing">Pricing</a></li><li><a href="/demo">Demo</a></li><li><a href="/api">How it works</a></li><li><a href="/dashboard">Dashboard</a></li></ul></div>
+      <div><div class="footer-heading">Resources</div><ul class="footer-list"><li><a href="/api">API Reference</a></li><li><a href="/demo">Live Demo</a></li><li><a href="/pricing">Plans</a></li></ul></div>
+      <div><div class="footer-heading">Legal</div><ul class="footer-list"><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li><li><a href="#">Cookie Policy</a></li></ul></div>
+    </div>
+    <div class="container footer-bottom">
+      <span>&copy; 2026 SiteTrace. All rights reserved.</span>
+      <span>Website health monitoring for agencies and site owners.</span>
+    </div>
+  </footer>
+
+  <script src="/assets/app.js"></script>
+  <script>
+    const navToggle = document.getElementById('navToggle');
+    const navLinks  = document.getElementById('navLinks');
+    if (navToggle && navLinks) {
+      const iM=navToggle.querySelector('.icon-menu'), iC=navToggle.querySelector('.icon-close');
+      navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});
+    }
+    const mainNav=document.getElementById('mainNav');
+    if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',scrollY>10),{passive:true});
+  </script>
+</body>
+</html

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo - SiteTrace</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <script>(function(){var t=localStorage.getItem('sitetrace_theme');if(t==='night')document.documentElement.setAttribute('data-theme','night');}());</script>
+</head>
+<body data-page="demo">
+
+  <nav class="nav" id="mainNav">
+    <div class="container nav-inner">
+      <a class="brand" href="/">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>
+        SiteTrace
+      </a>
+      <div class="nav-links" id="navLinks">
+        <a href="/pricing">Pricing</a>
+        <a href="/demo" class="active">Demo</a>
+        <a href="/api">How it works</a>
+        <a href="/dashboard">Dashboard</a>
+        <a href="/signin">Sign in</a>
+      </div>
+      <div class="nav-controls">
+        <a class="button small" href="/signin">Get Started</a>
+      </div>
+      <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" class="icon-menu"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg viewBox="0 0 24 24" class="icon-close" style="display:none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <main class="page-shell">
+    <div class="container" style="max-width:1100px">
+
+      <!-- Section header — updated by app.js i18n -->
+      <div class="section-head" style="text-align:center; max-width:700px; margin:0 auto 40px;">
+        <p class="eyebrow">Live-style demo</p>
+        <h1 style="font-size:clamp(1.8rem,4vw,2.6rem); margin-bottom:14px;">See how SiteTrace explains client website health.</h1>
+        <p class="lead" style="margin:0 auto;">Explore sample monitors for a healthy site, a warning state, and a down incident before creating an account.</p>
+      </div>
+
+      <!-- app.js renders all demo content into this root -->
+      <div id="demoRoot"></div>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="/"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg></span>SiteTrace</a>
+        <p class="footer-desc">Instant website audit plus ongoing monitoring for client sites.</p>
+      </div>
+      <div><div class="footer-heading">Product</div><ul class="footer-list"><li><a href="/#pricing">Pricing</a></li><li><a href="/demo">Demo</a></li><li><a href="/api">How it works</a></li><li><a href="/dashboard">Dashboard</a></li></ul></div>
+      <div><div class="footer-heading">Resources</div><ul class="footer-list"><li><a href="/api">API Reference</a></li><li><a href="/demo">Live Demo</a></li><li><a href="/pricing">Plans</a></li></ul></div>
+      <div><div class="footer-heading">Legal</div><ul class="footer-list"><li><a href="#">Privacy Policy</a></li><li><a href="#">Terms of Service</a></li><li><a href="#">Cookie Policy</a></li></ul></div>
+    </div>
+    <div class="container footer-bottom">
+      <span>&copy; 2026 SiteTrace. All rights reserved.</span>
+      <span>Website health monitoring for agencies and site owners.</span>
+    </div>
+  </footer>
+
+  <script src="/assets/app.js"></script>
+  <script>
+    const navToggle = document.getElementById('navToggle');
+    const navLinks  = document.getElementById('navLinks');
+    if (navToggle && navLinks) {
+      const iM=navToggle.querySelector('.icon-menu'), iC=navToggle.querySelector('.icon-close');
+      navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});
+      navLinks.querySelectorAll('a').forEach(l=>l.addEventListener('click',()=>{navLinks.classList.remove('open');navToggle.setAttribute('aria-expanded','false');if(iM)iM.style.display='block';if(iC)iC.style.display='none';}));
+    }
+    const mainNav=document.getElementById('mainNav');
+    if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',window.scrollY>10),{passive:true});
+  </script>
+</body>
+</html>
