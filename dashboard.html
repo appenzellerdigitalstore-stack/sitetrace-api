@@ -35,57 +35,41 @@
     </div>
   </nav>
 
-  <!-- Dashboard application shell -->
   <div class="db-app">
 
-    <!-- ── LEFT SIDEBAR ── -->
+    <!-- SIDEBAR -->
     <aside class="db-sidebar" id="dbSidebar">
-
-      <!-- Search -->
-      <div class="db-search-wrap">
-        <svg viewBox="0 0 24 24" class="db-search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="siteSearchInput" class="db-search-input" placeholder="Search sites..." autocomplete="off" aria-label="Search monitored sites">
-      </div>
-
-      <!-- Monitored sites list -->
+      <button class="db-add-site-btn" id="addMonitorSidebarBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add new site
+      </button>
       <div class="db-section-label">Monitored Sites</div>
-      <div id="sitesList" class="db-sites-list">
-        <!-- Populated by app.js -->
-      </div>
-
-      <!-- Sidebar bottom: plan usage card -->
+      <div id="sitesList" class="db-sites-list"></div>
       <div class="db-sidebar-bottom">
-        <div id="sidebarPlanUsage">
-          <!-- Populated by app.js -->
-        </div>
+        <div id="sidebarPlanUsage"></div>
       </div>
     </aside>
 
-    <!-- ── MAIN CONTENT ── -->
+    <!-- CONTENT -->
     <div class="db-content">
 
-      <!-- Setup warning (no Supabase configured) -->
       <div id="setupWarning" class="db-banner hidden">
         <h3 style="margin-bottom:6px;">Supabase is not configured yet</h3>
         <p style="color:var(--muted);margin:0;">Add Supabase environment variables in Render, run the SQL schema, and this dashboard will become active.</p>
       </div>
 
-      <!-- Auth required -->
       <div id="authRequired" class="hidden db-auth-gate">
         <div class="db-auth-inner">
-          <div class="db-auth-icon">
-            <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          </div>
+          <div class="db-auth-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
           <h2>Sign in required</h2>
           <p>Use your SiteTrace account to manage monitored sites and check history.</p>
           <a class="button" href="/signin">Sign in to continue</a>
         </div>
       </div>
 
-      <!-- Authenticated dashboard view -->
       <div id="dashboardView" class="hidden db-dashboard-view">
 
-        <!-- Content header: selected site title + action buttons -->
+        <!-- Header -->
         <header class="db-content-header" id="dbContentHeader">
           <div class="db-site-title" id="dbSiteTitle">
             <svg viewBox="0 0 24 24" class="db-globe-icon"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -93,64 +77,72 @@
             <span class="db-status-badge" id="dbSelectedSiteStatus" style="display:none;"></span>
           </div>
           <div class="db-header-actions">
+            <button class="button secondary small" id="refreshPingBtn" type="button" style="display:none;" title="Reset live ping chart">
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              Refresh ping
+            </button>
             <button class="button secondary small" id="copyReportBtn" type="button" style="display:none;">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy Client Report
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy report
             </button>
             <button class="button secondary small" id="refreshDashboardBtn" type="button">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
               Refresh
             </button>
-            <button class="button small" id="addMonitorBtn" type="button">
-              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add Monitor
+            <button class="button small" id="runAuditBtn" type="button" style="display:none;" disabled>
+              <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><path d="M22 12h-4l-3 8L9 4l-3 8H2"/></svg>
+              Run full audit
             </button>
           </div>
         </header>
 
-        <!-- Add monitor form (hidden by default, toggled by button) -->
-        <div id="addMonitorForm" class="db-add-form hidden">
-          <form id="siteForm">
-            <input id="siteName" type="text" placeholder="Client or site name" required>
-            <input id="siteUrl" type="text" inputmode="url" autocomplete="url" placeholder="example.com or https://example.com" required>
-            <button class="button" type="submit">
-              <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add monitor
-            </button>
-            <button class="button secondary" type="button" id="cancelAddMonitor">Cancel</button>
-          </form>
-        </div>
-
-        <!-- Status messages and panels -->
         <div id="dashboardMessage" class="message db-message"></div>
         <div id="paidFeaturePanel"></div>
-        <div id="planUsagePanel" style="display:none;"></div><!-- moved to sidebar -->
+        <div id="planUsagePanel" style="display:none;"></div>
         <div id="emailDnsPanel"></div>
-        <div id="alertStatusPanel" style="display:none;"></div><!-- cleaned up -->
+        <div id="alertStatusPanel" style="display:none;"></div>
         <div id="alertCenterPanel" class="db-alert-center-wrap"></div>
 
-        <!-- Site detail content -->
         <div id="siteDetail" class="db-site-detail empty-state">
-          <div class="db-empty-icon">
-            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          </div>
+          <div class="db-empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
           <h2>No monitor selected</h2>
-          <p>Choose a site from the left panel to see its health score, incidents, response history, and issue recommendations.</p>
+          <p>Choose a site from the sidebar to see its health score, incidents, response history, and issue recommendations.</p>
         </div>
 
-      </div><!-- /dashboardView -->
-    </div><!-- /db-content -->
-  </div><!-- /db-app -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Add new site modal -->
+  <div id="addSiteModal" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>Add new site</h3>
+        <button class="modal-close" id="closeAddSiteModal" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="width:18px;height:18px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="siteForm" class="modal-form">
+        <label><span>Site name</span><input id="siteName" type="text" placeholder="e.g. Acme Corp" required></label>
+        <label><span>URL</span><input id="siteUrl" type="text" inputmode="url" autocomplete="url" placeholder="https://example.com" required></label>
+        <div class="modal-actions">
+          <button class="button" type="submit">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add monitor
+          </button>
+          <button class="button secondary" type="button" id="cancelAddMonitor">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Legacy stub so JS refs don't throw -->
+  <div id="addMonitorForm" class="hidden"></div>
 
   <script src="/assets/app.js"></script>
   <script>
-    // Nav toggle
-    const navToggle = document.getElementById('navToggle');
-    const navLinks  = document.getElementById('navLinks');
-    if (navToggle && navLinks) {
-      const iM=navToggle.querySelector('.icon-menu'), iC=navToggle.querySelector('.icon-close');
-      navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});
-    }
+    const navToggle=document.getElementById('navToggle'),navLinks=document.getElementById('navLinks');
+    if(navToggle&&navLinks){const iM=navToggle.querySelector('.icon-menu'),iC=navToggle.querySelector('.icon-close');navToggle.addEventListener('click',()=>{const o=navLinks.classList.toggle('open');navToggle.setAttribute('aria-expanded',String(o));if(iM)iM.style.display=o?'none':'block';if(iC)iC.style.display=o?'block':'none';});}
     const mainNav=document.getElementById('mainNav');
     if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',scrollY>10),{passive:true});
   </script>

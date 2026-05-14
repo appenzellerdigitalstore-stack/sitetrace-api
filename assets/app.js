@@ -134,7 +134,7 @@ const copy = {
       noIssues: 'No open recommendations from the latest check.',
       firstCheck: 'Run the first check to start history.',
       monitorEyebrow: 'Client site monitor',
-      runCheck: 'Run health check',
+      runCheck: 'Run scan',
       refresh: 'Refresh history',
       delete: 'Delete',
       currentHealth: 'Current health',
@@ -308,7 +308,7 @@ const copy = {
       noIssues: 'No hay recomendaciones abiertas en el ultimo check.',
       firstCheck: 'Corre el primer check para iniciar el historial.',
       monitorEyebrow: 'Monitor de sitio cliente',
-      runCheck: 'Correr health check',
+      runCheck: 'Correr escaneo',
       refresh: 'Actualizar historial',
       delete: 'Eliminar',
       currentHealth: 'Salud actual',
@@ -774,20 +774,31 @@ function startScanCountdown(lastCheckedAt) {
     lastScanEl.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: planIntervalMinutes() <= 1 ? '2-digit' : undefined });
   }
 
+  const setAuditBtnState = (available) => {
+    const btn = document.getElementById('runAuditBtn');
+    if (!btn) return;
+    btn.disabled = !available;
+    btn.classList.toggle('btn-available', available);
+  };
+
   const tick = () => {
     const rem = nextMs - Date.now();
-    if (!document.getElementById('scanCountdown')) { clearInterval(scanCountdownInterval); return; }
+    const el  = document.getElementById('scanCountdown');
+    if (!el) { clearInterval(scanCountdownInterval); return; }
     if (rem <= 0) {
-      document.getElementById('scanCountdown').textContent = 'Scanning now…';
+      el.textContent = 'Scan available';
+      el.style.color = 'var(--green)';
+      setAuditBtnState(true);
       return;
     }
+    el.style.color = '';
+    setAuditBtnState(false);
     const totalSec = Math.floor(rem / 1000);
     const mins = Math.floor(totalSec / 60);
     const secs = totalSec % 60;
-    const display = planIntervalMinutes() >= 60
+    el.textContent = planIntervalMinutes() >= 60
       ? `${mins}:${String(secs).padStart(2, '0')}`
       : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    document.getElementById('scanCountdown').textContent = display;
   };
   tick();
   scanCountdownInterval = setInterval(tick, 1000);
@@ -1411,12 +1422,14 @@ function renderDashboard() {
     const active = site.id === state.selectedSiteId ? ' active' : '';
     const status = statusLabel(site.last_status);
     const dotCls = status === 'online' ? '' : status;
-    return `<button class="db-site-item${active}" type="button" data-select="${site.id}">
-      <span class="dot ${dotCls}" style="flex-shrink:0;margin-top:1px;"></span>
-      <span class="db-site-item-info">
-        <span class="db-site-item-name">${escapeHtml(site.name)}</span>
-        <span class="db-site-item-url">${escapeHtml(site.url)}</span>
-      </span>
+    const scoreStr = site.last_score ? `${site.last_score}/100` : '–';
+    return `<button class="db-site-card${active}" type="button" data-select="${site.id}">
+      <div class="db-site-card-top">
+        <span class="dot ${dotCls}"></span>
+        <span class="db-site-card-name">${escapeHtml(site.name)}</span>
+        <span class="db-site-card-score" style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : site.last_score ? 'var(--red)' : 'var(--muted)'}">${scoreStr}</span>
+      </div>
+      <div class="db-site-card-url">${escapeHtml(site.url)}</div>
     </button>`;
   }).join('');
   renderSiteDetail(state.sites.find((site) => site.id === state.selectedSiteId));
@@ -1851,13 +1864,18 @@ function initDemo() {
 }
 
 function syncContentHeader(site, status, reportText, reportLocked) {
-  const nameEl   = document.getElementById('dbSelectedSiteName');
-  const statusEl = document.getElementById('dbSelectedSiteStatus');
-  const copyBtn  = document.getElementById('copyReportBtn');
+  const nameEl      = document.getElementById('dbSelectedSiteName');
+  const statusEl    = document.getElementById('dbSelectedSiteStatus');
+  const copyBtn     = document.getElementById('copyReportBtn');
+  const auditBtn    = document.getElementById('runAuditBtn');
+  const pingRefresh = document.getElementById('refreshPingBtn');
+
   if (!site) {
-    if (nameEl)   nameEl.textContent = 'Select a site';
-    if (statusEl) { statusEl.style.display = 'none'; statusEl.className = 'db-status-badge'; statusEl.textContent = ''; }
-    if (copyBtn)  copyBtn.style.display = 'none';
+    if (nameEl)      nameEl.textContent = 'Select a site';
+    if (statusEl)    { statusEl.style.display = 'none'; statusEl.className = 'db-status-badge'; statusEl.textContent = ''; }
+    if (copyBtn)     copyBtn.style.display = 'none';
+    if (auditBtn)    { auditBtn.style.display = 'none'; auditBtn.dataset.run = ''; }
+    if (pingRefresh) pingRefresh.style.display = 'none';
     return;
   }
   if (nameEl) nameEl.textContent = site.name;
@@ -1867,13 +1885,15 @@ function syncContentHeader(site, status, reportText, reportLocked) {
     statusEl.textContent = statusCopy(status);
   }
   if (copyBtn) {
-    if (reportLocked) {
-      copyBtn.style.display = 'none';
-    } else {
-      copyBtn.style.display = '';
-      copyBtn.dataset.copyClientReport = reportText;
-    }
+    copyBtn.style.display = reportLocked ? 'none' : '';
+    if (!reportLocked) copyBtn.dataset.copyClientReport = reportText;
   }
+  if (auditBtn) {
+    auditBtn.style.display = '';
+    auditBtn.dataset.run = site.id;
+    auditBtn.disabled = true; // countdown controls re-enabling
+  }
+  if (pingRefresh) pingRefresh.style.display = '';
 }
 
 
@@ -2121,24 +2141,34 @@ class LivePingChart {
       ctx.restore();
     }
 
-    // X axis time labels
+    // X axis time labels — only show oldest + newest, skip if too close
     ctx.fillStyle    = 'rgba(148,163,184,0.5)';
-    ctx.textAlign    = 'center';
     ctx.textBaseline = 'alphabetic';
     ctx.font         = '10px Inter,sans-serif';
-    if (pts.length >= 3) {
-      [0, 0.5, 1].forEach(f => {
-        const idx = Math.round(f * (pts.length - 1));
-        const x   = xOf(idx);
-        const lbl = pts[idx].t.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-        ctx.fillText(lbl, x, H - 4);
-      });
+    if (pts.length >= 2) {
+      const fmt = t => t.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      const x0  = xOf(0);
+      const x1  = xOf(pts.length - 1);
+      const minGap = 80; // px
+      ctx.textAlign = 'left';
+      ctx.fillText(fmt(pts[0].t), Math.max(PAD.left, x0), H - 4);
+      if (x1 - x0 > minGap) {
+        ctx.textAlign = 'right';
+        ctx.fillText(fmt(pts[pts.length - 1].t), Math.min(PAD.left + cW, x1), H - 4);
+      }
     }
   }
 }
 function renderSiteDetail(site) {
-  // Stop any running live ping chart before re-rendering
-  if (state.livePingChart) { state.livePingChart.stop(); state.livePingChart = null; }
+  // Preserve ping data if re-rendering the same site (e.g. after audit)
+  let _savedPingPoints = null;
+  let _savedPingUrl    = null;
+  if (state.livePingChart) {
+    _savedPingUrl    = state.livePingChart.url;
+    _savedPingPoints = state.livePingChart.points.slice();
+    state.livePingChart.stop();
+    state.livePingChart = null;
+  }
 
   const detail = document.getElementById('siteDetail');
   if (!detail) return;
@@ -2171,6 +2201,40 @@ function renderSiteDetail(site) {
   const issueHtml = importantChecks.length
     ? importantChecks.map((check) => `<div class="issue-row"><svg viewBox="0 0 24 24" class="icon-${check.level === 'fail' ? 'red' : 'amber'}"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><strong>${escapeHtml(check.title)}</strong><p class="meta">${escapeHtml(check.recommendation)}</p></div><span class="time"><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></span></div>`).join('')
     : `<div class="empty subtle">${escapeHtml(t('dashboard.noIssues'))}</div>`;
+
+  // Full scan breakdown (all checks from latest result, grouped by level)
+  const allChecks = latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [];
+  const failChecks = allChecks.filter(c => c.level === 'fail');
+  const warnChecks = allChecks.filter(c => c.level === 'warn');
+  const passChecks = allChecks.filter(c => c.level === 'pass');
+  const scanBreakdownHtml = allChecks.length ? `
+    <details class="scan-breakdown" open>
+      <summary class="scan-breakdown-head">
+        <span>Latest scan breakdown</span>
+        <span class="scan-breakdown-meta">
+          ${failChecks.length ? `<span class="level-badge fail">${failChecks.length} fail</span>` : ''}
+          ${warnChecks.length ? `<span class="level-badge warn">${warnChecks.length} warn</span>` : ''}
+          ${passChecks.length ? `<span class="level-badge pass">${passChecks.length} pass</span>` : ''}
+          <span style="color:var(--muted);font-size:.8rem;margin-left:4px;">${formatDateTime(latest && latest.created_at)}</span>
+        </span>
+        <svg class="scan-breakdown-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      </summary>
+      <div class="scan-breakdown-body">
+        ${[...failChecks, ...warnChecks, ...passChecks].map(c => `
+          <div class="scan-check-row scan-check-${c.level}">
+            <span class="scan-check-icon">
+              ${c.level === 'pass'
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
+            </span>
+            <div class="scan-check-text">
+              <strong>${escapeHtml(c.title)}</strong>
+              ${c.level !== 'pass' && c.recommendation ? `<p class="scan-check-rec">${escapeHtml(c.recommendation)}</p>` : ''}
+            </div>
+            <span class="level-badge ${c.level}">${c.level}</span>
+          </div>`).join('')}
+      </div>
+    </details>` : '';
 
   const incidentRowsHtml = downChecks.length
     ? downChecks.slice(0, 8).map((check) => `<div class="incident-row"><svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><div><strong>Downtime detected</strong><p class="meta">HTTP ${check.status_code || 'unreachable'} · Score ${check.score || '-'}/100</p></div><span class="time">${formatDateTime(check.created_at)}</span></div>`).join('')
@@ -2247,7 +2311,6 @@ function renderSiteDetail(site) {
       <span>Last scan: <strong id="lastScanTime">–</strong></span>
       <span>·</span>
       <span>Next scan in <strong id="scanCountdown">–</strong></span>
-      <button class="button small" type="button" data-run="${site.id}" style="margin-left:auto;">${escapeHtml(t('dashboard.runCheck'))}</button>
     </div>
 
     <div class="detail-tabs" id="detailTabs">
@@ -2296,6 +2359,14 @@ function renderSiteDetail(site) {
           ${incidentRowsHtml}
         </div>
       </div>
+      <div class="audit-cta-band">
+        <div class="audit-cta-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;color:var(--muted)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Issues are from the last scheduled scan. Run a full audit to get the latest SEO, SSL and performance results.</span>
+        </div>
+        <button class="button small" id="auditCtaBtn" type="button" data-run="${site.id}">Run full audit</button>
+      </div>
+      ${scanBreakdownHtml}
     </div>
 
     <!-- Incidents -->
@@ -2362,11 +2433,14 @@ function renderSiteDetail(site) {
   // Start live scan countdown
   startScanCountdown(site.last_checked_at);
 
-  // Mount live ping chart (independent of scheduled scans)
-  if (state.livePingChart) { state.livePingChart.stop(); state.livePingChart = null; }
+  // Mount live ping chart — restore history if same site re-renders (e.g. after audit)
   const pingCanvas = document.getElementById('livePingCanvas');
   if (pingCanvas) {
     state.livePingChart = new LivePingChart(pingCanvas, { url: site.url });
+    if (_savedPingUrl === site.url && _savedPingPoints && _savedPingPoints.length) {
+      state.livePingChart.points = _savedPingPoints;
+      state.livePingChart._updateStats();
+    }
     state.livePingChart.start();
   }
 }
@@ -2406,16 +2480,49 @@ async function initDashboard() {
     });
   }
 
-  // Sidebar search filter
-  const searchInput = document.getElementById('siteSearchInput');
-  if (searchInput) {
-    searchInput.addEventListener('input', () => {
-      const q = searchInput.value.trim().toLowerCase();
-      document.querySelectorAll('.db-site-item').forEach((btn) => {
-        const name = (btn.querySelector('.db-site-item-name') || btn).textContent.toLowerCase();
-        const url  = (btn.querySelector('.db-site-item-url')  || btn).textContent.toLowerCase();
-        btn.style.display = (!q || name.includes(q) || url.includes(q)) ? '' : 'none';
-      });
+  // Run Audit button (header)
+  const runAuditBtn = document.getElementById('runAuditBtn');
+  if (runAuditBtn) {
+    runAuditBtn.addEventListener('click', async () => {
+      const siteId = runAuditBtn.dataset.run;
+      if (!siteId) return;
+      runAuditBtn.disabled = true;
+      try { await runSiteCheck(siteId); } catch (e) { setDashboardMessage(e.message, 'error'); }
+    });
+  }
+
+  // Refresh Ping button (header)
+  const refreshPingBtn = document.getElementById('refreshPingBtn');
+  if (refreshPingBtn) {
+    refreshPingBtn.addEventListener('click', () => {
+      if (state.livePingChart) {
+        state.livePingChart.stop();
+        state.livePingChart.points = [];
+        state.livePingChart._updateStats();
+        const canvas = document.getElementById('livePingCanvas');
+        if (canvas) {
+          state.livePingChart.canvas = canvas;
+          state.livePingChart.ctx = canvas.getContext('2d');
+          state.livePingChart._resize();
+        }
+        state.livePingChart.start();
+      }
+    });
+  }
+
+  // "Add new site" sidebar button → open modal
+  const addMonitorSidebarBtn = document.getElementById('addMonitorSidebarBtn');
+  const addSiteModal         = document.getElementById('addSiteModal');
+  const closeModalBtn        = document.getElementById('closeAddSiteModal');
+  if (addMonitorSidebarBtn && addSiteModal) {
+    addMonitorSidebarBtn.addEventListener('click', () => addSiteModal.classList.remove('hidden'));
+  }
+  if (closeModalBtn && addSiteModal) {
+    closeModalBtn.addEventListener('click', () => addSiteModal.classList.add('hidden'));
+  }
+  if (addSiteModal) {
+    addSiteModal.addEventListener('click', (e) => {
+      if (e.target === addSiteModal) addSiteModal.classList.add('hidden');
     });
   }
 
@@ -2458,6 +2565,8 @@ async function initDashboard() {
     if (created.features) state.features = created.features;
     if (created.usage) state.usage = created.usage;
     event.target.reset();
+    const _modal = document.getElementById('addSiteModal');
+    if (_modal) _modal.classList.add('hidden');
     if (addMonitorForm) addMonitorForm.classList.add('hidden');
     await loadDashboard();
     setDashboardMessage(t('dashboard.saved'), 'success');

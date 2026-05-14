@@ -2149,3 +2149,123 @@ pre { background: var(--bg-subtle); border: 1px solid var(--line); border-radius
 .live-ping-stat:last-child { border-right: none; }
 .live-ping-stat .muted { font-size: .7rem; color: var(--muted); }
 .live-ping-stat strong { font-size: .9rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ── Latest scan breakdown (paid dashboard) ── */
+.scan-breakdown {
+  border: 1px solid var(--line); border-radius: 10px;
+  margin: 16px 0; overflow: hidden;
+}
+.scan-breakdown-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer; list-style: none;
+  font-size: .88rem; font-weight: 600;
+  background: var(--bg-subtle);
+  user-select: none;
+}
+.scan-breakdown-head::-webkit-details-marker { display: none; }
+.scan-breakdown-meta { display: flex; align-items: center; gap: 6px; margin-left: 4px; }
+.scan-breakdown-chevron {
+  width: 16px; height: 16px; color: var(--muted);
+  margin-left: auto; transition: transform .2s;
+}
+details[open] .scan-breakdown-chevron { transform: rotate(180deg); }
+.scan-breakdown-body { padding: 4px 0; }
+.scan-check-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 16px; border-bottom: 1px solid var(--line);
+  font-size: .84rem;
+}
+.scan-check-row:last-child { border-bottom: none; }
+.scan-check-icon {
+  flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px;
+}
+.scan-check-icon svg { width: 16px; height: 16px; }
+.scan-check-fail .scan-check-icon { color: var(--red); }
+.scan-check-warn .scan-check-icon { color: var(--amber); }
+.scan-check-pass .scan-check-icon { color: var(--green); }
+.scan-check-text { flex: 1; }
+.scan-check-rec {
+  margin: 2px 0 0; font-size: .78rem;
+  color: var(--muted); line-height: 1.4;
+}
+
+/* ── Sidebar site cards ── */
+.db-add-site-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 12px; margin-bottom: 14px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 8px; cursor: pointer;
+  font-size: .84rem; font-weight: 600; text-align: left;
+  transition: opacity .15s;
+}
+.db-add-site-btn:hover { opacity: .88; }
+
+.db-site-card {
+  display: block; width: 100%; text-align: left;
+  background: var(--bg-subtle); border: 1px solid var(--line);
+  border-radius: 9px; padding: 10px 12px; margin-bottom: 6px;
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.db-site-card:hover { border-color: var(--accent); background: var(--bg); }
+.db-site-card.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+.db-site-card-top {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 4px;
+}
+.db-site-card-name {
+  flex: 1; font-size: .86rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.db-site-card-score { font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.db-site-card-url { font-size: .74rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 19px; }
+
+/* ── Modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.modal-backdrop.hidden { display: none; }
+.modal-box {
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 24px; width: 100%; max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+}
+.modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+.modal-head h3 { margin: 0; font-size: 1.05rem; }
+.modal-close {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 2px; border-radius: 5px;
+  transition: color .15s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-form { display: grid; gap: 14px; }
+.modal-form label { display: grid; gap: 5px; font-size: .85rem; font-weight: 500; }
+.modal-form input { width: 100%; }
+.modal-actions { display: flex; gap: 10px; margin-top: 4px; }
+
+/* ── Run full audit button — available state ── */
+#runAuditBtn:not(:disabled) { background: var(--accent); color: #fff; }
+#runAuditBtn:disabled { opacity: .45; cursor: not-allowed; }
+#runAuditBtn.btn-available { animation: auditPulse .6s ease; }
+@keyframes auditPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); }
+  70%  { box-shadow: 0 0 0 8px transparent; }
+  100% { box-shadow: none; }
+}
+
+/* ── Audit CTA band ── */
+.audit-cta-band {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-subtle));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
+  border-radius: 9px; padding: 11px 16px; margin: 16px 0;
+  font-size: .83rem; color: var(--muted);
+}
+.audit-cta-left { display: flex; align-items: flex-start; gap: 8px; flex: 1; line-height: 1.45; }
