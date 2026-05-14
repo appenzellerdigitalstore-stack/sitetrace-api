@@ -60,7 +60,7 @@ const copy = {
       cards: [
         ['Validate', 'Free', '$0', 'For one-time website health checks.', ['Instant public audit', 'SEO, uptime, SSL, domain expiry, and security basics', 'Visual score with shareable recommendations', 'No saved monitors, history, or alerts']],
         ['Best first paid plan', 'Starter', '$19/mo', "For one business or a freelancer's core sites.", ['5 monitored sites', 'Checks every 5 minutes', 'In-app alerts and 30-day history', 'Public status pages and client-ready reports']],
-        ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Checks every 1 minute', '90-day history, client reports, and status pages', 'Slack, Teams, webhooks, and API access']]
+        ['For recurring care', 'Agency', '$79/mo', 'For teams managing client websites.', ['50 monitored sites', 'Checks every 1 minute', '90-day history, client reports, and status pages', 'Advanced incident history, downloadable client reports, priority monitoring dashboard']]
       ],
       buttons: ['Start monitoring', 'Upgrade to Agency'],
       note: 'Launch focus:',
@@ -168,7 +168,7 @@ const copy = {
       limitReached: 'Monitor limit reached for this plan.',
       freeScanOnly: 'Free plan = instant audits only',
       paidFeaturesTitle: 'Upgrade to monitor sites continuously',
-      paidFeaturesCopy: 'Starter unlocks saved monitors, scheduled checks, in-app alerts, history, status pages, and client-ready reports. Agency adds higher capacity, webhooks, and API access.',
+      paidFeaturesCopy: 'Starter unlocks saved monitors, scheduled checks, in-app alerts, history, status pages, and client-ready reports. Agency adds higher capacity, advanced incident history, and priority monitoring.',
       paidFeatureItems: ['Saved client monitors', 'Scheduled checks', 'In-app Alert Center', 'History and incidents', 'Status pages', 'Reports for clients'],
       monitoringUnavailable: 'Monitoring is a paid feature. Use the homepage scanner for a free one-time audit.',
       lockedForPlan: 'Locked on this plan',
@@ -191,7 +191,11 @@ const copy = {
       noIncidentsYet: 'No incidents recorded.',
       planFree: 'Free',
       planStarter: 'Starter',
-      planAgency: 'Agency'
+      planAgency: 'Agency',
+      scanHistory: 'Scan History',
+      viewReport: 'View Report',
+      downloadReport: 'Download Report',
+      noHistory: 'No scan history for this period.'
     },
     signin: {
       eyebrow: 'Customer access',
@@ -250,7 +254,7 @@ const copy = {
       cards: [
         ['Validar', 'Free', '$0', 'Para checks puntuales de salud web.', ['Auditoria publica instantanea', 'SEO, uptime, SSL, dominio y seguridad basica', 'Score visual con recomendaciones compartibles', 'Sin monitores guardados, historial ni alertas']],
         ['Mejor primer plan pago', 'Starter', '$19/mes', 'Para un negocio o los sitios clave de un freelancer.', ['5 sitios monitoreados', 'Checks cada 5 minutos', 'Alertas por email e historial de 30 dias', 'Status pages y reportes para cliente']],
-        ['Para cuidado recurrente', 'Agency', '$79/mes', 'Para equipos que manejan sitios de clientes.', ['50 sitios monitoreados', 'Checks cada 1 minuto', 'Historial de 90 dias, reportes y status pages', 'Slack, Teams, webhooks y API']]
+        ['Para cuidado recurrente', 'Agency', '$79/mes', 'Para equipos que manejan sitios de clientes.', ['50 sitios monitoreados', 'Checks cada 1 minuto', 'Historial de 90 dias, reportes y status pages', 'Historial avanzado de incidentes, reportes descargables, dashboard prioritario']]
       ],
       buttons: ['Empezar monitoreo', 'Subir a Agency'],
       note: 'Enfoque de lanzamiento:',
@@ -358,7 +362,7 @@ const copy = {
       limitReached: 'Limite de monitores alcanzado para este plan.',
       freeScanOnly: 'Plan Free = auditorias instantaneas',
       paidFeaturesTitle: 'Sube de plan para monitorear sitios continuamente',
-      paidFeaturesCopy: 'Starter desbloquea monitores guardados, checks programados, alertas en la app, historial, status pages y reportes para clientes. Agency agrega mas capacidad, webhooks y API.',
+      paidFeaturesCopy: 'Starter desbloquea monitores guardados, checks programados, alertas en la app, historial, status pages y reportes para clientes. Agency agrega mas capacidad, historial avanzado y monitoreo prioritario.',
       paidFeatureItems: ['Monitores de clientes', 'Checks programados', 'Centro de alertas', 'Historial e incidentes', 'Status pages', 'Reportes para clientes'],
       monitoringUnavailable: 'El monitoreo es una funcion de pago. Usa el scanner del inicio para una auditoria gratis puntual.',
       lockedForPlan: 'Bloqueado en este plan',
@@ -381,7 +385,11 @@ const copy = {
       noIncidentsYet: 'Sin incidentes registrados.',
       planFree: 'Gratis',
       planStarter: 'Starter',
-      planAgency: 'Agencia'
+      planAgency: 'Agencia',
+      scanHistory: 'Historial de Escaneos',
+      viewReport: 'Ver Reporte',
+      downloadReport: 'Descargar Reporte',
+      noHistory: 'Sin historial de escaneos para este periodo.'
     },
     signin: {
       eyebrow: 'Acceso de cliente',
@@ -471,13 +479,88 @@ function reportSummaryFromAnalysis(data) {
   return lines.join('\n');
 }
 
+// ── Spanish audit translation layer ────────────────────────────────────────────
+const CHECK_TRANSLATIONS_ES = {
+  // uptime / status
+  'site is reachable': ['El sitio responde', 'El servidor esta respondiendo normalmente.', 'Mantener el servidor activo y accesible.'],
+  'site is unreachable': ['El sitio no responde', 'El servidor no esta respondiendo.', 'Revisar el servidor y la configuracion de DNS.'],
+  'http status warning': ['Advertencia de estado HTTP', 'El servidor devolvio un estado de advertencia.', 'Revisar los logs del servidor.'],
+  'response time is fast': ['Tiempo de respuesta rapido', 'La pagina carga rapidamente.', 'Mantener el rendimiento actual.'],
+  'response time is slow': ['Tiempo de respuesta lento', 'La pagina tarda en cargar.', 'Optimizar el servidor o usar un CDN.'],
+  'response time is very slow': ['Tiempo de respuesta muy lento', 'La pagina carga muy despacio.', 'Revisar la carga del servidor y optimizar recursos.'],
+  // ssl
+  'ssl certificate is valid': ['Certificado SSL valido', 'El certificado SSL esta activo y es valido.', 'Renovar antes del vencimiento.'],
+  'ssl certificate expiring soon': ['Certificado SSL por vencer', 'El certificado SSL vence pronto.', 'Renovar el certificado SSL cuanto antes.'],
+  'https is enabled': ['HTTPS activado', 'El sitio usa HTTPS correctamente.', 'Mantener HTTPS activo.'],
+  'https is not enabled': ['HTTPS no activado', 'El sitio no usa HTTPS.', 'Migrar a HTTPS para proteger a los visitantes.'],
+  // domain
+  'domain expiry is ok': ['Dominio vigente', 'El dominio esta al dia.', 'Renovar el dominio antes de que venza.'],
+  'domain expiring soon': ['Dominio por vencer', 'El dominio vence pronto.', 'Renovar el dominio cuanto antes.'],
+  'domain is expired': ['Dominio vencido', 'El dominio ha vencido.', 'Renovar el dominio de inmediato.'],
+  'domain expiry unknown': ['Vencimiento de dominio desconocido', 'No se pudo verificar el vencimiento del dominio.', 'Verificar el estado del dominio con el registrador.'],
+  // seo - title
+  'title tag is healthy': ['Etiqueta title correcta', 'La pagina tiene un titulo util para buscadores.', 'Mantener el titulo entre 30 y 60 caracteres.'],
+  'title tag is missing': ['Etiqueta title faltante', 'La pagina no tiene etiqueta de titulo.', 'Agregar una etiqueta <title> con 30-60 caracteres.'],
+  'title tag length warning': ['Longitud del title fuera de rango', 'El titulo es demasiado corto o largo.', 'Ajustar el titulo a entre 30 y 60 caracteres.'],
+  // meta description
+  'meta description is healthy': ['Meta description correcta', 'La pagina tiene una descripcion util para resultados de busqueda.', 'Mantener la descripcion entre 70 y 160 caracteres.'],
+  'meta description is missing': ['Meta description faltante', 'La pagina no tiene meta description.', 'Agregar una <meta name="description"> de 70-160 caracteres.'],
+  'meta description length warning': ['Longitud de meta description fuera de rango', 'La descripcion es demasiado corta o larga.', 'Ajustar la descripcion a entre 70 y 160 caracteres.'],
+  // h1
+  'h1 tag is present': ['Etiqueta H1 presente', 'La pagina tiene una etiqueta H1.', 'Mantener un solo H1 descriptivo por pagina.'],
+  'h1 tag is missing': ['Etiqueta H1 faltante', 'La pagina no tiene etiqueta H1.', 'Agregar una etiqueta H1 con la frase principal.'],
+  'multiple h1 tags found': ['Multiples etiquetas H1', 'La pagina tiene mas de un H1.', 'Dejar solo un H1 por pagina.'],
+  // canonical
+  'canonical url is set': ['URL canonical definida', 'La URL canonical esta configurada.', 'Verificar que la canonical apunte a la URL correcta.'],
+  'canonical url is missing': ['URL canonical faltante', 'No se encontro URL canonical.', 'Agregar <link rel="canonical"> a la pagina.'],
+  // open graph / og
+  'open graph tags are present': ['Tags Open Graph presentes', 'La pagina tiene tags Open Graph.', 'Verificar que titulo, descripcion e imagen esten definidos.'],
+  'open graph tags incomplete': ['Tags Open Graph incompletos', 'Faltan tags Open Graph importantes.', 'Agregar og:title, og:description y og:image.'],
+  // robots
+  'page is indexable': ['Pagina indexable', 'Los motores de busqueda pueden indexar esta pagina.', 'Mantener la pagina indexable si debe aparecer en busquedas.'],
+  'page is blocked from indexing': ['Pagina bloqueada de indexacion', 'La pagina tiene noindex y no aparecera en busquedas.', 'Quitar la directiva noindex si la pagina debe aparecer en busquedas.'],
+  // keyword
+  'keyword found on page': ['Keyword encontrada', 'La keyword requerida esta presente en la pagina.', 'Mantener la keyword en el contenido principal.'],
+  'keyword not found on page': ['Keyword no encontrada', 'La keyword requerida no esta en la pagina.', 'Revisar si la keyword fue eliminada o cambiada.'],
+  // security
+  'csp header is present': ['Header CSP presente', 'El header Content-Security-Policy esta configurado.', 'Revisar la politica CSP periodicamente.'],
+  'csp header is missing': ['Header CSP faltante', 'No hay header Content-Security-Policy.', 'Agregar un header Content-Security-Policy al servidor.'],
+  'hsts header is present': ['Header HSTS presente', 'El header HSTS esta activo.', 'Mantener HSTS activo para seguridad.'],
+  'hsts header is missing': ['Header HSTS faltante', 'No hay header Strict-Transport-Security.', 'Agregar el header HSTS en el servidor.'],
+  'x-frame-options is set': ['X-Frame-Options configurado', 'La pagina esta protegida contra clickjacking.', 'Mantener el header X-Frame-Options.'],
+  'x-frame-options is missing': ['X-Frame-Options faltante', 'La pagina no tiene proteccion contra clickjacking.', 'Agregar X-Frame-Options: DENY o SAMEORIGIN.'],
+  // image alt
+  'image alt texts are complete': ['Textos alt de imagenes completos', 'La mayoria de imagenes tiene texto alternativo.', 'Mantener los textos alt actualizados.'],
+  'image alt texts incomplete': ['Textos alt de imagenes incompletos', 'Algunas imagenes no tienen texto alternativo.', 'Agregar atributo alt a todas las imagenes.'],
+  // redirect
+  'redirect detected': ['Redireccion detectada', 'La URL redirige a otra direccion.', 'Verificar que la redireccion sea intencional y correcta.'],
+};
+
+function translateCheck(check, locale) {
+  if (locale !== 'es') return check;
+  const key = (check.title || '').toLowerCase().trim();
+  const mapping = CHECK_TRANSLATIONS_ES[key];
+  if (!mapping) return check;
+  return Object.assign({}, check, {
+    title: mapping[0],
+    description: mapping[1] || check.description,
+    recommendation: mapping[2] || check.recommendation
+  });
+}
+
 // ── Client PDF Report Generator ───────────────────────────────────────────────
-function generateClientReport(site, checks) {
+function generateClientReport(site, checks, tier) {
   const latest      = checks[0] || {};
   const latestResult= latest.result || {};
-  const allChecks   = Array.isArray(latestResult.checks) ? latestResult.checks : [];
+  const allChecks   = Array.isArray(latestResult.checks) ? latestResult.checks.map(c => translateCheck(c, currentLocale)) : [];
   const domainExpiry= latestResult.domain_expiry || null;
   const issues      = allChecks.filter(c => c.level !== 'pass');
+  // Tier-based content limits
+  const reportTier  = tier || state.plan || 'free';
+  const isFree      = reportTier === 'free';
+  const isStarter   = reportTier === 'starter';
+  const isAgency    = reportTier === 'agency';
+  const shownIssues = isFree ? issues.slice(0, 3) : issues;
   const downChecks  = checks.filter(c => c.status === 'down');
   const recentChecks= checks.slice(0, 15);
   const status      = statusLabel(site.last_status);
@@ -833,7 +916,7 @@ function generateClientReport(site, checks) {
 function reportSummaryFromSite(site, checks) {
   const latest = checks[0] || {};
   const result = latest.result || {};
-  const issues = Array.isArray(result.checks) ? result.checks.filter((check) => check.level !== 'pass').slice(0, 8) : [];
+  const issues = Array.isArray(result.checks) ? result.checks.filter((check) => check.level !== 'pass').slice(0, 8).map(c => translateCheck(c, currentLocale)) : [];
   const lines = [
     `SiteTrace client report: ${site.name}`,
     `URL: ${site.url}`,
@@ -1142,7 +1225,7 @@ function hasFeature(name) {
 // ── Scan interval by plan ──────────────────────────────
 function planIntervalMinutes() {
   const interval = state.limits && Number(state.limits.interval_minutes);
-  if (!interval || interval <= 0) return 60;
+  if (!interval || interval <= 0) return 20;
   return interval;
 }
 
@@ -1155,25 +1238,43 @@ function planIntervalLabel() {
   }
   if (mins <= 1) return 'Every 1 min';
   if (mins <= 5) return 'Every 5 min';
+  if (mins <= 20) return 'Every 20 min';
   return `Every ${mins} min`;
 }
 
 // ── Scan timer / countdown ─────────────────────────────
 let scanCountdownInterval = null;
 
-function startScanCountdown(lastCheckedAt) {
+function startScanCountdown(lastCheckedAt, siteId) {
   if (scanCountdownInterval) clearInterval(scanCountdownInterval);
   const countdownEl = document.getElementById('scanCountdown');
   const lastScanEl  = document.getElementById('lastScanTime');
   if (!countdownEl) return;
 
-  const intervalMs = planIntervalMinutes() * 60 * 1000;
-  const lastMs = lastCheckedAt ? new Date(lastCheckedAt).getTime() : Date.now() - intervalMs + 30000;
+  const intervalMins = planIntervalMinutes();
+  const intervalMs = intervalMins * 60 * 1000;
+
+  // Use localStorage timestamp if more recent than server timestamp
+  let lastMs = lastCheckedAt ? new Date(lastCheckedAt).getTime() : Date.now() - intervalMs + 30000;
+  if (siteId) {
+    const stored = localStorage.getItem('st_last_scan_' + siteId);
+    if (stored) {
+      const storedMs = Number(stored);
+      if (storedMs > lastMs) lastMs = storedMs;
+    }
+  }
   const nextMs = lastMs + intervalMs;
 
   if (lastScanEl && lastCheckedAt) {
     const d = new Date(lastCheckedAt);
-    lastScanEl.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: planIntervalMinutes() <= 1 ? '2-digit' : undefined });
+    lastScanEl.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: intervalMins <= 1 ? '2-digit' : undefined });
+  }
+
+  // Show plan cooldown message
+  const planMsgEl = document.getElementById('scanCooldownMsg');
+  if (planMsgEl) {
+    const planName = state.plan === 'agency' ? 'Agency' : state.plan === 'starter' ? 'Starter' : 'Free';
+    planMsgEl.textContent = `Your ${planName} plan allows one scan every ${intervalMins} minute${intervalMins !== 1 ? 's' : ''}.`;
   }
 
   const setAuditBtnState = (available) => {
@@ -1198,9 +1299,7 @@ function startScanCountdown(lastCheckedAt) {
     const totalSec = Math.floor(rem / 1000);
     const mins = Math.floor(totalSec / 60);
     const secs = totalSec % 60;
-    el.textContent = planIntervalMinutes() >= 60
-      ? `${mins}:${String(secs).padStart(2, '0')}`
-      : `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    el.textContent = `Next scan in ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
   tick();
   scanCountdownInterval = setInterval(tick, 1000);
@@ -1852,6 +1951,8 @@ async function runSiteCheck(siteId) {
   } else {
     setDashboardMessage(t('dashboard.completed'));
   }
+  // Store last scan timestamp for cooldown
+  localStorage.setItem('st_last_scan_' + siteId, String(Date.now()));
 }
 
 async function testAlertEmail() {
@@ -2596,7 +2697,7 @@ function renderSiteDetail(site) {
   const latestResult = latest && latest.result ? latest.result : null;
   const domainExpiry = latestResult && latestResult.domain_expiry ? latestResult.domain_expiry : null;
   const importantChecks = latestResult && Array.isArray(latestResult.checks)
-    ? latestResult.checks.filter((check) => check.level !== 'pass').slice(0, 5)
+    ? latestResult.checks.filter((check) => check.level !== 'pass').slice(0, 5).map(c => translateCheck(c, currentLocale))
     : [];
 
   const issueHtml = importantChecks.length
@@ -2618,7 +2719,7 @@ function renderSiteDetail(site) {
     : `<div class="empty subtle">${escapeHtml(t('dashboard.noIssues'))}</div>`;
 
   // Full scan breakdown — grouped by category, showing value + description
-  const allChecks = latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [];
+  const allChecks = (latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : []).map(c => translateCheck(c, currentLocale));
   const failChecks = allChecks.filter(c => c.level === 'fail');
   const warnChecks = allChecks.filter(c => c.level === 'warn');
   const passChecks = allChecks.filter(c => c.level === 'pass');
@@ -2744,11 +2845,12 @@ function renderSiteDetail(site) {
   if (state.plan === 'free' && !hasFeature('in_app_alerts')) {
     detail.innerHTML = `
       <div class="scan-proof-bar">
-        <span class="scan-interval-badge">Free · Every 60 min</span>
+        <span class="scan-interval-badge">Free · Every 20 min</span>
         <span>Last scan: <strong id="lastScanTime">–</strong></span>
         <span>·</span>
-        <span>Next scan in <strong id="scanCountdown">–</strong></span>
+        <span><strong id="scanCountdown">–</strong></span>
       </div>
+      <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
       <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
@@ -2775,7 +2877,7 @@ function renderSiteDetail(site) {
         <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
         <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
       </div>`;
-    startScanCountdown(site.last_checked_at);
+    startScanCountdown(site.last_checked_at, site.id);
     return;
   }
 
@@ -2785,13 +2887,16 @@ function renderSiteDetail(site) {
       <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? t('dashboard.planAgency') : state.plan === 'starter' ? t('dashboard.planStarter') : t('dashboard.planFree'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
       <span>${escapeHtml(t('dashboard.lastScan'))}: <strong id="lastScanTime">–</strong></span>
       <span>·</span>
-      <span>${escapeHtml(t('dashboard.nextScan'))} <strong id="scanCountdown">–</strong></span>
+      <span><strong id="scanCountdown">–</strong></span>
     </div>
+    <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
 
     <div class="detail-tabs" id="detailTabs">
       <button class="detail-tab active" type="button" data-tab="overview">${escapeHtml(t('dashboard.overview'))}</button>
       <button class="detail-tab" type="button" data-tab="incidents">${escapeHtml(t('dashboard.recentIncidents'))}</button>
       <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
+      <button class="detail-tab" type="button" data-tab="scan-history">${escapeHtml(t('dashboard.scanHistory'))}</button>
+      <button class="detail-tab" type="button" data-tab="api-access">API Access</button>
       <button class="detail-tab" type="button" data-tab="settings">${escapeHtml(t('dashboard.settings'))}</button>
     </div>
 
@@ -2868,6 +2973,19 @@ function renderSiteDetail(site) {
       </div>
     </div>
 
+    <!-- Scan History -->
+    <div class="detail-tab-panel hidden" data-panel="scan-history">
+      <div class="detail-panel" style="margin:0 0 16px;">
+        <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.scanHistory'))}</span></div>
+        <div style="overflow-x:auto;padding:0 4px;" id="scanHistoryTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- API Access -->
+    <div class="detail-tab-panel hidden" data-panel="api-access">
+      <div id="apiAccessPanelContent" style="padding:20px;"></div>
+    </div>
+
     <!-- Settings -->
     <div class="detail-tab-panel hidden" data-panel="settings">
       <form class="monitor-settings" id="monitorSettingsForm" style="padding:20px 24px; display:grid; gap:16px;">
@@ -2895,6 +3013,83 @@ function renderSiteDetail(site) {
       </form>
     </div>`;
 
+  // Populate Scan History panel
+  const scanHistoryWrap = document.getElementById('scanHistoryTableWrap');
+  if (scanHistoryWrap) {
+    const allHistory = checks;
+    const now = Date.now();
+    let historyChecks;
+    if (state.plan === 'agency') {
+      historyChecks = allHistory.filter(function(c) { return (now - new Date(c.created_at).getTime()) < 90 * 24 * 60 * 60 * 1000; });
+    } else if (state.plan === 'starter') {
+      historyChecks = allHistory.filter(function(c) { return (now - new Date(c.created_at).getTime()) < 30 * 24 * 60 * 60 * 1000; });
+    } else {
+      historyChecks = allHistory.slice(0, 3);
+    }
+    if (!historyChecks.length) {
+      scanHistoryWrap.innerHTML = '<div class="empty subtle" style="padding:16px;">' + escapeHtml(t('dashboard.noHistory')) + '</div>';
+    } else {
+      var rows = '';
+      historyChecks.forEach(function(c, idx) {
+        var issueCount = c.result && Array.isArray(c.result.checks) ? c.result.checks.filter(function(x) { return x.level !== 'pass'; }).length : '-';
+        var scoreColor = c.score >= 80 ? 'var(--green)' : c.score >= 60 ? 'var(--amber)' : 'var(--red)';
+        rows += '<tr>' +
+          '<td style="white-space:nowrap;">' + formatDateTime(c.created_at) + '</td>' +
+          '<td><span class="dot ' + (c.status === 'online' ? '' : escapeHtml(c.status)) + '" style="display:inline-block;margin-right:4px;"></span>' + escapeHtml(localizedStatus(c.status)) + '</td>' +
+          '<td style="color:' + scoreColor + ';font-weight:600;">' + (c.score || '-') + '/100</td>' +
+          '<td>' + (c.response_time_ms ? c.response_time_ms + 'ms' : '-') + '</td>' +
+          '<td>' + issueCount + '</td>' +
+          '<td style="white-space:nowrap;">' +
+          '<button class="button small secondary" type="button" data-view-overview="1">' + escapeHtml(t('dashboard.viewReport')) + '</button> ' +
+          '<button class="button small secondary" type="button" data-history-idx="' + idx + '">' + escapeHtml(t('dashboard.downloadReport')) + '</button>' +
+          '</td></tr>';
+      });
+      scanHistoryWrap.innerHTML = '<table class="scan-history-table"><thead><tr><th>Date / Time</th><th>Status</th><th>Score</th><th>Response</th><th>Issues</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      scanHistoryWrap.addEventListener('click', function(e) {
+        var viewBtn = e.target.closest('[data-view-overview]');
+        if (viewBtn) {
+          var tb = document.querySelector('[data-tab=overview]');
+          if (tb) tb.click();
+          window.scrollTo(0, 0);
+          return;
+        }
+        var btn = e.target.closest('[data-history-idx]');
+        if (!btn) return;
+        var hIdx = Number(btn.dataset.historyIdx);
+        var histSite = state.sites ? state.sites.find(function(s) { return s.id === state.selectedSiteId; }) : null;
+        if (histSite && historyChecks[hIdx]) generateClientReport(histSite, [historyChecks[hIdx]], state.plan);
+      });
+    }
+  }
+
+  // Populate API Access panel
+  const apiPanelContent = document.getElementById('apiAccessPanelContent');
+  if (apiPanelContent) {
+    if (state.plan === 'agency') {
+      apiPanelContent.innerHTML = '<div class="api-access-section">' +
+        '<div class="api-coming-soon-notice">API authentication is coming soon. This preview shows where Agency users will manage API keys.</div>' +
+        '<div class="api-key-area"><label>Your API Key</label><div class="api-key-display">' +
+        '<code id="apiKeyDisplay">sk_live_••••••••••••••••</code>' +
+        '<button class="button small secondary" type="button" id="apiGenKeyBtn">Generate Key</button>' +
+        '<button class="button small secondary" type="button" id="apiCopyKeyBtn">Copy</button>' +
+        '</div></div>' +
+        '<div class="api-endpoints"><h4>Available Endpoints</h4>' +
+        '<code>POST /api/analyze</code><code>GET /api/monitors</code><code>GET /api/scan-history</code><code>GET /api/incidents</code>' +
+        '</div></div>';
+      const genBtn = document.getElementById('apiGenKeyBtn');
+      if (genBtn) genBtn.addEventListener('click', function() { alert('API key generation coming soon.'); });
+      const copyBtn = document.getElementById('apiCopyKeyBtn');
+      if (copyBtn) copyBtn.addEventListener('click', function() { var k = document.getElementById('apiKeyDisplay'); if (k) navigator.clipboard.writeText(k.textContent); });
+    } else {
+      apiPanelContent.innerHTML = '<div class="locked-section">' +
+        '<div class="lock-icon">🔒</div>' +
+        '<h3>API Access</h3>' +
+        '<p>API access is available on the Agency plan. Upgrade to integrate SiteTrace data into your own tools and dashboards.</p>' +
+        '<button class="button small" type="button" data-dashboard-upgrade="agency">Upgrade to Agency</button>' +
+        '</div>';
+    }
+  }
+
   // Tab switching
   const tabsEl = document.getElementById('detailTabs');
   if (tabsEl) {
@@ -2911,7 +3106,7 @@ function renderSiteDetail(site) {
   }
 
   // Start live scan countdown
-  startScanCountdown(site.last_checked_at);
+  startScanCountdown(site.last_checked_at, site.id);
 
   // Mount live ping chart — restore history if same site re-renders (e.g. after audit)
   const pingCanvas = document.getElementById('livePingCanvas');
@@ -2953,7 +3148,7 @@ async function initDashboard() {
     copyReportBtn.addEventListener('click', () => {
       const site = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
       if (!site) return;
-      generateClientReport(site, state.selectedChecks || []);
+      generateClientReport(site, state.selectedChecks || [], state.plan);
     });
   }
 

@@ -2390,3 +2390,103 @@ details[open] .scan-breakdown-chevron { transform: rotate(180deg); }
   border: 1px solid color-mix(in srgb, var(--red) 20%, var(--line));
   border-radius: 4px; padding: 2px 7px;
 }
+
+/* ── Scan cooldown message ── */
+.scan-cooldown-msg {
+  font-size: .78rem; color: var(--muted);
+  padding: 4px 16px 8px;
+  min-height: 0;
+}
+
+/* ── Scan History table ── */
+.scan-history-table {
+  width: 100%; border-collapse: collapse;
+  font-size: .82rem;
+}
+.scan-history-table th {
+  text-align: left; padding: 8px 12px;
+  border-bottom: 2px solid var(--line);
+  font-weight: 600; color: var(--muted);
+  font-size: .75rem; text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap;
+}
+.scan-history-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.scan-history-table tr:last-child td { border-bottom: none; }
+.scan-history-table tr:hover td { background: var(--bg-subtle); }
+
+/* ── API Access section ── */
+.api-access-section {
+  display: grid; gap: 20px;
+}
+.api-coming-soon-notice {
+  background: color-mix(in srgb, var(--indigo) 8%, var(--bg-subtle));
+  border: 1px solid color-mix(in srgb, var(--indigo) 25%, var(--line));
+  border-radius: 8px; padding: 12px 16px;
+  font-size: .85rem; color: var(--text);
+}
+.api-key-area {
+  display: grid; gap: 8px;
+}
+.api-key-area label {
+  font-size: .85rem; font-weight: 600; color: var(--muted);
+}
+.api-key-display {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap;
+}
+.api-key-display code {
+  font-family: 'Courier New', monospace;
+  font-size: .85rem; background: var(--bg-subtle);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 12px; flex: 1; min-width: 200px;
+}
+.api-endpoints {
+  display: grid; gap: 8px;
+}
+.api-endpoints h4 {
+  font-size: .85rem; font-weight: 600; margin-bottom: 4px;
+}
+.api-endpoints code {
+  display: block; font-family: 'Courier New', monospace;
+  font-size: .82rem; background: var(--bg-subtle);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 5px 10px; margin-bottom: 4px;
+}
+
+/* ── Locked section (non-agency API) ── */
+.locked-section {
+  text-align: center; padding: 40px 20px;
+  display: grid; gap: 12px; justify-items: center;
+}
+.locked-section .lock-icon {
+  font-size: 2rem; margin-bottom: 4px;
+}
+.locked-section h3 {
+  font-size: 1.1rem; font-weight: 700; margin: 0;
+}
+.locked-section p {
+  color: var(--muted); font-size: .9rem;
+  max-width: 380px; line-height: 1.6; margin: 0;
+}
+
+/* ── Sidebar navigation ── */
+.db-sidebar-nav {
+  display: grid; gap: 2px; margin-bottom: 4px;
+}
+.db-nav-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 7px;
+  font-size: .83rem; font-weight: 500;
+  color: var(--muted); text-decoration: none;
+  transition: background .12s, color .12s;
+}
+.db-nav-item:hover {
+  background: var(--bg-subtle); color: var(--text);
+}
+.db-nav-item-active {
+  background: color-mix(in srgb, var(--indigo) 10%, var(--bg-subtle));
+  color: var(--indigo); font-weight: 600;
+}

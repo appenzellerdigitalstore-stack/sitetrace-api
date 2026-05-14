@@ -29,7 +29,7 @@ const ALERT_REPLY_TO_EMAIL = process.env.ALERT_REPLY_TO_EMAIL || 'support@sitetr
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL || '';
 const TEAMS_WEBHOOK_URL = process.env.TEAMS_WEBHOOK_URL || '';
 const PLAN_LIMITS = {
-  free: { sites: 0, interval_minutes: 0, history_days: 0 },
+  free: { sites: 1, interval_minutes: 20, history_days: 7 },
   starter: { sites: 5, interval_minutes: 5, history_days: 30 },
   agency: { sites: 50, interval_minutes: 1, history_days: 90 }
 };
