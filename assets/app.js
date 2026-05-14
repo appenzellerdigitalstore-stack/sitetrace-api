@@ -3,7 +3,7 @@ const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   : 'https://sitetrace-api.onrender.com';
 const apiPath = (path) => `${apiBase}${path}`;
 const page = document.body.dataset.page || 'home';
-const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, features: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [], alerts: [], alertsUnread: 0 };
+const state = { config: null, supabase: null, session: null, profile: null, plan: 'free', limits: null, features: null, usage: null, sites: [], selectedSiteId: null, selectedChecks: [], alerts: [], alertsUnread: 0, dashboardPanel: 'overview' };
 const escapeHtml = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]));
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const savedLocale = localStorage.getItem('sitetrace_locale');
@@ -195,7 +195,27 @@ const copy = {
       scanHistory: 'Scan History',
       viewReport: 'View Report',
       downloadReport: 'Download Report',
-      noHistory: 'No scan history for this period.'
+      noHistory: 'No scan history for this period.',
+      websiteHealthOverview: 'Website Health Overview',
+      websiteHealthSubtitle: 'Monitor uptime, response time, SEO health, SSL, and recent site changes.',
+      apiAccess: 'API Access',
+      apiAccessLocked: 'API Access — Agency Plan',
+      apiAccessLockedDesc: 'Integrate SiteTrace monitoring data into your own tools, dashboards, and workflows.',
+      apiAccessNotice: 'API authentication and usage tracking will be connected to Supabase in a future update. This preview shows where Agency users will manage API access.',
+      generateKey: 'Generate Key',
+      copyKey: 'Copy',
+      endpointExamples: 'API Endpoints',
+      alertsIncidents: 'Alert Center',
+      noAlerts: 'No alerts yet.',
+      activeAlerts: 'Active alerts',
+      resolvedIncidents: 'Resolved incidents',
+      scanHistoryEmpty: 'No scan history yet for this site.',
+      selectSiteFirst: 'Select a site from the sidebar to view this section.',
+      reports: 'Reports',
+      latestReport: 'Latest Report',
+      noReports: 'Select a site to download reports.',
+      refreshLivePing: 'Refresh Live Ping',
+      upgradeAgencyBtn: 'Upgrade to Agency'
     },
     signin: {
       eyebrow: 'Customer access',
@@ -389,7 +409,27 @@ const copy = {
       scanHistory: 'Historial de Escaneos',
       viewReport: 'Ver Reporte',
       downloadReport: 'Descargar Reporte',
-      noHistory: 'Sin historial de escaneos para este periodo.'
+      noHistory: 'Sin historial de escaneos para este periodo.',
+      websiteHealthOverview: 'Resumen de salud del sitio',
+      websiteHealthSubtitle: 'Monitorea uptime, tiempo de respuesta, SEO, SSL y cambios recientes.',
+      apiAccess: 'Acceso API',
+      apiAccessLocked: 'Acceso API — Plan Agency',
+      apiAccessLockedDesc: 'Integra los datos de SiteTrace en tus propias herramientas y flujos de trabajo.',
+      apiAccessNotice: 'La autenticacion API y el seguimiento de uso se conectaran a Supabase en una actualizacion futura.',
+      generateKey: 'Generar clave',
+      copyKey: 'Copiar',
+      endpointExamples: 'Endpoints de API',
+      alertsIncidents: 'Centro de alertas',
+      noAlerts: 'Sin alertas aun.',
+      activeAlerts: 'Alertas activas',
+      resolvedIncidents: 'Incidentes resueltos',
+      scanHistoryEmpty: 'Sin historial de escaneos para este sitio.',
+      selectSiteFirst: 'Selecciona un sitio para ver esta seccion.',
+      reports: 'Reportes',
+      latestReport: 'Ultimo reporte',
+      noReports: 'Selecciona un sitio para descargar reportes.',
+      refreshLivePing: 'Actualizar ping en vivo',
+      upgradeAgencyBtn: 'Subir a Agency'
     },
     signin: {
       eyebrow: 'Acceso de cliente',
@@ -2895,13 +2935,14 @@ function renderSiteDetail(site) {
       <button class="detail-tab active" type="button" data-tab="overview">${escapeHtml(t('dashboard.overview'))}</button>
       <button class="detail-tab" type="button" data-tab="incidents">${escapeHtml(t('dashboard.recentIncidents'))}</button>
       <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
-      <button class="detail-tab" type="button" data-tab="scan-history">${escapeHtml(t('dashboard.scanHistory'))}</button>
-      <button class="detail-tab" type="button" data-tab="api-access">API Access</button>
-      <button class="detail-tab" type="button" data-tab="settings">${escapeHtml(t('dashboard.settings'))}</button>
     </div>
 
     <!-- Overview -->
     <div class="detail-tab-panel" data-panel="overview">
+      <div style="margin-bottom:16px;">
+        <h2 style="margin:0 0 4px;font-size:1.15rem;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
+        <p style="margin:0;font-size:.85rem;color:var(--muted);">${escapeHtml(t('dashboard.websiteHealthSubtitle'))}</p>
+      </div>
       <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);">
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
@@ -2973,122 +3014,7 @@ function renderSiteDetail(site) {
       </div>
     </div>
 
-    <!-- Scan History -->
-    <div class="detail-tab-panel hidden" data-panel="scan-history">
-      <div class="detail-panel" style="margin:0 0 16px;">
-        <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.scanHistory'))}</span></div>
-        <div style="overflow-x:auto;padding:0 4px;" id="scanHistoryTableWrap"></div>
-      </div>
-    </div>
-
-    <!-- API Access -->
-    <div class="detail-tab-panel hidden" data-panel="api-access">
-      <div id="apiAccessPanelContent" style="padding:20px;"></div>
-    </div>
-
-    <!-- Settings -->
-    <div class="detail-tab-panel hidden" data-panel="settings">
-      <form class="monitor-settings" id="monitorSettingsForm" style="padding:20px 24px; display:grid; gap:16px;">
-        <div class="settings-head">
-          <strong>${escapeHtml(t('dashboard.settings'))}</strong>
-          <span class="muted" style="font-size:.85rem;">${escapeHtml(t('dashboard.settingsCopy'))}</span>
-        </div>
-        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.keyword'))}</span><input id="keywordInput" type="text" value="${escapeHtml(site.keyword || '')}" placeholder="${escapeHtml(t('dashboard.keywordPlaceholder'))}"></label>
-        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.maintenanceStart'))}</span><input id="maintenanceStartInput" type="datetime-local" value="${site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : ''}"></label>
-        <label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">${escapeHtml(t('dashboard.maintenanceEnd'))}</span><input id="maintenanceEndInput" type="datetime-local" value="${site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : ''}"></label>
-        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="emailAlertsInput" type="checkbox" ${boolValue(site.email_alerts_enabled) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.emailAlerts'))}</span></label>
-        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertDownInput" type="checkbox" ${boolValue(site.alert_on_down) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertDown'))}</span></label>
-        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertWarningInput" type="checkbox" ${boolValue(site.alert_on_warning) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertWarning'))}</span></label>
-        <label class="toggle-row ${alertsLocked ? 'locked-control' : ''}"><input id="alertRecoveryInput" type="checkbox" ${boolValue(site.alert_on_recovery) ? 'checked' : ''} ${alertsLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.alertRecovery'))}</span></label>
-        <label class="toggle-row ${statusLocked ? 'locked-control' : ''}"><input id="statusPageInput" type="checkbox" ${site.status_page_enabled ? 'checked' : ''} ${statusLocked ? 'disabled' : ''}><span>${escapeHtml(t('dashboard.statusPage'))}</span></label>
-        ${alertsLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedAlerts'))}</div>` : ''}
-        ${statusLocked ? `<div class="locked-note">${escapeHtml(t('dashboard.lockedStatusPage'))}</div>` : ''}
-        ${publicUrl && site.status_page_enabled ? `<a class="status-link" href="${publicUrl}" target="_blank" rel="noopener">${escapeHtml(publicUrl)}</a>` : ''}
-        ${site.public_slug ? `<div style="margin-top:10px;padding:10px 14px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;">
-          <div style="font-size:.7rem;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">📊 Client Report Link</div>
-          <a class="status-link" href="/report/${site.public_slug}" target="_blank" rel="noopener" style="color:#6366f1;">${window.location.origin}/report/${site.public_slug}</a>
-          <button type="button" onclick="navigator.clipboard.writeText('${window.location.origin}/report/${site.public_slug}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy link',2000)})" style="margin-left:10px;font-size:.72rem;font-weight:700;background:#6366f1;color:#fff;border:none;border-radius:5px;padding:3px 10px;cursor:pointer;">Copy link</button>
-        </div>` : ''}
-        <button class="button secondary" type="submit">${escapeHtml(t('dashboard.save'))}</button>
-      </form>
-    </div>`;
-
-  // Populate Scan History panel
-  const scanHistoryWrap = document.getElementById('scanHistoryTableWrap');
-  if (scanHistoryWrap) {
-    const allHistory = checks;
-    const now = Date.now();
-    let historyChecks;
-    if (state.plan === 'agency') {
-      historyChecks = allHistory.filter(function(c) { return (now - new Date(c.created_at).getTime()) < 90 * 24 * 60 * 60 * 1000; });
-    } else if (state.plan === 'starter') {
-      historyChecks = allHistory.filter(function(c) { return (now - new Date(c.created_at).getTime()) < 30 * 24 * 60 * 60 * 1000; });
-    } else {
-      historyChecks = allHistory.slice(0, 3);
-    }
-    if (!historyChecks.length) {
-      scanHistoryWrap.innerHTML = '<div class="empty subtle" style="padding:16px;">' + escapeHtml(t('dashboard.noHistory')) + '</div>';
-    } else {
-      var rows = '';
-      historyChecks.forEach(function(c, idx) {
-        var issueCount = c.result && Array.isArray(c.result.checks) ? c.result.checks.filter(function(x) { return x.level !== 'pass'; }).length : '-';
-        var scoreColor = c.score >= 80 ? 'var(--green)' : c.score >= 60 ? 'var(--amber)' : 'var(--red)';
-        rows += '<tr>' +
-          '<td style="white-space:nowrap;">' + formatDateTime(c.created_at) + '</td>' +
-          '<td><span class="dot ' + (c.status === 'online' ? '' : escapeHtml(c.status)) + '" style="display:inline-block;margin-right:4px;"></span>' + escapeHtml(localizedStatus(c.status)) + '</td>' +
-          '<td style="color:' + scoreColor + ';font-weight:600;">' + (c.score || '-') + '/100</td>' +
-          '<td>' + (c.response_time_ms ? c.response_time_ms + 'ms' : '-') + '</td>' +
-          '<td>' + issueCount + '</td>' +
-          '<td style="white-space:nowrap;">' +
-          '<button class="button small secondary" type="button" data-view-overview="1">' + escapeHtml(t('dashboard.viewReport')) + '</button> ' +
-          '<button class="button small secondary" type="button" data-history-idx="' + idx + '">' + escapeHtml(t('dashboard.downloadReport')) + '</button>' +
-          '</td></tr>';
-      });
-      scanHistoryWrap.innerHTML = '<table class="scan-history-table"><thead><tr><th>Date / Time</th><th>Status</th><th>Score</th><th>Response</th><th>Issues</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table>';
-      scanHistoryWrap.addEventListener('click', function(e) {
-        var viewBtn = e.target.closest('[data-view-overview]');
-        if (viewBtn) {
-          var tb = document.querySelector('[data-tab=overview]');
-          if (tb) tb.click();
-          window.scrollTo(0, 0);
-          return;
-        }
-        var btn = e.target.closest('[data-history-idx]');
-        if (!btn) return;
-        var hIdx = Number(btn.dataset.historyIdx);
-        var histSite = state.sites ? state.sites.find(function(s) { return s.id === state.selectedSiteId; }) : null;
-        if (histSite && historyChecks[hIdx]) generateClientReport(histSite, [historyChecks[hIdx]], state.plan);
-      });
-    }
-  }
-
-  // Populate API Access panel
-  const apiPanelContent = document.getElementById('apiAccessPanelContent');
-  if (apiPanelContent) {
-    if (state.plan === 'agency') {
-      apiPanelContent.innerHTML = '<div class="api-access-section">' +
-        '<div class="api-coming-soon-notice">API authentication is coming soon. This preview shows where Agency users will manage API keys.</div>' +
-        '<div class="api-key-area"><label>Your API Key</label><div class="api-key-display">' +
-        '<code id="apiKeyDisplay">sk_live_••••••••••••••••</code>' +
-        '<button class="button small secondary" type="button" id="apiGenKeyBtn">Generate Key</button>' +
-        '<button class="button small secondary" type="button" id="apiCopyKeyBtn">Copy</button>' +
-        '</div></div>' +
-        '<div class="api-endpoints"><h4>Available Endpoints</h4>' +
-        '<code>POST /api/analyze</code><code>GET /api/monitors</code><code>GET /api/scan-history</code><code>GET /api/incidents</code>' +
-        '</div></div>';
-      const genBtn = document.getElementById('apiGenKeyBtn');
-      if (genBtn) genBtn.addEventListener('click', function() { alert('API key generation coming soon.'); });
-      const copyBtn = document.getElementById('apiCopyKeyBtn');
-      if (copyBtn) copyBtn.addEventListener('click', function() { var k = document.getElementById('apiKeyDisplay'); if (k) navigator.clipboard.writeText(k.textContent); });
-    } else {
-      apiPanelContent.innerHTML = '<div class="locked-section">' +
-        '<div class="lock-icon">🔒</div>' +
-        '<h3>API Access</h3>' +
-        '<p>API access is available on the Agency plan. Upgrade to integrate SiteTrace data into your own tools and dashboards.</p>' +
-        '<button class="button small" type="button" data-dashboard-upgrade="agency">Upgrade to Agency</button>' +
-        '</div>';
-    }
-  }
+    `;
 
   // Tab switching
   const tabsEl = document.getElementById('detailTabs');
@@ -3119,6 +3045,321 @@ function renderSiteDetail(site) {
     state.livePingChart.start();
   }
 }
+
+// ── Sidebar panel rendering ───────────────────────────────────────────────────
+
+function buildScanHistoryTable(checks, plan) {
+  const now = Date.now();
+  let historyChecks;
+  if (plan === 'agency') {
+    historyChecks = checks.filter(c => (now - new Date(c.created_at).getTime()) < 90 * 24 * 60 * 60 * 1000);
+  } else if (plan === 'starter') {
+    historyChecks = checks.filter(c => (now - new Date(c.created_at).getTime()) < 30 * 24 * 60 * 60 * 1000);
+  } else {
+    historyChecks = checks.slice(0, 3);
+  }
+  if (!historyChecks.length) {
+    return '<div class="empty subtle" style="padding:16px;">' + escapeHtml(t('dashboard.scanHistoryEmpty')) + '</div>';
+  }
+  let rows = '';
+  historyChecks.forEach(function(c, idx) {
+    const issueCount = c.result && Array.isArray(c.result.checks) ? c.result.checks.filter(x => x.level !== 'pass').length : '-';
+    const scoreColor = c.score >= 80 ? 'var(--green)' : c.score >= 60 ? 'var(--amber)' : 'var(--red)';
+    rows += '<tr>' +
+      '<td style="white-space:nowrap;">' + formatDateTime(c.created_at) + '</td>' +
+      '<td><span class="dot ' + (c.status === 'online' ? '' : escapeHtml(c.status)) + '" style="display:inline-block;margin-right:4px;"></span>' + escapeHtml(localizedStatus(c.status)) + '</td>' +
+      '<td style="color:' + scoreColor + ';font-weight:600;">' + (c.score || '-') + '/100</td>' +
+      '<td>' + (c.response_time_ms ? c.response_time_ms + 'ms' : '-') + '</td>' +
+      '<td>' + issueCount + '</td>' +
+      '<td style="white-space:nowrap;" data-history-idx="' + idx + '">' +
+      '<button class="button small secondary sh-view-btn" type="button">' + escapeHtml(t('dashboard.viewReport')) + '</button> ' +
+      '<button class="button small secondary sh-dl-btn" type="button">' + escapeHtml(t('dashboard.downloadReport')) + '</button>' +
+      '</td></tr>';
+  });
+  return '<table class="scan-history-table"><thead><tr><th>Date / Time</th><th>Status</th><th>Score</th><th>Response</th><th>Issues</th><th>Actions</th></tr></thead><tbody>' + rows + '</tbody></table>';
+}
+
+function buildSettingsForm(site) {
+  const alertsLocked = !hasFeature('in_app_alerts');
+  const statusLocked = !hasFeature('status_pages');
+  const publicUrl = site.public_slug ? window.location.origin + '/status/' + site.public_slug : '';
+  return '<form class="monitor-settings" id="monitorSettingsForm" style="padding:20px 24px; display:grid; gap:16px;">' +
+    '<div class="settings-head"><strong>' + escapeHtml(t('dashboard.settings')) + '</strong>' +
+    '<span class="muted" style="font-size:.85rem;">' + escapeHtml(t('dashboard.settingsCopy')) + '</span></div>' +
+    '<label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">' + escapeHtml(t('dashboard.keyword')) + '</span>' +
+    '<input id="keywordInput" type="text" value="' + escapeHtml(site.keyword || '') + '" placeholder="' + escapeHtml(t('dashboard.keywordPlaceholder')) + '"></label>' +
+    '<label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">' + escapeHtml(t('dashboard.maintenanceStart')) + '</span>' +
+    '<input id="maintenanceStartInput" type="datetime-local" value="' + (site.maintenance_starts_at ? new Date(site.maintenance_starts_at).toISOString().slice(0,16) : '') + '"></label>' +
+    '<label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;"><span style="color:var(--muted);font-size:.85rem;">' + escapeHtml(t('dashboard.maintenanceEnd')) + '</span>' +
+    '<input id="maintenanceEndInput" type="datetime-local" value="' + (site.maintenance_ends_at ? new Date(site.maintenance_ends_at).toISOString().slice(0,16) : '') + '"></label>' +
+    '<label class="toggle-row ' + (alertsLocked ? 'locked-control' : '') + '">' +
+    '<input id="emailAlertsInput" type="checkbox" ' + (boolValue(site.email_alerts_enabled) ? 'checked' : '') + ' ' + (alertsLocked ? 'disabled' : '') + '>' +
+    '<span>' + escapeHtml(t('dashboard.emailAlerts')) + '</span></label>' +
+    '<label class="toggle-row ' + (alertsLocked ? 'locked-control' : '') + '">' +
+    '<input id="alertDownInput" type="checkbox" ' + (boolValue(site.alert_on_down) ? 'checked' : '') + ' ' + (alertsLocked ? 'disabled' : '') + '>' +
+    '<span>' + escapeHtml(t('dashboard.alertDown')) + '</span></label>' +
+    '<label class="toggle-row ' + (alertsLocked ? 'locked-control' : '') + '">' +
+    '<input id="alertWarningInput" type="checkbox" ' + (boolValue(site.alert_on_warning) ? 'checked' : '') + ' ' + (alertsLocked ? 'disabled' : '') + '>' +
+    '<span>' + escapeHtml(t('dashboard.alertWarning')) + '</span></label>' +
+    '<label class="toggle-row ' + (alertsLocked ? 'locked-control' : '') + '">' +
+    '<input id="alertRecoveryInput" type="checkbox" ' + (boolValue(site.alert_on_recovery) ? 'checked' : '') + ' ' + (alertsLocked ? 'disabled' : '') + '>' +
+    '<span>' + escapeHtml(t('dashboard.alertRecovery')) + '</span></label>' +
+    '<label class="toggle-row ' + (statusLocked ? 'locked-control' : '') + '">' +
+    '<input id="statusPageInput" type="checkbox" ' + (site.status_page_enabled ? 'checked' : '') + ' ' + (statusLocked ? 'disabled' : '') + '>' +
+    '<span>' + escapeHtml(t('dashboard.statusPage')) + '</span></label>' +
+    (alertsLocked ? '<div class="locked-note">' + escapeHtml(t('dashboard.lockedAlerts')) + '</div>' : '') +
+    (statusLocked ? '<div class="locked-note">' + escapeHtml(t('dashboard.lockedStatusPage')) + '</div>' : '') +
+    (publicUrl && site.status_page_enabled ? '<a class="status-link" href="' + publicUrl + '" target="_blank" rel="noopener">' + escapeHtml(publicUrl) + '</a>' : '') +
+    (site.public_slug ? '<div style="margin-top:10px;padding:10px 14px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;">' +
+      '<div style="font-size:.7rem;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Client Report Link</div>' +
+      '<a class="status-link" href="/report/' + site.public_slug + '" target="_blank" rel="noopener" style="color:#6366f1;">' + window.location.origin + '/report/' + site.public_slug + '</a>' +
+      '</div>' : '') +
+    '<button class="button secondary" type="submit">' + escapeHtml(t('dashboard.save')) + '</button>' +
+    '</form>';
+}
+
+function renderPanel(panelName) {
+  state.dashboardPanel = panelName;
+
+  // Update sidebar active state
+  document.querySelectorAll('.db-nav-item').forEach(el => el.classList.remove('db-nav-item-active'));
+  const navMap = { overview: 'navOverview', alerts: 'navAlerts', 'scan-history': 'navScanHistory', reports: 'navReports', 'api-access': 'navApiAccess', settings: 'navSettings' };
+  const activeNav = document.getElementById(navMap[panelName]);
+  if (activeNav) activeNav.classList.add('db-nav-item-active');
+
+  const site = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
+  const checks = state.selectedChecks || [];
+  const detail = document.getElementById('siteDetail');
+  if (!detail) return;
+
+  // Update content header title for non-overview panels
+  const dbSiteTitle = document.getElementById('dbSiteTitle');
+
+  if (panelName === 'overview') {
+    // Show overview — re-render site detail normally
+    renderSiteDetail(site);
+    return;
+  }
+
+  if (panelName === 'alerts') {
+    if (dbSiteTitle) dbSiteTitle.querySelector('.db-site-name') && (dbSiteTitle.querySelector('.db-site-name').textContent = t('dashboard.alertCenter'));
+    syncContentHeader(null, null, null, true);
+    // Restore site name in header if site selected
+    const nameEl = document.getElementById('dbSelectedSiteName');
+    if (site && nameEl) nameEl.textContent = site.name;
+    const alerts = state.alerts || [];
+    const unread = state.alertsUnread || 0;
+    detail.classList.remove('empty-state', 'is-loading');
+    const hasAlerts = alerts.length > 0;
+    detail.innerHTML = '<div class="alert-center-wrap">' +
+      '<div class="alert-center-head">' +
+      '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>' +
+      '<strong>' + escapeHtml(t('dashboard.alertCenter')) + '</strong>' +
+      (unread > 0 ? '<span class="alert-badge">' + unread + '</span>' : '') +
+      '</div>' +
+      (hasAlerts ? '<button class="link-button small" id="markAlertsReadBtn2" type="button">' + escapeHtml(t('dashboard.alertMarkRead')) + '</button>' : '') +
+      '</div>' +
+      '<p class="alert-center-tagline">' + escapeHtml(t('dashboard.alertCenterDesc')) + '</p>' +
+      '<div class="alert-list">' +
+      (hasAlerts
+        ? alerts.slice(0, 20).map(alert => '<div class="alert-row ' + (alert.read ? 'read' : 'unread') + '" data-alert-id="' + alert.id + '">' +
+            '<div class="alert-icon">' + alertIcon(alert.type) + '</div>' +
+            '<div class="alert-body"><div class="alert-title">' + escapeHtml(alert.title) + '</div>' +
+            '<div class="alert-msg">' + escapeHtml(alert.message) + '</div>' +
+            '<div class="alert-time">' + formatDateTime(alert.created_at) + '</div></div>' +
+            (!alert.read ? '<span class="alert-unread-dot"></span>' : '') +
+            '</div>').join('')
+        : '<div class="alert-empty">' + escapeHtml(t('dashboard.alertCenterEmpty')) + '</div>') +
+      '</div></div>';
+    const markBtn2 = document.getElementById('markAlertsReadBtn2');
+    if (markBtn2) {
+      markBtn2.addEventListener('click', async () => {
+        markBtn2.disabled = true;
+        try {
+          await fetch(apiPath('/api/alerts/read-all'), { method: 'PATCH', headers: authHeaders() });
+          state.alerts = (state.alerts || []).map(a => ({ ...a, read: true }));
+          state.alertsUnread = 0;
+          renderPanel('alerts');
+        } catch (e) { markBtn2.disabled = false; }
+      });
+    }
+    return;
+  }
+
+  if (panelName === 'scan-history') {
+    syncContentHeader(site, site ? statusLabel(site.last_status) : null, null, true);
+    const nameEl = document.getElementById('dbSelectedSiteName');
+    if (site && nameEl) nameEl.textContent = site.name;
+    detail.classList.remove('empty-state', 'is-loading');
+    if (!site) {
+      detail.innerHTML = '<div class="db-empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>' +
+        '<h2>' + escapeHtml(t('dashboard.scanHistory')) + '</h2>' +
+        '<p>' + escapeHtml(t('dashboard.selectSiteFirst')) + '</p>';
+      detail.classList.add('empty-state');
+      return;
+    }
+    const tableHtml = buildScanHistoryTable(checks, state.plan);
+    detail.innerHTML = '<div class="detail-panel" style="margin:0 0 16px;">' +
+      '<div class="detail-panel-head"><span>' + escapeHtml(t('dashboard.scanHistory')) + '</span></div>' +
+      '<div style="overflow-x:auto;padding:0 4px;" id="panelScanHistoryTable">' + tableHtml + '</div></div>';
+    const tableWrap = document.getElementById('panelScanHistoryTable');
+    if (tableWrap) {
+      const allHistory = checks;
+      const now = Date.now();
+      let historyChecks;
+      if (state.plan === 'agency') {
+        historyChecks = allHistory.filter(c => (now - new Date(c.created_at).getTime()) < 90 * 24 * 60 * 60 * 1000);
+      } else if (state.plan === 'starter') {
+        historyChecks = allHistory.filter(c => (now - new Date(c.created_at).getTime()) < 30 * 24 * 60 * 60 * 1000);
+      } else {
+        historyChecks = allHistory.slice(0, 3);
+      }
+      tableWrap.addEventListener('click', function(e) {
+        const td = e.target.closest('[data-history-idx]');
+        if (!td) return;
+        const idx = Number(td.dataset.historyIdx);
+        if (e.target.classList.contains('sh-view-btn')) {
+          renderPanel('overview');
+          window.scrollTo(0, 0);
+        } else if (e.target.classList.contains('sh-dl-btn')) {
+          const histSite = state.sites ? state.sites.find(s => s.id === state.selectedSiteId) : null;
+          if (histSite && historyChecks[idx]) generateClientReport(histSite, [historyChecks[idx]], state.plan);
+        }
+      });
+    }
+    return;
+  }
+
+  if (panelName === 'reports') {
+    syncContentHeader(site, site ? statusLabel(site.last_status) : null, null, true);
+    const nameEl = document.getElementById('dbSelectedSiteName');
+    if (site && nameEl) nameEl.textContent = site.name;
+    detail.classList.remove('empty-state', 'is-loading');
+    if (!site) {
+      detail.innerHTML = '<div class="db-empty-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>' +
+        '<h2>' + escapeHtml(t('dashboard.reports')) + '</h2>' +
+        '<p>' + escapeHtml(t('dashboard.noReports')) + '</p>';
+      detail.classList.add('empty-state');
+      return;
+    }
+    const latest = checks[0];
+    let html = '<div style="padding:4px 0;">' +
+      '<h3 style="margin-bottom:16px;">' + escapeHtml(t('dashboard.reports')) + '</h3>';
+    if (latest) {
+      const scoreColor = latest.score >= 80 ? 'var(--green)' : latest.score >= 60 ? 'var(--amber)' : 'var(--red)';
+      html += '<div class="detail-panel" style="margin-bottom:20px;">' +
+        '<div class="detail-panel-head"><span>' + escapeHtml(t('dashboard.latestReport')) + '</span></div>' +
+        '<div style="padding:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;">' +
+        '<div><span class="muted" style="font-size:.85rem;">' + escapeHtml(t('dashboard.healthScore')) + '</span><h3 style="color:' + scoreColor + ';margin:4px 0;">' + (latest.score || '-') + '/100</h3></div>' +
+        '<div><span class="muted" style="font-size:.85rem;">' + escapeHtml(t('dashboard.lastCheck')) + '</span><p style="margin:4px 0;">' + formatDateTime(latest.created_at) + '</p></div>' +
+        '<button class="button small" type="button" id="downloadLatestReportBtn">' + escapeHtml(t('dashboard.downloadReport')) + '</button>' +
+        '</div></div>';
+    }
+    if (checks.length > 1) {
+      html += '<div class="detail-panel"><div class="detail-panel-head"><span>Previous Reports</span></div>' +
+        '<div style="overflow-x:auto;">' + buildScanHistoryTable(checks.slice(1), state.plan) + '</div></div>';
+    }
+    if (!latest) {
+      html += '<div class="empty subtle">' + escapeHtml(t('dashboard.noHistory')) + '</div>';
+    }
+    html += '</div>';
+    detail.innerHTML = html;
+    const dlBtn = document.getElementById('downloadLatestReportBtn');
+    if (dlBtn && site && latest) {
+      dlBtn.addEventListener('click', () => generateClientReport(site, [latest], state.plan));
+    }
+    const tableWrap = detail.querySelector('.scan-history-table');
+    if (tableWrap) {
+      tableWrap.closest('div').addEventListener('click', function(e) {
+        const td = e.target.closest('[data-history-idx]');
+        if (!td) return;
+        const idx = Number(td.dataset.historyIdx);
+        if (e.target.classList.contains('sh-dl-btn')) {
+          if (site && checks[idx + 1]) generateClientReport(site, [checks[idx + 1]], state.plan);
+        }
+      });
+    }
+    return;
+  }
+
+  if (panelName === 'api-access') {
+    syncContentHeader(null, null, null, true);
+    const nameEl = document.getElementById('dbSelectedSiteName');
+    if (nameEl) nameEl.textContent = t('dashboard.apiAccess');
+    detail.classList.remove('empty-state', 'is-loading');
+    if (state.plan !== 'agency') {
+      detail.innerHTML = '<div class="locked-section" style="text-align:center;padding:40px 20px;">' +
+        '<div style="font-size:2.5rem;margin-bottom:12px;">🔒</div>' +
+        '<h3 style="margin-bottom:8px;">' + escapeHtml(t('dashboard.apiAccessLocked')) + '</h3>' +
+        '<p style="color:var(--muted);max-width:400px;margin:0 auto 20px;">' + escapeHtml(t('dashboard.apiAccessLockedDesc')) + '</p>' +
+        '<button class="button small" data-dashboard-upgrade="agency">' + escapeHtml(t('dashboard.upgradeAgencyBtn')) + '</button>' +
+        '</div>';
+    } else {
+      const savedKey = localStorage.getItem('st_api_key') || '';
+      detail.innerHTML = '<div class="api-access-section" style="padding:20px;">' +
+        '<div class="api-coming-soon-notice" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#0369a1;">' +
+        escapeHtml(t('dashboard.apiAccessNotice')) + '</div>' +
+        '<h3 style="margin-bottom:16px;">Your API Key</h3>' +
+        '<div class="api-key-row" style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">' +
+        '<code id="apiKeyDisplay" style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.85rem;letter-spacing:.05em;">' +
+        (savedKey ? escapeHtml(savedKey) : 'Click Generate to create your demo key') + '</code>' +
+        '<button class="button small secondary" id="generateApiKeyBtn" type="button">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
+        '<button class="button small secondary" id="copyApiKeyBtn" type="button">' + escapeHtml(t('dashboard.copyKey')) + '</button>' +
+        '</div>' +
+        '<h4 style="margin-bottom:12px;">' + escapeHtml(t('dashboard.endpointExamples')) + '</h4>' +
+        '<div style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-family:monospace;font-size:.8rem;line-height:2;">' +
+        '<div><span style="color:#94a3b8;">POST</span> /api/analyze</div>' +
+        '<div><span style="color:#94a3b8;">GET</span>  /api/monitors</div>' +
+        '<div><span style="color:#94a3b8;">GET</span>  /api/scan-history</div>' +
+        '<div><span style="color:#94a3b8;">GET</span>  /api/incidents</div>' +
+        '</div>' +
+        '<h4 style="margin:16px 0 10px;">Example Request</h4>' +
+        '<pre style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-size:.78rem;overflow-x:auto;">curl https://sitetrace-api.onrender.com/api/monitors \
+  -H "Authorization: Bearer YOUR_API_KEY"</pre>' +
+        '</div>';
+      const genBtn = document.getElementById('generateApiKeyBtn');
+      if (genBtn) {
+        genBtn.addEventListener('click', () => {
+          const key = 'st_demo_' + Math.random().toString(36).slice(2, 14);
+          localStorage.setItem('st_api_key', key);
+          const disp = document.getElementById('apiKeyDisplay');
+          if (disp) disp.textContent = key;
+        });
+      }
+      const copyBtn = document.getElementById('copyApiKeyBtn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+          const disp = document.getElementById('apiKeyDisplay');
+          if (disp) {
+            navigator.clipboard.writeText(disp.textContent).then(() => {
+              copyBtn.textContent = 'Copied!';
+              setTimeout(() => { copyBtn.textContent = t('dashboard.copyKey'); }, 2000);
+            });
+          }
+        });
+      }
+    }
+    return;
+  }
+
+  if (panelName === 'settings') {
+    syncContentHeader(site, site ? statusLabel(site.last_status) : null, null, true);
+    const nameEl = document.getElementById('dbSelectedSiteName');
+    if (site && nameEl) nameEl.textContent = site.name;
+    detail.classList.remove('empty-state', 'is-loading');
+    if (!site) {
+      detail.innerHTML = '<div class="db-empty-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>' +
+        '<h2>' + escapeHtml(t('dashboard.settings')) + '</h2>' +
+        '<p>' + escapeHtml(t('dashboard.selectSiteFirst')) + '</p>';
+      detail.classList.add('empty-state');
+      return;
+    }
+    detail.innerHTML = buildSettingsForm(site);
+    return;
+  }
+}
+
 
 async function initDashboard() {
   if (page !== 'dashboard') return;
@@ -3197,6 +3438,23 @@ async function initDashboard() {
       if (e.target === addSiteModal) addSiteModal.classList.add('hidden');
     });
   }
+
+  // Sidebar navigation
+  document.querySelectorAll('.db-nav-item').forEach(navEl => {
+    navEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      const panelMap = {
+        navOverview: 'overview',
+        navAlerts: 'alerts',
+        navScanHistory: 'scan-history',
+        navReports: 'reports',
+        navApiAccess: 'api-access',
+        navSettings: 'settings'
+      };
+      const panel = panelMap[navEl.id];
+      if (panel) renderPanel(panel);
+    });
+  });
 
   // Upgrade click handler (works anywhere in dashboard)
   document.getElementById('dashboardView').addEventListener('click', async (event) => {
