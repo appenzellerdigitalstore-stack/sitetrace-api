@@ -1785,4 +1785,41 @@ app.post('/jobs/run-checks', async (req, res) => {
       const { analysis, level, incident } = await runMonitorCheck(site, 'en', site.user_id);
       results.push({ site_id: site.id, status: level, score: analysis.score, plan, incident: Boolean(incident && incident.incident) });
     } catch (error) {
-      results.push({ site_id: site.id, status: 'error', err
+      results.push({ site_id: site.id, status: 'error', error: error.message });
+    }
+  }
+
+  res.json({ status: 'success', checked: results.filter((result) => result.status !== 'skipped').length, results });
+});
+
+app.get('/pricing', (req, res) => {
+  res.sendFile(path.join(__dirname, 'pricing.html'));
+});
+
+app.get('/demo', (req, res) => {
+  res.sendFile(path.join(__dirname, 'demo.html'));
+});
+
+app.get('/api-docs', (req, res) => {
+  res.sendFile(path.join(__dirname, 'api.html'));
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+app.get('/signin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'signin.html'));
+});
+
+app.get('/status/:slug', (req, res) => {
+  res.sendFile(path.join(__dirname, 'status.html'));
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log('SiteTrace API listening on port ' + PORT);
+});
