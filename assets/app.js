@@ -919,7 +919,13 @@ function initPreferences() {
       currentLocale = event.target.value === 'es' ? 'es' : 'en';
       localStorage.setItem('sitetrace_locale', currentLocale);
       applyLanguage();
-      if (page === 'dashboard' && state.sites.length) renderDashboard();
+      if (page === 'dashboard' && state.sites.length) {
+        renderDashboard();
+        if (state.selectedSiteId) {
+          const selSite = state.sites.find(s => s.id === state.selectedSiteId);
+          if (selSite) renderSiteDetail(selSite, state.selectedChecks || []);
+        }
+      }
     });
     document.getElementById('themeToggle').addEventListener('click', () => {
       currentTheme = currentTheme === 'day' ? 'night' : 'day';
@@ -1142,6 +1148,11 @@ function planIntervalMinutes() {
 
 function planIntervalLabel() {
   const mins = planIntervalMinutes();
+  if (currentLocale === 'es') {
+    if (mins <= 1) return 'Cada 1 min';
+    if (mins <= 5) return 'Cada 5 min';
+    return `Cada ${mins} min`;
+  }
   if (mins <= 1) return 'Every 1 min';
   if (mins <= 5) return 'Every 5 min';
   return `Every ${mins} min`;
@@ -2771,7 +2782,7 @@ function renderSiteDetail(site) {
   detail.innerHTML = `
     <!-- Scan proof bar -->
     <div class="scan-proof-bar">
-      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? t('dashboard.planAgency') : state.plan === 'starter' ? t('dashboard.planStarter') : t('dashboard.planFree'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.max_sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
+      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? t('dashboard.planAgency') : state.plan === 'starter' ? t('dashboard.planStarter') : t('dashboard.planFree'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
       <span>${escapeHtml(t('dashboard.lastScan'))}: <strong id="lastScanTime">–</strong></span>
       <span>·</span>
       <span>${escapeHtml(t('dashboard.nextScan'))} <strong id="scanCountdown">–</strong></span>

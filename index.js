@@ -1516,7 +1516,8 @@ app.post('/api/sites', requireUser, async (req, res) => {
       name,
       url: normalized,
       monitoring_enabled: true,
-      check_interval_minutes: limits.interval_minutes
+      check_interval_minutes: limits.interval_minutes,
+      public_slug: Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6)
     })
     .select('*')
     .single();
@@ -1675,6 +1676,15 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
   }
 
   updates.updated_at = new Date().toISOString();
+
+  // Auto-generate public_slug if enabling status page and slug doesn't exist yet
+  if (updates.status_page_enabled) {
+    const { data: existing } = await supabaseAdmin
+      .from('sites').select('public_slug').eq('id', req.params.id).single();
+    if (!existing?.public_slug) {
+      updates.public_slug = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+    }
+  }
 
   const { data, error } = await supabaseAdmin
     .from('sites')
