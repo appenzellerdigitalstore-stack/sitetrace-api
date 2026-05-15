@@ -201,9 +201,12 @@ const copy = {
       apiAccess: 'API Access',
       apiAccessLocked: 'API Access — Agency Plan',
       apiAccessLockedDesc: 'Integrate SiteTrace monitoring data into your own tools, dashboards, and workflows.',
-      apiAccessNotice: 'Generate API keys for server-side integrations. New keys are shown once, so store them before leaving this panel.',
-      generateKey: 'Generate Key',
-      newKeyName: 'Key name',
+      apiAccessNotice: 'API keys are for server-side integrations. Treat them like passwords and only share them with systems you trust.',
+      apiKeyCreateTitle: 'Create an API key',
+      apiKeyCreateHelp: 'Use a label that tells you where this key will be used, such as Production, Zapier, or Client dashboard.',
+      apiKeyOneTime: 'Copy this key now. For security, SiteTrace will not show it again.',
+      generateKey: 'Create key',
+      newKeyName: 'Label, e.g. Production',
       activeKeys: 'Active keys',
       revokeKey: 'Revoke',
       noApiKeys: 'No API keys yet.',
@@ -419,9 +422,12 @@ const copy = {
       apiAccess: 'Acceso API',
       apiAccessLocked: 'Acceso API — Plan Agency',
       apiAccessLockedDesc: 'Integra los datos de SiteTrace en tus propias herramientas y flujos de trabajo.',
-      apiAccessNotice: 'Genera API keys para integraciones de servidor. Las keys nuevas se muestran una sola vez, guardalas antes de salir de este panel.',
-      generateKey: 'Generar clave',
-      newKeyName: 'Nombre de key',
+      apiAccessNotice: 'Las API keys son para integraciones de servidor. Tratalas como contrasenas y compartelas solo con sistemas confiables.',
+      apiKeyCreateTitle: 'Crear una API key',
+      apiKeyCreateHelp: 'Usa una etiqueta que indique donde se usara esta key, como Produccion, Zapier o Dashboard cliente.',
+      apiKeyOneTime: 'Copia esta key ahora. Por seguridad, SiteTrace no volvera a mostrarla.',
+      generateKey: 'Crear key',
+      newKeyName: 'Etiqueta, ej. Produccion',
       activeKeys: 'Keys activas',
       revokeKey: 'Revocar',
       noApiKeys: 'Aun no hay API keys.',
@@ -3206,15 +3212,22 @@ function renderApiAccessPanel(detail) {
     return;
   }
 
-  detail.innerHTML = '<div class="api-access-section" style="padding:20px;">' +
+  detail.innerHTML = '<div class="api-access-section" style="padding:20px;max-width:980px;">' +
+    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin-bottom:20px;">' +
+    '<h3 style="margin:0 0 6px;font-size:1rem;">' + escapeHtml(t('dashboard.apiKeyCreateTitle')) + '</h3>' +
+    '<p style="margin:0;color:var(--muted);font-size:.88rem;line-height:1.5;">' + escapeHtml(t('dashboard.apiKeyCreateHelp')) + '</p>' +
+    '</div>' +
     '<div class="api-coming-soon-notice" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#0369a1;">' +
     escapeHtml(t('dashboard.apiAccessNotice')) + '</div>' +
-    '<h3 style="margin-bottom:16px;">' + escapeHtml(t('dashboard.apiAccess')) + '</h3>' +
-    '<form id="apiKeyForm" class="api-key-row" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' +
-    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="' + escapeHtml(t('dashboard.newKeyName')) + '" style="flex:1;min-width:180px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;">' +
+    '<form id="apiKeyForm" class="api-key-row" style="display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:10px;margin-bottom:14px;">' +
+    '<label style="display:grid;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">' +
+    escapeHtml(t('dashboard.newKeyName')) +
+    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="Production" style="width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--text);font-weight:500;">' +
+    '</label>' +
     '<button class="button small secondary" type="submit">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
     '</form>' +
-    '<div id="newApiKeyBox" style="display:none;margin-bottom:18px;">' +
+    '<div id="newApiKeyBox" style="display:none;margin-bottom:18px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">' +
+    '<p style="margin:0 0 10px;color:#047857;font-size:.82rem;font-weight:700;">' + escapeHtml(t('dashboard.apiKeyOneTime')) + '</p>' +
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
     '<code id="apiKeyDisplay" style="flex:1;min-width:220px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.85rem;letter-spacing:.03em;overflow-x:auto;"></code>' +
     '<button class="button small secondary" id="copyApiKeyBtn" type="button">' + escapeHtml(t('dashboard.copyKey')) + '</button>' +
