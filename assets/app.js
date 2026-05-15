@@ -1272,11 +1272,11 @@ function planIntervalMinutes() {
 function planIntervalLabel() {
   const mins = planIntervalMinutes();
   if (currentLocale === 'es') {
-    if (mins <= 1) return 'Cada 1 min';
+    if (mins <= 1) return 'Prioritario · Cada 1 min';
     if (mins <= 5) return 'Cada 5 min';
     return `Cada ${mins} min`;
   }
-  if (mins <= 1) return 'Every 1 min';
+  if (mins <= 1) return 'Priority · Every 1 min';
   if (mins <= 5) return 'Every 5 min';
   if (mins <= 20) return 'Every 20 min';
   return `Every ${mins} min`;
@@ -1926,7 +1926,7 @@ function renderSidebarPlanUsage() {
   const max = Number.isFinite(Number(state.limits.sites)) ? Number(state.limits.sites) : 0;
   const interval = Number(state.limits.interval_minutes || 60);
   const reached = max > 0 && used >= max;
-  const cadence = interval > 0 ? `Every ${interval}m` : 'Manual scans';
+  const cadence = planIntervalLabel();
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const upgrade = planUpgradeTarget();
   target.innerHTML = `
@@ -2940,7 +2940,7 @@ function renderSiteDetail(site) {
     </div>
 
     <!-- Overview -->
-    <div class="detail-tab-panel" data-panel="overview">
+    <div class="detail-tab-panel" data-panel="overview" style="padding-top:24px;">
       <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);">
         <h2 style="margin:0 0 6px;font-size:1.2rem;font-weight:700;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
         <p style="margin:0;font-size:.88rem;color:var(--muted);">${escapeHtml(t('dashboard.websiteHealthSubtitle'))}</p>
@@ -3594,7 +3594,7 @@ async function init() {
   await initAuth();
   await initDashboard();
   await initStatusPage();
-  await initBilling();
+  await initBiilling();
 }
 
 init();
