@@ -201,8 +201,12 @@ const copy = {
       apiAccess: 'API Access',
       apiAccessLocked: 'API Access — Agency Plan',
       apiAccessLockedDesc: 'Integrate SiteTrace monitoring data into your own tools, dashboards, and workflows.',
-      apiAccessNotice: 'API authentication and usage tracking will be connected to Supabase in a future update. This preview shows where Agency users will manage API access.',
+      apiAccessNotice: 'Generate API keys for server-side integrations. New keys are shown once, so store them before leaving this panel.',
       generateKey: 'Generate Key',
+      newKeyName: 'Key name',
+      activeKeys: 'Active keys',
+      revokeKey: 'Revoke',
+      noApiKeys: 'No API keys yet.',
       copyKey: 'Copy',
       endpointExamples: 'API Endpoints',
       alertsIncidents: 'Alert Center',
@@ -415,8 +419,12 @@ const copy = {
       apiAccess: 'Acceso API',
       apiAccessLocked: 'Acceso API — Plan Agency',
       apiAccessLockedDesc: 'Integra los datos de SiteTrace en tus propias herramientas y flujos de trabajo.',
-      apiAccessNotice: 'La autenticacion API y el seguimiento de uso se conectaran a Supabase en una actualizacion futura.',
+      apiAccessNotice: 'Genera API keys para integraciones de servidor. Las keys nuevas se muestran una sola vez, guardalas antes de salir de este panel.',
       generateKey: 'Generar clave',
+      newKeyName: 'Nombre de key',
+      activeKeys: 'Keys activas',
+      revokeKey: 'Revocar',
+      noApiKeys: 'Aun no hay API keys.',
       copyKey: 'Copiar',
       endpointExamples: 'Endpoints de API',
       alertsIncidents: 'Centro de alertas',
@@ -1824,9 +1832,10 @@ async function loadDashboard() {
   state.limits = me.limits || (state.config && state.config.plans && state.config.plans[state.plan]) || null;
   state.features = me.features || (state.config && state.config.plans && state.config.plans[state.plan] && state.config.plans[state.plan].features) || null;
   state.usage = me.usage || null;
-  const { data: sites, error } = await state.supabase.from('sites').select('*').order('created_at', { ascending: false });
-  if (error) throw error;
-  state.sites = sites || [];
+  const sitesResponse = await fetch(apiPath('/api/sites'), { headers: authHeaders() });
+  const sitesData = await sitesResponse.json();
+  if (!sitesResponse.ok) throw new Error(sitesData.message || 'Could not load sites');
+  state.sites = sitesData.sites || [];
   if (!state.selectedSiteId && state.sites.length) state.selectedSiteId = state.sites[0].id;
   if (state.selectedSiteId && !state.sites.some((site) => site.id === state.selectedSiteId)) {
     state.selectedSiteId = state.sites.length ? state.sites[0].id : null;
@@ -2064,14 +2073,17 @@ async function loadSelectedChecks() {
     state.selectedChecks = [];
     return;
   }
-  const { data, error } = await state.supabase.from('checks').select('*').eq('site_id', state.selectedSiteId).order('created_at', { ascending: false }).limit(50);
-  if (error) throw error;
-  state.selectedChecks = data || [];
+  const response = await fetch(apiPath(`/api/sites/${state.selectedSiteId}/checks?limit=50`), { headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Could not load checks');
+  state.selectedChecks = data.checks || [];
 }
 
 async function showHistory(siteId) {
-  const { data, error } = await state.supabase.from('checks').select('*').eq('site_id', siteId).order('created_at', { ascending: false }).limit(10);
-  if (error) throw error;
+  const response = await fetch(apiPath(`/api/sites/${siteId}/checks?limit=10`), { headers: authHeaders() });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.message || 'Could not load checks');
+  const data = payload.checks || [];
   const history = document.getElementById('siteDetail');
   if (!data.length) {
     history.innerHTML = `<div class="empty">${escapeHtml(t('dashboard.noHistory'))}</div>`;
@@ -3120,6 +3132,127 @@ function buildSettingsForm(site) {
     '</form>';
 }
 
+function renderApiKeys(keys) {
+  const target = document.getElementById('apiKeysList');
+  if (!target) return;
+  const active = (keys || []).filter((key) => !key.revoked_at);
+  if (!active.length) {
+    target.innerHTML = '<div class="empty subtle">' + escapeHtml(t('dashboard.noApiKeys')) + '</div>';
+    return;
+  }
+  target.innerHTML = active.map((key) => (
+    '<div class="check" style="align-items:center;">' +
+    '<span class="dot online"></span>' +
+    '<div style="flex:1;">' +
+    '<p class="check-title">' + escapeHtml(key.name || 'API key') + '</p>' +
+    '<p class="check-copy">' + escapeHtml(key.key_prefix || '') + '... - ' + escapeHtml(key.last_used_at ? formatDateTime(key.last_used_at) : 'Never used') + '</p>' +
+    '</div>' +
+    '<button class="button small secondary" type="button" data-revoke-api-key="' + escapeHtml(key.id) + '">' + escapeHtml(t('dashboard.revokeKey')) + '</button>' +
+    '</div>'
+  )).join('');
+  target.querySelectorAll('[data-revoke-api-key]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const response = await fetch(apiPath(`/api/api-keys/${button.dataset.revokeApiKey}`), { method: 'DELETE', headers: authHeaders() });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not revoke API key');
+      await loadApiKeys();
+    });
+  });
+}
+
+async function loadApiKeys() {
+  const target = document.getElementById('apiKeysList');
+  if (target) target.innerHTML = '<div class="empty subtle">Loading...</div>';
+  try {
+    const response = await fetch(apiPath('/api/api-keys'), { headers: authHeaders() });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Could not load API keys');
+    renderApiKeys(data.api_keys || []);
+  } catch (error) {
+    if (target) target.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+  }
+}
+
+async function createApiKey(event) {
+  event.preventDefault();
+  const input = document.getElementById('apiKeyNameInput');
+  const response = await fetch(apiPath('/api/api-keys'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ name: input && input.value ? input.value : 'API key' })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Could not create API key');
+  if (input) input.value = '';
+  const box = document.getElementById('newApiKeyBox');
+  const display = document.getElementById('apiKeyDisplay');
+  if (box) box.style.display = 'block';
+  if (display) display.textContent = data.api_key || '';
+  await loadApiKeys();
+}
+
+function renderApiAccessPanel(detail) {
+  syncContentHeader(null, null, null, true);
+  const nameEl = document.getElementById('dbSelectedSiteName');
+  if (nameEl) nameEl.textContent = t('dashboard.apiAccess');
+  detail.classList.remove('empty-state', 'is-loading');
+  if (state.plan !== 'agency') {
+    detail.innerHTML = '<div class="locked-section" style="text-align:center;padding:40px 20px;">' +
+      '<div style="font-size:2.5rem;margin-bottom:12px;">API</div>' +
+      '<h3 style="margin-bottom:8px;">' + escapeHtml(t('dashboard.apiAccessLocked')) + '</h3>' +
+      '<p style="color:var(--muted);max-width:400px;margin:0 auto 20px;">' + escapeHtml(t('dashboard.apiAccessLockedDesc')) + '</p>' +
+      '<button class="button small" data-dashboard-upgrade="agency">' + escapeHtml(t('dashboard.upgradeAgencyBtn')) + '</button>' +
+      '</div>';
+    return;
+  }
+
+  detail.innerHTML = '<div class="api-access-section" style="padding:20px;">' +
+    '<div class="api-coming-soon-notice" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#0369a1;">' +
+    escapeHtml(t('dashboard.apiAccessNotice')) + '</div>' +
+    '<h3 style="margin-bottom:16px;">' + escapeHtml(t('dashboard.apiAccess')) + '</h3>' +
+    '<form id="apiKeyForm" class="api-key-row" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="' + escapeHtml(t('dashboard.newKeyName')) + '" style="flex:1;min-width:180px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;">' +
+    '<button class="button small secondary" type="submit">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
+    '</form>' +
+    '<div id="newApiKeyBox" style="display:none;margin-bottom:18px;">' +
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+    '<code id="apiKeyDisplay" style="flex:1;min-width:220px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.85rem;letter-spacing:.03em;overflow-x:auto;"></code>' +
+    '<button class="button small secondary" id="copyApiKeyBtn" type="button">' + escapeHtml(t('dashboard.copyKey')) + '</button>' +
+    '</div></div>' +
+    '<h4 style="margin-bottom:12px;">' + escapeHtml(t('dashboard.endpointExamples')) + '</h4>' +
+    '<div style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-family:monospace;font-size:.8rem;line-height:2;">' +
+    '<div><span style="color:#94a3b8;">POST</span> /api/v1/analyze</div>' +
+    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors</div>' +
+    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors/{id}/checks</div>' +
+    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/incidents</div>' +
+    '</div>' +
+    '<h4 style="margin:16px 0 10px;">Example Request</h4>' +
+    '<pre style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-size:.78rem;overflow-x:auto;">curl https://sitetrace-api.onrender.com/api/v1/monitors \\\n  -H "Authorization: Bearer YOUR_API_KEY"</pre>' +
+    '<h4 style="margin:18px 0 10px;">' + escapeHtml(t('dashboard.activeKeys')) + '</h4>' +
+    '<div id="apiKeysList"><div class="empty subtle">Loading...</div></div>' +
+    '</div>';
+
+  loadApiKeys();
+  const form = document.getElementById('apiKeyForm');
+  if (form) {
+    form.addEventListener('submit', (event) => {
+      createApiKey(event).catch((error) => setDashboardMessage(error.message, 'error'));
+    });
+  }
+  const copyBtn = document.getElementById('copyApiKeyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const disp = document.getElementById('apiKeyDisplay');
+      if (disp) {
+        navigator.clipboard.writeText(disp.textContent).then(() => {
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => { copyBtn.textContent = t('dashboard.copyKey'); }, 2000);
+        });
+      }
+    });
+  }
+}
+
 function renderPanel(panelName) {
   state.dashboardPanel = panelName;
 
@@ -3255,62 +3388,7 @@ function renderPanel(panelName) {
   }
 
   if (panelName === 'api-access') {
-    syncContentHeader(null, null, null, true);
-    const nameEl = document.getElementById('dbSelectedSiteName');
-    if (nameEl) nameEl.textContent = t('dashboard.apiAccess');
-    detail.classList.remove('empty-state', 'is-loading');
-    if (state.plan !== 'agency') {
-      detail.innerHTML = '<div class="locked-section" style="text-align:center;padding:40px 20px;">' +
-        '<div style="font-size:2.5rem;margin-bottom:12px;">🔒</div>' +
-        '<h3 style="margin-bottom:8px;">' + escapeHtml(t('dashboard.apiAccessLocked')) + '</h3>' +
-        '<p style="color:var(--muted);max-width:400px;margin:0 auto 20px;">' + escapeHtml(t('dashboard.apiAccessLockedDesc')) + '</p>' +
-        '<button class="button small" data-dashboard-upgrade="agency">' + escapeHtml(t('dashboard.upgradeAgencyBtn')) + '</button>' +
-        '</div>';
-    } else {
-      const savedKey = localStorage.getItem('st_api_key') || '';
-      detail.innerHTML = '<div class="api-access-section" style="padding:20px;">' +
-        '<div class="api-coming-soon-notice" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#0369a1;">' +
-        escapeHtml(t('dashboard.apiAccessNotice')) + '</div>' +
-        '<h3 style="margin-bottom:16px;">Your API Key</h3>' +
-        '<div class="api-key-row" style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">' +
-        '<code id="apiKeyDisplay" style="flex:1;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.85rem;letter-spacing:.05em;">' +
-        (savedKey ? escapeHtml(savedKey) : 'Click Generate to create your demo key') + '</code>' +
-        '<button class="button small secondary" id="generateApiKeyBtn" type="button">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
-        '<button class="button small secondary" id="copyApiKeyBtn" type="button">' + escapeHtml(t('dashboard.copyKey')) + '</button>' +
-        '</div>' +
-        '<h4 style="margin-bottom:12px;">' + escapeHtml(t('dashboard.endpointExamples')) + '</h4>' +
-        '<div style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-family:monospace;font-size:.8rem;line-height:2;">' +
-        '<div><span style="color:#94a3b8;">POST</span> /api/analyze</div>' +
-        '<div><span style="color:#94a3b8;">GET</span>  /api/monitors</div>' +
-        '<div><span style="color:#94a3b8;">GET</span>  /api/scan-history</div>' +
-        '<div><span style="color:#94a3b8;">GET</span>  /api/incidents</div>' +
-        '</div>' +
-        '<h4 style="margin:16px 0 10px;">Example Request</h4>' +
-        '<pre style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-size:.78rem;overflow-x:auto;">curl https://sitetrace-api.onrender.com/api/monitors \
-  -H "Authorization: Bearer YOUR_API_KEY"</pre>' +
-        '</div>';
-      const genBtn = document.getElementById('generateApiKeyBtn');
-      if (genBtn) {
-        genBtn.addEventListener('click', () => {
-          const key = 'st_demo_' + Math.random().toString(36).slice(2, 14);
-          localStorage.setItem('st_api_key', key);
-          const disp = document.getElementById('apiKeyDisplay');
-          if (disp) disp.textContent = key;
-        });
-      }
-      const copyBtn = document.getElementById('copyApiKeyBtn');
-      if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-          const disp = document.getElementById('apiKeyDisplay');
-          if (disp) {
-            navigator.clipboard.writeText(disp.textContent).then(() => {
-              copyBtn.textContent = 'Copied!';
-              setTimeout(() => { copyBtn.textContent = t('dashboard.copyKey'); }, 2000);
-            });
-          }
-        });
-      }
-    }
+    renderApiAccessPanel(detail);
     return;
   }
 
@@ -3505,7 +3583,9 @@ async function initDashboard() {
       }
       if (deleteId) {
         if (!window.confirm(t('dashboard.deleteConfirm'))) return;
-        await state.supabase.from('sites').delete().eq('id', deleteId);
+        const response = await fetch(apiPath(`/api/sites/${deleteId}`), { method: 'DELETE', headers: authHeaders() });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Could not delete monitor');
         await loadDashboard();
       }
     } catch (error) {
@@ -3594,7 +3674,7 @@ async function init() {
   await initAuth();
   await initDashboard();
   await initStatusPage();
-  await initBiilling();
+  await initBilling();
 }
 
 init();

@@ -100,6 +100,20 @@ POST https://sitetrace-api.onrender.com/jobs/run-checks
 Authorization: Bearer long-random-secret
 ```
 
+### Agency API Keys
+
+Agency users can generate API keys from the dashboard API Access panel. Keys are shown once and stored only as SHA-256 hashes in Supabase.
+
+Available API endpoints:
+
+```bash
+GET  /api/v1/monitors
+GET  /api/v1/monitors/:id/checks
+GET  /api/v1/incidents
+POST /api/v1/analyze
+Authorization: Bearer st_your_api_key
+```
+
 ### Optional Alerts
 
 Add these if you want SiteTrace to send alerts when a monitored site changes into `down` or `warning`, and again when it resolves:

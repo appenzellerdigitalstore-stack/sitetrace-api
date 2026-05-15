@@ -4,6 +4,11 @@ const cheerio = require('cheerio');
 const cors = require('cors');
 const tls = require('tls');
 const path = require('path');
+const http = require('http');
+const https = require('https');
+const dns = require('dns').promises;
+const net = require('net');
+const crypto = require('crypto');
 const Stripe = require('stripe');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -309,6 +314,44 @@ function checkText(locale, key) {
   return messages[language(locale)].checks[key] || messages.en.checks[key];
 }
 
+function isPrivateIp(address) {
+  const ipVersion = net.isIP(address);
+
+  if (ipVersion === 4) {
+    const parts = address.split('.').map((part) => Number(part));
+    const [first, second] = parts;
+    return (
+      first === 0 ||
+      first === 10 ||
+      first === 127 ||
+      first === 169 && second === 254 ||
+      first === 172 && second >= 16 && second <= 31 ||
+      first === 192 && second === 168 ||
+      first >= 224
+    );
+  }
+
+  if (ipVersion === 6) {
+    const normalized = address.toLowerCase();
+    return (
+      normalized === '::1' ||
+      normalized === '::' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') ||
+      normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') ||
+      normalized.startsWith('feb')
+    );
+  }
+
+  return false;
+}
+
+function normalizeHostname(hostname) {
+  return String(hostname || '').replace(/\.+$/g, '').toLowerCase();
+}
+
 function normalizeUrl(rawUrl) {
   if (!rawUrl || typeof rawUrl !== 'string') {
     throw new Error('URL is required');
@@ -322,15 +365,79 @@ function normalizeUrl(rawUrl) {
     throw new Error('Unsupported protocol');
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  const hostname = normalizeHostname(parsed.hostname);
   const blockedHosts = ['localhost', '0.0.0.0', '127.0.0.1', '::1'];
-  const privatePatterns = [/^10\./, /^127\./, /^192\.168\./, /^169\.254\./, /^172\.(1[6-9]|2\d|3[0-1])\./];
 
-  if (blockedHosts.includes(hostname) || privatePatterns.some((pattern) => pattern.test(hostname))) {
+  if (blockedHosts.includes(hostname) || isPrivateIp(hostname)) {
     throw new Error('Private or local network URLs are not supported');
   }
 
   return parsed;
+}
+
+async function assertPublicHostname(hostname) {
+  const normalized = normalizeHostname(hostname);
+
+  if (!normalized || normalized === 'localhost' || isPrivateIp(normalized)) {
+    throw new Error('Private or local network URLs are not supported');
+  }
+
+  const records = await dns.lookup(normalized, { all: true, verbatim: true });
+  if (!records.length || records.some((record) => isPrivateIp(record.address))) {
+    throw new Error('Private or local network URLs are not supported');
+  }
+
+  return records;
+}
+
+async function validatePublicUrl(rawUrl) {
+  const urlObj = normalizeUrl(rawUrl);
+  await assertPublicHostname(urlObj.hostname);
+  return urlObj;
+}
+
+async function requestPublicUrl(urlObj, axiosOptions, maxRedirects = 5) {
+  let currentUrl = urlObj;
+
+  for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+    const records = await assertPublicHostname(currentUrl.hostname);
+    const targetAddress = records.find((record) => record.family === 4) || records[0];
+    const lookup = (hostname, options, callback) => {
+      if (typeof options === 'function') {
+        callback = options;
+        options = {};
+      }
+
+      if (options && options.all) {
+        callback(null, [{ address: targetAddress.address, family: targetAddress.family }]);
+        return;
+      }
+
+      callback(null, targetAddress.address, targetAddress.family);
+    };
+    const response = await axios.request({
+      ...axiosOptions,
+      url: currentUrl.toString(),
+      httpAgent: new http.Agent({ lookup }),
+      httpsAgent: new https.Agent({ lookup }),
+      maxRedirects: 0,
+      proxy: false,
+      validateStatus: () => true
+    });
+
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      return { response, finalUrl: currentUrl.toString() };
+    }
+
+    const location = response.headers && response.headers.location;
+    if (!location) {
+      return { response, finalUrl: currentUrl.toString() };
+    }
+
+    currentUrl = normalizeUrl(new URL(location, currentUrl).toString());
+  }
+
+  throw new Error('Too many redirects');
 }
 
 function getPageContext(urlObj, title, metaDescription) {
@@ -1120,8 +1227,73 @@ async function requireUser(req, res, next) {
   next();
 }
 
+function hashApiKey(apiKey) {
+  return crypto.createHash('sha256').update(String(apiKey || '')).digest('hex');
+}
+
+function generateApiKey() {
+  return `st_${crypto.randomBytes(32).toString('base64url')}`;
+}
+
+async function requireAgencyUser(req, res, next) {
+  const plan = await loadUserPlan(req.user.id);
+  const features = planFeatures(plan);
+
+  if (!features.api_access) {
+    return res.status(402).json({
+      status: 'error',
+      code: 'agency_required',
+      message: 'API access is available on the Agency plan.',
+      plan,
+      features
+    });
+  }
+
+  req.plan = plan;
+  req.features = features;
+  next();
+}
+
+async function requireApiKey(req, res, next) {
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
+  }
+
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token || !token.startsWith('st_')) {
+    return res.status(401).json({ status: 'error', message: 'Missing API key' });
+  }
+
+  const keyHash = hashApiKey(token);
+  const { data: apiKey, error } = await supabaseAdmin
+    .from('api_keys')
+    .select('id, user_id, name, revoked_at')
+    .eq('key_hash', keyHash)
+    .is('revoked_at', null)
+    .maybeSingle();
+
+  if (error || !apiKey) {
+    return res.status(401).json({ status: 'error', message: 'Invalid API key' });
+  }
+
+  const plan = await loadUserPlan(apiKey.user_id);
+  const features = planFeatures(plan);
+  if (!features.api_access) {
+    return res.status(402).json({ status: 'error', code: 'agency_required', message: 'API access is available on the Agency plan.' });
+  }
+
+  await supabaseAdmin
+    .from('api_keys')
+    .update({ last_used_at: new Date().toISOString() })
+    .eq('id', apiKey.id);
+
+  req.apiKey = apiKey;
+  req.apiUser = { id: apiKey.user_id };
+  next();
+}
+
 async function analyzeWebsite(rawUrl, locale, options = {}) {
-  const urlObj = normalizeUrl(rawUrl);
+  const urlObj = await validatePublicUrl(rawUrl);
   const startedAt = Date.now();
   const sslPromise = getSslInfo(urlObj);
   const domainExpiryPromise = getDomainExpiryInfo(urlObj.hostname).catch((error) => ({
@@ -1132,22 +1304,17 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     error: error.message
   }));
 
-  const response = await axios.get(urlObj.toString(), {
+  const { response, finalUrl } = await requestPublicUrl(urlObj, {
+    method: 'GET',
     timeout: API_TIMEOUT_MS,
-    maxRedirects: 5,
     maxContentLength: MAX_BODY_BYTES,
-    proxy: false,
     responseType: 'arraybuffer',
-    validateStatus: () => true,
     headers: {
       'User-Agent': 'SiteTraceBot/1.0 (+https://www.sitetrace.it.com/)'
     }
   });
 
   const responseTime = Date.now() - startedAt;
-  const finalUrl = response.request && response.request.res && response.request.res.responseUrl
-    ? response.request.res.responseUrl
-    : urlObj.toString();
   const html = responseText(response.data);
   const pageSizeBytes = Buffer.byteLength(html, 'utf8');
   const $ = cheerio.load(html);
@@ -1462,6 +1629,20 @@ app.get('/api/me', requireUser, async (req, res) => {
   });
 });
 
+app.get('/api/sites', requireUser, async (req, res) => {
+  const { data: sites, error } = await supabaseAdmin
+    .from('sites')
+    .select('*')
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', sites: sites || [] });
+});
+
 app.post('/api/sites', requireUser, async (req, res) => {
   const plan = await loadUserPlan(req.user.id);
   const limits = planLimits(plan);
@@ -1504,7 +1685,7 @@ app.post('/api/sites', requireUser, async (req, res) => {
 
   let normalized;
   try {
-    normalized = normalizeUrl(url).toString();
+    normalized = (await validatePublicUrl(url)).toString();
   } catch (error) {
     return res.status(400).json({ status: 'error', message: error.message });
   }
@@ -1527,6 +1708,34 @@ app.post('/api/sites', requireUser, async (req, res) => {
   }
 
   res.status(201).json({ status: 'success', site: data, plan, limits, features, usage: { sites: (count || 0) + 1 } });
+});
+
+app.get('/api/sites/:id/checks', requireUser, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const { data: site, error: siteError } = await supabaseAdmin
+    .from('sites')
+    .select('id')
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
+    .maybeSingle();
+
+  if (siteError || !site) {
+    return res.status(404).json({ status: 'error', message: 'Site not found' });
+  }
+
+  const { data: checks, error } = await supabaseAdmin
+    .from('checks')
+    .select('*')
+    .eq('site_id', req.params.id)
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', checks: checks || [] });
 });
 
 app.post('/api/test-alert-email', requireUser, async (req, res) => {
@@ -1571,21 +1780,26 @@ app.patch('/api/alerts/read-all', requireUser, async (req, res) => {
 });
 
 app.get('/api/ping', requireUser, async (req, res) => {
-  const url = (req.query.url || '').trim();
-  if (!url || !/^https?:\/\//i.test(url)) {
+  let urlObj;
+  try {
+    urlObj = await validatePublicUrl(req.query.url || '');
+  } catch (error) {
     return res.status(400).json({ error: 'Invalid url' });
   }
   const start = Date.now();
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const r = await fetch(url, { method: 'HEAD', signal: controller.signal, redirect: 'follow' });
-    clearTimeout(timer);
+    const { response } = await requestPublicUrl(urlObj, {
+      method: 'HEAD',
+      timeout: 6000,
+      headers: {
+        'User-Agent': 'SiteTraceBot/1.0 (+https://www.sitetrace.it.com/)'
+      }
+    });
     const ms = Date.now() - start;
-    return res.json({ ms, httpStatus: r.status, status: r.ok ? 'ok' : 'warn', ts: new Date().toISOString() });
+    return res.json({ ms, httpStatus: response.status, status: response.status >= 200 && response.status < 400 ? 'ok' : 'warn', ts: new Date().toISOString() });
   } catch (err) {
     const ms = Date.now() - start;
-    const timedOut = err.name === 'AbortError' || ms >= 5900;
+    const timedOut = err.code === 'ECONNABORTED' || ms >= 5900;
     return res.json({ ms: timedOut ? null : ms, httpStatus: null, status: timedOut ? 'timeout' : 'error', ts: new Date().toISOString() });
   }
 });
@@ -1667,6 +1881,14 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(updates, 'url') && updates.url) {
+    try {
+      updates.url = (await validatePublicUrl(updates.url)).toString();
+    } catch (error) {
+      return res.status(400).json({ status: 'error', message: error.message });
+    }
+  }
+
   if (updates.status_page_enabled && !features.status_pages) {
     return res.status(402).json({ status: 'error', code: 'paid_status_required', message: 'Public status pages are available on Starter and Agency plans.', plan, features });
   }
@@ -1699,6 +1921,142 @@ app.patch('/api/sites/:id', requireUser, async (req, res) => {
   }
 
   res.json({ status: 'success', site: data });
+});
+
+app.delete('/api/sites/:id', requireUser, async (req, res) => {
+  const { error } = await supabaseAdmin
+    .from('sites')
+    .delete()
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id);
+
+  if (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success' });
+});
+
+app.get('/api/api-keys', requireUser, requireAgencyUser, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('api_keys')
+    .select('id, name, key_prefix, created_at, last_used_at, revoked_at')
+    .eq('user_id', req.user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', api_keys: data || [] });
+});
+
+app.post('/api/api-keys', requireUser, requireAgencyUser, async (req, res) => {
+  const activeCount = await supabaseAdmin
+    .from('api_keys')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', req.user.id)
+    .is('revoked_at', null);
+
+  if ((activeCount.count || 0) >= 10) {
+    return res.status(400).json({ status: 'error', message: 'You can have up to 10 active API keys.' });
+  }
+
+  const name = String(req.body.name || 'API key').trim().slice(0, 80) || 'API key';
+  const apiKey = generateApiKey();
+  const { data, error } = await supabaseAdmin
+    .from('api_keys')
+    .insert({
+      user_id: req.user.id,
+      name,
+      key_hash: hashApiKey(apiKey),
+      key_prefix: apiKey.slice(0, 12)
+    })
+    .select('id, name, key_prefix, created_at, last_used_at, revoked_at')
+    .single();
+
+  if (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  res.status(201).json({ status: 'success', api_key: apiKey, key: data });
+});
+
+app.delete('/api/api-keys/:id', requireUser, requireAgencyUser, async (req, res) => {
+  const { error } = await supabaseAdmin
+    .from('api_keys')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', req.params.id)
+    .eq('user_id', req.user.id)
+    .is('revoked_at', null);
+
+  if (error) {
+    return res.status(400).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success' });
+});
+
+app.get('/api/v1/monitors', requireApiKey, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('sites')
+    .select('id, name, url, monitoring_enabled, last_status, last_score, last_response_time_ms, last_checked_at, created_at, updated_at')
+    .eq('user_id', req.apiUser.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', monitors: data || [] });
+});
+
+app.get('/api/v1/monitors/:id/checks', requireApiKey, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const { data, error } = await supabaseAdmin
+    .from('checks')
+    .select('id, site_id, status, score, status_code, response_time_ms, result, created_at')
+    .eq('user_id', req.apiUser.id)
+    .eq('site_id', req.params.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', checks: data || [] });
+});
+
+app.get('/api/v1/incidents', requireApiKey, async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const { data, error } = await supabaseAdmin
+    .from('incidents')
+    .select('id, site_id, status, title, details, resolved_at, duration_seconds, created_at')
+    .eq('user_id', req.apiUser.id)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    return res.status(500).json({ status: 'error', message: error.message });
+  }
+
+  res.json({ status: 'success', incidents: data || [] });
+});
+
+app.post('/api/v1/analyze', requireApiKey, async (req, res) => {
+  const locale = language(req.body.locale);
+  try {
+    res.json(await analyzeWebsite(req.body.url, locale));
+  } catch (error) {
+    const statusCode = error.message.includes('URL') || error.message.includes('protocol') || error.message.includes('Private') ? 400 : 502;
+    res.status(statusCode).json({
+      status: 'error',
+      code: statusCode === 400 ? 'invalid_url' : 'fetch_failed',
+      message: statusCode === 400 ? messages[locale].invalid : messages[locale].fetch,
+      detail: error.message
+    });
+  }
 });
 
 app.get('/public/status/:slug', async (req, res) => {
@@ -1826,15 +2184,7 @@ app.get('/status/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'status.html'));
 });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.listen(PORT, () => {
-  console.log('SiteTrace API listening on port ' + PORT);
-});
-
-// ── Public Client Report endpoint ──────────────────────────────────────────
+// Public Client Report endpoint
 app.get('/public/report/:slug', async (req, res) => {
   if (!supabaseAdmin) {
     return res.status(503).json({ status: 'error', message: 'Not configured' });
@@ -1868,4 +2218,12 @@ app.get('/public/report/:slug', async (req, res) => {
 
 app.get('/report/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'report.html'));
+});
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log('SiteTrace API listening on port ' + PORT);
 });
