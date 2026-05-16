@@ -105,6 +105,7 @@ Authorization: Bearer long-random-secret
 ### Agency API Keys
 
 Agency users can generate API keys from the dashboard API Access panel. Keys are shown once and stored only as SHA-256 hashes in Supabase.
+SiteTrace records per-key API usage for status codes, response time, rate-limit events, and dashboard usage totals.
 
 Available API endpoints:
 

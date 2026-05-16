@@ -98,6 +98,8 @@ API key flow:
 - [ ] Copy the key.
 - [ ] Call `/api/v1/monitors`.
 - [ ] Confirm `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers exist.
+- [ ] Confirm the key usage totals update in Dashboard > API Access.
+- [ ] Confirm `api_key_usage` has a row with endpoint, status code, response time, and rate limit status.
 - [ ] Revoke the key.
 - [ ] Call `/api/v1/monitors` again.
 

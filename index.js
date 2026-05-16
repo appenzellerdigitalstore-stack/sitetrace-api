@@ -579,6 +579,82 @@ function apiKeyRateLimit(limit, bucketName) {
   };
 }
 
+async function countApiKeyUsage(db, userId, apiKeyId, since, options = {}) {
+  let query = db
+    .from('api_key_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('api_key_id', apiKeyId)
+    .gte('created_at', since);
+
+  if (options.rateLimited) {
+    query = query.eq('rate_limited', true);
+  }
+
+  const { count, error } = await query;
+  if (error) throw error;
+  return count || 0;
+}
+
+async function loadApiKeyUsageSummary(db, userId, apiKeyId) {
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  try {
+    const [today, month, rateLimitedMonth] = await Promise.all([
+      countApiKeyUsage(db, userId, apiKeyId, todayStart.toISOString()),
+      countApiKeyUsage(db, userId, apiKeyId, monthStart.toISOString()),
+      countApiKeyUsage(db, userId, apiKeyId, monthStart.toISOString(), { rateLimited: true })
+    ]);
+
+    return { today, month, rate_limited_month: rateLimitedMonth };
+  } catch (error) {
+    logEvent('api_key_usage_summary_failed', {
+      user_id: userId,
+      api_key_id: apiKeyId,
+      message: error.message
+    });
+    return { today: 0, month: 0, rate_limited_month: 0 };
+  }
+}
+
+async function recordApiKeyUsage(req, statusCode, responseTimeMs) {
+  if (!req.apiKey || !req.apiUser || !req.db) return;
+
+  const routePath = req.route && req.route.path ? req.route.path : req.path;
+  const endpoint = `${req.baseUrl || ''}${routePath}`;
+  const { error } = await req.db
+    .from('api_key_usage')
+    .insert({
+      api_key_id: req.apiKey.id,
+      user_id: req.apiUser.id,
+      endpoint,
+      method: req.method,
+      status_code: statusCode,
+      response_time_ms: responseTimeMs,
+      rate_limited: statusCode === 429
+    });
+
+  if (error) throw error;
+}
+
+function trackApiKeyUsage(req, res, next) {
+  const startedAt = Date.now();
+
+  res.on('finish', () => {
+    recordApiKeyUsage(req, res.statusCode, Date.now() - startedAt).catch((error) => {
+      logEvent('api_key_usage_record_failed', {
+        api_key_id: req.apiKey && req.apiKey.id,
+        message: error.message
+      });
+    });
+  });
+
+  next();
+}
+
 function addCheck(checks, locale, category, id, level, weight, value, messageKey) {
   const [title, description, recommendation] = checkText(locale, messageKey);
   checks.push({ category, id, level, weight, value, title, description, recommendation });
@@ -2085,7 +2161,12 @@ app.get('/api/api-keys', requireUser, requireAgencyUser, async (req, res) => {
     return res.status(500).json({ status: 'error', message: error.message });
   }
 
-  res.json({ status: 'success', api_keys: data || [] });
+  const keys = await Promise.all((data || []).map(async (key) => ({
+    ...key,
+    usage: await loadApiKeyUsageSummary(supabaseAdmin, req.user.id, key.id)
+  })));
+
+  res.json({ status: 'success', api_keys: keys });
 });
 
 app.post('/api/api-keys', requireUser, requireAgencyUser, async (req, res) => {
@@ -2136,7 +2217,7 @@ app.delete('/api/api-keys/:id', requireUser, requireAgencyUser, async (req, res)
   res.json({ status: 'success' });
 });
 
-app.get('/api/v1/monitors', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
+app.get('/api/v1/monitors', requireApiKey, trackApiKeyUsage, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const db = req.db || getSupabaseAdmin();
   const { data, error } = await db
     .from('sites')
@@ -2151,7 +2232,7 @@ app.get('/api/v1/monitors', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, '
   res.json({ status: 'success', monitors: data || [] });
 });
 
-app.get('/api/v1/monitors/:id/checks', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
+app.get('/api/v1/monitors/:id/checks', requireApiKey, trackApiKeyUsage, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const db = req.db || getSupabaseAdmin();
   const { data, error } = await db
@@ -2169,7 +2250,7 @@ app.get('/api/v1/monitors/:id/checks', requireApiKey, apiKeyRateLimit(API_KEY_RE
   res.json({ status: 'success', checks: data || [] });
 });
 
-app.get('/api/v1/incidents', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
+app.get('/api/v1/incidents', requireApiKey, trackApiKeyUsage, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const db = req.db || getSupabaseAdmin();
   const { data, error } = await db
@@ -2186,7 +2267,7 @@ app.get('/api/v1/incidents', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 
   res.json({ status: 'success', incidents: data || [] });
 });
 
-app.post('/api/v1/analyze', requireApiKey, apiKeyRateLimit(API_KEY_ANALYZE_LIMIT, 'analyze'), async (req, res) => {
+app.post('/api/v1/analyze', requireApiKey, trackApiKeyUsage, apiKeyRateLimit(API_KEY_ANALYZE_LIMIT, 'analyze'), async (req, res) => {
   const locale = language(req.body.locale);
   try {
     res.json(await analyzeWebsite(req.body.url, locale));

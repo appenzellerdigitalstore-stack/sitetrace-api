@@ -152,8 +152,21 @@ create table if not exists public.api_keys (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.api_key_usage (
+  id uuid primary key default gen_random_uuid(),
+  api_key_id uuid references public.api_keys(id) on delete set null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  endpoint text not null,
+  method text not null,
+  status_code integer not null,
+  response_time_ms integer not null,
+  rate_limited boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 alter table public.alerts enable row level security;
 alter table public.api_keys enable row level security;
+alter table public.api_key_usage enable row level security;
 
 drop policy if exists "alerts_select_own" on public.alerts;
 create policy "alerts_select_own"
@@ -182,11 +195,18 @@ on public.api_keys for update
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
+drop policy if exists "api_key_usage_select_own" on public.api_key_usage;
+create policy "api_key_usage_select_own"
+on public.api_key_usage for select
+using (auth.uid() = user_id);
+
 create index if not exists alerts_user_id_created_at_idx on public.alerts(user_id, created_at desc);
 create index if not exists alerts_site_id_idx on public.alerts(site_id);
 create index if not exists alerts_user_id_read_idx on public.alerts(user_id, read);
 create index if not exists api_keys_user_id_created_at_idx on public.api_keys(user_id, created_at desc);
 create index if not exists api_keys_key_hash_idx on public.api_keys(key_hash);
+create index if not exists api_key_usage_api_key_id_created_at_idx on public.api_key_usage(api_key_id, created_at desc);
+create index if not exists api_key_usage_user_id_created_at_idx on public.api_key_usage(user_id, created_at desc);
 
 create index if not exists sites_user_id_idx on public.sites(user_id);
 create index if not exists sites_public_slug_idx on public.sites(public_slug);

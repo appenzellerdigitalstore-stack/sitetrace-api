@@ -211,6 +211,11 @@ const copy = {
       revokeKey: 'Revoke',
       revokeKeyConfirm: 'Revoke this API key? Any integration using it will stop working immediately.',
       noApiKeys: 'No API keys yet.',
+      lastUsed: 'Last used',
+      neverUsed: 'Never used',
+      apiUsageToday: 'Today',
+      apiUsageMonth: 'This month',
+      apiUsageRateLimited: 'Rate limited',
       copyKey: 'Copy',
       endpointExamples: 'API Endpoints',
       alertsIncidents: 'Alert Center',
@@ -433,6 +438,11 @@ const copy = {
       revokeKey: 'Revocar',
       revokeKeyConfirm: 'Revocar esta API key? Cualquier integracion que la use dejara de funcionar inmediatamente.',
       noApiKeys: 'Aun no hay API keys.',
+      lastUsed: 'Ultimo uso',
+      neverUsed: 'Nunca usada',
+      apiUsageToday: 'Hoy',
+      apiUsageMonth: 'Este mes',
+      apiUsageRateLimited: 'Limitadas',
       copyKey: 'Copiar',
       endpointExamples: 'Endpoints de API',
       alertsIncidents: 'Centro de alertas',
@@ -3149,14 +3159,28 @@ function renderApiKeys(keys) {
     return;
   }
   target.innerHTML = active.map((key) => (
+    (() => {
+      const usage = key.usage || {};
+      const lastUsed = key.last_used_at ? formatDateTime(key.last_used_at) : t('dashboard.neverUsed');
+      const usageText = [
+        t('dashboard.lastUsed') + ': ' + lastUsed,
+        t('dashboard.apiUsageToday') + ': ' + Number(usage.today || 0),
+        t('dashboard.apiUsageMonth') + ': ' + Number(usage.month || 0)
+      ];
+      if (usage.rate_limited_month) {
+        usageText.push(t('dashboard.apiUsageRateLimited') + ': ' + Number(usage.rate_limited_month));
+      }
+      return (
     '<div class="check" style="align-items:center;">' +
     '<span class="dot online"></span>' +
     '<div style="flex:1;">' +
     '<p class="check-title">' + escapeHtml(key.name || 'API key') + '</p>' +
-    '<p class="check-copy">' + escapeHtml(key.key_prefix || '') + '... - ' + escapeHtml(key.last_used_at ? formatDateTime(key.last_used_at) : 'Never used') + '</p>' +
+    '<p class="check-copy">' + escapeHtml(key.key_prefix || '') + '... - ' + escapeHtml(usageText.join(' - ')) + '</p>' +
     '</div>' +
     '<button class="button small secondary" type="button" data-revoke-api-key="' + escapeHtml(key.id) + '">' + escapeHtml(t('dashboard.revokeKey')) + '</button>' +
     '</div>'
+      );
+    })()
   )).join('');
   target.querySelectorAll('[data-revoke-api-key]').forEach((button) => {
     button.addEventListener('click', async () => {

@@ -16,7 +16,9 @@ function startServer() {
 }
 
 function createMockSupabase({ apiKey = null, plan = 'agency', sites = [] } = {}) {
+  const usage = [];
   return {
+    __usage: usage,
     from(table) {
       const state = { table };
       const builder = {
@@ -27,6 +29,13 @@ function createMockSupabase({ apiKey = null, plan = 'agency', sites = [] } = {})
         },
         is() { return builder; },
         update() { return builder; },
+        insert(values) {
+          if (table === 'api_key_usage') {
+            usage.push(values);
+            return Promise.resolve({ data: null, error: null });
+          }
+          return builder;
+        },
         order() {
           if (table === 'sites') return Promise.resolve({ data: sites, error: null });
           if (table === 'incidents') return Promise.resolve({ data: [], error: null });
@@ -139,6 +148,10 @@ test('API v1 endpoints reject non-agency API keys', async () => {
 });
 
 test('API v1 endpoints allow agency API keys and expose rate limit headers', async () => {
+  const supabase = createMockSupabase({
+    apiKey: { id: 'key-agency-ok', user_id: 'user-agency', name: 'Agency key' },
+    sites: [{ id: 'site-1', name: 'Site' }]
+  });
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/v1/monitors`, {
       headers: { Authorization: 'Bearer st_valid_agency_key' }
@@ -148,10 +161,16 @@ test('API v1 endpoints allow agency API keys and expose rate limit headers', asy
     assert.equal(body.status, 'success');
     assert.equal(response.headers.get('x-ratelimit-limit'), '2');
     assert.equal(response.headers.get('x-ratelimit-remaining'), '1');
-  }, createMockSupabase({ apiKey: { id: 'key-agency-ok', user_id: 'user-agency', name: 'Agency key' }, sites: [{ id: 'site-1', name: 'Site' }] }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(supabase.__usage.length, 1);
+    assert.equal(supabase.__usage[0].endpoint, '/api/v1/monitors');
+    assert.equal(supabase.__usage[0].status_code, 200);
+    assert.equal(supabase.__usage[0].rate_limited, false);
+  }, supabase);
 });
 
 test('API v1 endpoints rate limit agency API keys', async () => {
+  const supabase = createMockSupabase({ apiKey: { id: 'key-rate-limit', user_id: 'user-agency', name: 'Agency key' } });
   await withServer(async (baseUrl) => {
     const headers = { Authorization: 'Bearer st_valid_rate_limited_key' };
     await fetch(`${baseUrl}/api/v1/monitors`, { headers });
@@ -162,7 +181,11 @@ test('API v1 endpoints rate limit agency API keys', async () => {
     assert.equal(body.code, 'rate_limited');
     assert.equal(response.headers.get('x-ratelimit-limit'), '2');
     assert.equal(response.headers.get('x-ratelimit-remaining'), '0');
-  }, createMockSupabase({ apiKey: { id: 'key-rate-limit', user_id: 'user-agency', name: 'Agency key' } }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(supabase.__usage.length, 3);
+    assert.equal(supabase.__usage[2].status_code, 429);
+    assert.equal(supabase.__usage[2].rate_limited, true);
+  }, supabase);
 });
 
 test('public report API is not swallowed by the catch-all route', async () => {
