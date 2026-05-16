@@ -121,6 +121,32 @@
         </div>
       </div>
 
+      <div style="margin-top:72px;">
+        <h2 style="text-align:center; margin-bottom:12px;">Agency API access</h2>
+        <p class="lead" style="text-align:center; margin:0 auto 36px;">Agency users can create API keys for server-side integrations, dashboards, reports, and internal automations.</p>
+        <div class="watch-grid">
+          <div class="watch-item">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div><h4>Secure key storage</h4><p>Keys are shown once, then stored only as hashes. Revoke a key any time from API Access.</p></div>
+          </div>
+          <div class="watch-item">
+            <svg viewBox="0 0 24 24"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+            <div><h4>Monitoring data</h4><p>Read monitors, recent checks, and incident history from your own tools.</p></div>
+          </div>
+          <div class="watch-item">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <div><h4>On-demand audits</h4><p>Run API-based scans with the same URL safety checks used by the public analyzer.</p></div>
+          </div>
+        </div>
+        <div style="margin-top:28px;background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:18px;font-family:monospace;font-size:.84rem;line-height:2;overflow-x:auto;">
+          <div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors</div>
+          <div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors/{id}/checks</div>
+          <div><span style="color:#94a3b8;">GET</span>  /api/v1/incidents</div>
+          <div><span style="color:#94a3b8;">POST</span> /api/v1/analyze</div>
+          <div style="margin-top:12px;color:#94a3b8;">Authorization: Bearer st_your_api_key</div>
+        </div>
+      </div>
+
       <!-- CTA -->
       <div class="how-cta">
         <h2>Ready to try it?</h2>
@@ -149,7 +175,7 @@
     </div>
   </footer>
 
-  <script src="/assets/app.js?v=20260515-api-keys-ui"></script>
+  <script src="/assets/app.js?v=20260515-api-keys-docs"></script>
   <script>
     const navToggle = document.getElementById('navToggle');
     const navLinks  = document.getElementById('navLinks');

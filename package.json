@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node index.js",
-    "check": "node --check index.js"
+    "check": "node --check index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.1",

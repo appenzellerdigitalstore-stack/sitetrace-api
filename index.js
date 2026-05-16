@@ -1255,13 +1255,13 @@ async function requireAgencyUser(req, res, next) {
 }
 
 async function requireApiKey(req, res, next) {
-  if (!supabaseAdmin) {
-    return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
-  }
-
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!token || !token.startsWith('st_')) {
     return res.status(401).json({ status: 'error', message: 'Missing API key' });
+  }
+
+  if (!supabaseAdmin) {
+    return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
   }
 
   const keyHash = hashApiKey(token);
@@ -2224,6 +2224,10 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log('SiteTrace API listening on port ' + PORT);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('SiteTrace API listening on port ' + PORT);
+  });
+}
+
+module.exports = { app };

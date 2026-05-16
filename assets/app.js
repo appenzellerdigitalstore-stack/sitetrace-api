@@ -209,6 +209,7 @@ const copy = {
       newKeyName: 'Label, e.g. Production',
       activeKeys: 'Active keys',
       revokeKey: 'Revoke',
+      revokeKeyConfirm: 'Revoke this API key? Any integration using it will stop working immediately.',
       noApiKeys: 'No API keys yet.',
       copyKey: 'Copy',
       endpointExamples: 'API Endpoints',
@@ -430,6 +431,7 @@ const copy = {
       newKeyName: 'Etiqueta, ej. Produccion',
       activeKeys: 'Keys activas',
       revokeKey: 'Revocar',
+      revokeKeyConfirm: 'Revocar esta API key? Cualquier integracion que la use dejara de funcionar inmediatamente.',
       noApiKeys: 'Aun no hay API keys.',
       copyKey: 'Copiar',
       endpointExamples: 'Endpoints de API',
@@ -3158,6 +3160,7 @@ function renderApiKeys(keys) {
   )).join('');
   target.querySelectorAll('[data-revoke-api-key]').forEach((button) => {
     button.addEventListener('click', async () => {
+      if (!window.confirm(t('dashboard.revokeKeyConfirm'))) return;
       const response = await fetch(apiPath(`/api/api-keys/${button.dataset.revokeApiKey}`), { method: 'DELETE', headers: authHeaders() });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Could not revoke API key');
