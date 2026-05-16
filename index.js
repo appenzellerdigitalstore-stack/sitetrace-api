@@ -17,6 +17,9 @@ const PORT = process.env.PORT || 3000;
 const API_TIMEOUT_MS = Number(process.env.API_TIMEOUT_MS || 12000);
 const RATE_LIMIT = Number(process.env.RATE_LIMIT || 20);
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
+const API_KEY_READ_LIMIT = Number(process.env.API_KEY_READ_LIMIT || 600);
+const API_KEY_ANALYZE_LIMIT = Number(process.env.API_KEY_ANALYZE_LIMIT || 60);
+const API_KEY_RATE_LIMIT_WINDOW_MS = Number(process.env.API_KEY_RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 2 * 1024 * 1024);
 const APP_URL = process.env.APP_URL || 'https://www.sitetrace.it.com';
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
@@ -84,6 +87,7 @@ const EMAIL_DNS_GUIDANCE = {
 };
 
 const requestCounts = new Map();
+const apiKeyRequestCounts = new Map();
 const stripe = STRIPE_SECRET_KEY ? new Stripe(STRIPE_SECRET_KEY) : null;
 const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -109,6 +113,20 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   }
 }));
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+
+  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+
+  next();
+});
 
 app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripe || !supabaseAdmin || !STRIPE_WEBHOOK_SECRET) {
@@ -495,6 +513,49 @@ function checkRateLimit(req) {
     allowed: current.count <= RATE_LIMIT,
     remaining: Math.max(0, RATE_LIMIT - current.count),
     resetAt: current.resetAt
+  };
+}
+
+function checkBucketLimit(store, key, limit, windowMs) {
+  const now = Date.now();
+  const current = store.get(key);
+
+  if (!current || now > current.resetAt) {
+    const resetAt = now + windowMs;
+    store.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: limit - 1, resetAt };
+  }
+
+  current.count += 1;
+  store.set(key, current);
+
+  return {
+    allowed: current.count <= limit,
+    remaining: Math.max(0, limit - current.count),
+    resetAt: current.resetAt
+  };
+}
+
+function apiKeyRateLimit(limit, bucketName) {
+  return (req, res, next) => {
+    const keyId = req.apiKey && req.apiKey.id ? req.apiKey.id : 'unknown';
+    const bucket = `${bucketName}:${keyId}`;
+    const result = checkBucketLimit(apiKeyRequestCounts, bucket, limit, API_KEY_RATE_LIMIT_WINDOW_MS);
+
+    res.setHeader('X-RateLimit-Limit', String(limit));
+    res.setHeader('X-RateLimit-Remaining', String(result.remaining));
+    res.setHeader('X-RateLimit-Reset', new Date(result.resetAt).toISOString());
+
+    if (!result.allowed) {
+      return res.status(429).json({
+        status: 'error',
+        code: 'rate_limited',
+        message: 'API rate limit reached. Try again after the reset time.',
+        reset_at: new Date(result.resetAt).toISOString()
+      });
+    }
+
+    next();
   };
 }
 
@@ -1997,7 +2058,7 @@ app.delete('/api/api-keys/:id', requireUser, requireAgencyUser, async (req, res)
   res.json({ status: 'success' });
 });
 
-app.get('/api/v1/monitors', requireApiKey, async (req, res) => {
+app.get('/api/v1/monitors', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('sites')
     .select('id, name, url, monitoring_enabled, last_status, last_score, last_response_time_ms, last_checked_at, created_at, updated_at')
@@ -2011,7 +2072,7 @@ app.get('/api/v1/monitors', requireApiKey, async (req, res) => {
   res.json({ status: 'success', monitors: data || [] });
 });
 
-app.get('/api/v1/monitors/:id/checks', requireApiKey, async (req, res) => {
+app.get('/api/v1/monitors/:id/checks', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const { data, error } = await supabaseAdmin
     .from('checks')
@@ -2028,7 +2089,7 @@ app.get('/api/v1/monitors/:id/checks', requireApiKey, async (req, res) => {
   res.json({ status: 'success', checks: data || [] });
 });
 
-app.get('/api/v1/incidents', requireApiKey, async (req, res) => {
+app.get('/api/v1/incidents', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
   const { data, error } = await supabaseAdmin
     .from('incidents')
@@ -2044,7 +2105,7 @@ app.get('/api/v1/incidents', requireApiKey, async (req, res) => {
   res.json({ status: 'success', incidents: data || [] });
 });
 
-app.post('/api/v1/analyze', requireApiKey, async (req, res) => {
+app.post('/api/v1/analyze', requireApiKey, apiKeyRateLimit(API_KEY_ANALYZE_LIMIT, 'analyze'), async (req, res) => {
   const locale = language(req.body.locale);
   try {
     res.json(await analyzeWebsite(req.body.url, locale));

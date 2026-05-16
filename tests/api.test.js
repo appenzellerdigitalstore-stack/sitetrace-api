@@ -26,6 +26,9 @@ test('health endpoint returns ok', async () => {
     const body = await response.json();
     assert.equal(response.status, 200);
     assert.equal(body.status, 'ok');
+    assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(response.headers.get('x-frame-options'), 'DENY');
+    assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   });
 });
 
@@ -48,6 +51,7 @@ test('API v1 endpoints require an API key before doing protected work', async ()
     const body = await response.json();
     assert.equal(response.status, 401);
     assert.equal(body.message, 'Missing API key');
+    assert.equal(response.headers.get('x-ratelimit-limit'), null);
   });
 });
 
