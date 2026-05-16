@@ -92,6 +92,7 @@ Add:
 
 ```bash
 CRON_SECRET=long-random-secret
+HEALTH_SECRET=another-long-random-secret
 ```
 
 Then create a Render Cron Job or external cron that sends:

@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 process.env.API_KEY_READ_LIMIT = '2';
+process.env.HEALTH_SECRET = 'test-health-secret';
 
 const { app } = require('../index');
 
@@ -72,12 +73,23 @@ test('health endpoint returns ok', async () => {
 
 test('deep health reports degraded when required config is missing', async () => {
   await withServer(async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/health/deep`);
+    const response = await fetch(`${baseUrl}/health/deep`, {
+      headers: { Authorization: 'Bearer test-health-secret' }
+    });
     const body = await response.json();
     assert.equal(response.status, 503);
     assert.equal(body.status, 'degraded');
     assert.equal(body.checks.supabase_configured, false);
     assert.equal(body.checks.supabase_reachable, false);
+  });
+});
+
+test('deep health requires HEALTH_SECRET when configured', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/health/deep`);
+    const body = await response.json();
+    assert.equal(response.status, 401);
+    assert.equal(body.message, 'Unauthorized');
   });
 });
 

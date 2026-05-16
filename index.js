@@ -30,6 +30,7 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_STARTER_PRICE_ID = process.env.STRIPE_STARTER_PRICE_ID || '';
 const STRIPE_AGENCY_PRICE_ID = process.env.STRIPE_AGENCY_PRICE_ID || '';
 const CRON_SECRET = process.env.CRON_SECRET || '';
+const HEALTH_SECRET = process.env.HEALTH_SECRET || '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const RESEND_READ_API_KEY = process.env.RESEND_READ_API_KEY || RESEND_API_KEY;
 const ALERT_FROM_EMAIL = process.env.ALERT_FROM_EMAIL || 'SiteTrace <alerts@sitetrace.it.com>';
@@ -1624,7 +1625,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sitetrace-api' });
 });
 
-app.get('/health/deep', async (req, res) => {
+function requireHealthSecret(req, res, next) {
+  if (!HEALTH_SECRET) return next();
+  if (req.headers.authorization !== `Bearer ${HEALTH_SECRET}`) {
+    return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+  }
+  next();
+}
+
+app.get('/health/deep', requireHealthSecret, async (req, res) => {
   const db = getSupabaseAdmin();
   const checks = {
     app_url_configured: Boolean(APP_URL),

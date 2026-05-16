@@ -28,6 +28,7 @@ Required:
 - [ ] `SUPABASE_ANON_KEY`
 - [ ] `SUPABASE_SERVICE_ROLE_KEY`
 - [ ] `CRON_SECRET`
+- [ ] `HEALTH_SECRET`
 
 Billing:
 
@@ -56,13 +57,14 @@ Optional alerts:
 - [ ] Confirm the deployed commit hash matches GitHub.
 - [ ] Open Render logs and watch for boot errors.
 - [ ] Visit `/health`.
-- [ ] Visit `/health/deep`.
+- [ ] Visit `/health/deep` with `Authorization: Bearer HEALTH_SECRET`.
 
 Expected:
 
 - `/health` returns `status: ok`.
 - `/health/deep` returns `status: ok` when critical config and Supabase are healthy.
 - `/health/deep` may include warnings for optional integrations that are intentionally disabled.
+- `/health/deep` returns `401` without the health secret when `HEALTH_SECRET` is configured.
 
 ## 5. Smoke Tests
 
