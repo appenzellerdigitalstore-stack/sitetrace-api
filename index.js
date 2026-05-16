@@ -1624,6 +1624,51 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sitetrace-api' });
 });
 
+app.get('/health/deep', async (req, res) => {
+  const db = getSupabaseAdmin();
+  const checks = {
+    app_url_configured: Boolean(APP_URL),
+    supabase_configured: Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && SUPABASE_SERVICE_ROLE_KEY),
+    supabase_reachable: false,
+    stripe_configured: Boolean(stripe && STRIPE_WEBHOOK_SECRET && STRIPE_STARTER_PRICE_ID && STRIPE_AGENCY_PRICE_ID),
+    cron_configured: Boolean(CRON_SECRET),
+    api_key_limits_configured: API_KEY_READ_LIMIT > 0 && API_KEY_ANALYZE_LIMIT > 0 && API_KEY_RATE_LIMIT_WINDOW_MS > 0,
+    slack_alerts_configured: Boolean(SLACK_WEBHOOK_URL),
+    teams_alerts_configured: Boolean(TEAMS_WEBHOOK_URL),
+    resend_configured: Boolean(RESEND_API_KEY)
+  };
+  const errors = [];
+
+  if (db) {
+    try {
+      const { error } = await db
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .limit(1);
+      checks.supabase_reachable = !error;
+      if (error) errors.push({ service: 'supabase', message: error.message });
+    } catch (error) {
+      checks.supabase_reachable = false;
+      errors.push({ service: 'supabase', message: error.message });
+    }
+  }
+
+  const criticalOk = checks.app_url_configured && checks.supabase_configured && checks.supabase_reachable && checks.api_key_limits_configured;
+  const warnings = [];
+  if (!checks.stripe_configured) warnings.push('billing_not_fully_configured');
+  if (!checks.cron_configured) warnings.push('scheduled_checks_not_configured');
+  if (!checks.resend_configured && !checks.slack_alerts_configured && !checks.teams_alerts_configured) warnings.push('external_alerts_not_configured');
+
+  res.status(criticalOk ? 200 : 503).json({
+    status: criticalOk ? 'ok' : 'degraded',
+    service: 'sitetrace-api',
+    timestamp: new Date().toISOString(),
+    checks,
+    warnings,
+    errors
+  });
+});
+
 app.post('/analyze', async (req, res) => {
   const locale = language(req.body.locale);
   const limit = checkRateLimit(req);

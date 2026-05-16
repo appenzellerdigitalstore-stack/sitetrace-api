@@ -70,6 +70,17 @@ test('health endpoint returns ok', async () => {
   });
 });
 
+test('deep health reports degraded when required config is missing', async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/health/deep`);
+    const body = await response.json();
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'degraded');
+    assert.equal(body.checks.supabase_configured, false);
+    assert.equal(body.checks.supabase_reachable, false);
+  });
+});
+
 test('public analyzer rejects local network URLs', async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/analyze`, {

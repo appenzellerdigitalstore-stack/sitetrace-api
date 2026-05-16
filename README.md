@@ -46,6 +46,7 @@ It supports:
 - Incident lifecycle records and optional alerts through Resend, Slack, or Microsoft Teams webhooks
 
 For the full activation sequence, see `SETUP.md`.
+For production deploy checks, see `RELEASE_CHECKLIST.md`.
 
 ### Required Supabase Setup
 
