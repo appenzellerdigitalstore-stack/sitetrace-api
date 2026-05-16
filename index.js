@@ -93,6 +93,19 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
   : null;
 
+function getSupabaseAdmin() {
+  return app.locals.supabaseAdmin || supabaseAdmin;
+}
+
+function logEvent(event, fields = {}) {
+  console.info(JSON.stringify({
+    event,
+    service: 'sitetrace-api',
+    timestamp: new Date().toISOString(),
+    ...fields
+  }));
+}
+
 app.use(cors({
   origin(origin, callback) {
     const allowedOrigins = [
@@ -547,6 +560,12 @@ function apiKeyRateLimit(limit, bucketName) {
     res.setHeader('X-RateLimit-Reset', new Date(result.resetAt).toISOString());
 
     if (!result.allowed) {
+      logEvent('api_key_rate_limited', {
+        api_key_id: keyId,
+        bucket: bucketName,
+        limit,
+        reset_at: new Date(result.resetAt).toISOString()
+      });
       return res.status(429).json({
         status: 'error',
         code: 'rate_limited',
@@ -573,8 +592,9 @@ function planFeatures(plan) {
 }
 
 async function loadUserPlan(userId) {
-  if (!supabaseAdmin || !userId) return 'free';
-  const { data } = await supabaseAdmin
+  const db = getSupabaseAdmin();
+  if (!db || !userId) return 'free';
+  const { data } = await db
     .from('profiles')
     .select('plan, subscription_status')
     .eq('id', userId)
@@ -1321,12 +1341,13 @@ async function requireApiKey(req, res, next) {
     return res.status(401).json({ status: 'error', message: 'Missing API key' });
   }
 
-  if (!supabaseAdmin) {
+  const db = getSupabaseAdmin();
+  if (!db) {
     return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
   }
 
   const keyHash = hashApiKey(token);
-  const { data: apiKey, error } = await supabaseAdmin
+  const { data: apiKey, error } = await db
     .from('api_keys')
     .select('id, user_id, name, revoked_at')
     .eq('key_hash', keyHash)
@@ -1343,13 +1364,14 @@ async function requireApiKey(req, res, next) {
     return res.status(402).json({ status: 'error', code: 'agency_required', message: 'API access is available on the Agency plan.' });
   }
 
-  await supabaseAdmin
+  await db
     .from('api_keys')
     .update({ last_used_at: new Date().toISOString() })
     .eq('id', apiKey.id);
 
   req.apiKey = apiKey;
   req.apiUser = { id: apiKey.user_id };
+  req.db = db;
   next();
 }
 
@@ -2040,6 +2062,7 @@ app.post('/api/api-keys', requireUser, requireAgencyUser, async (req, res) => {
     return res.status(400).json({ status: 'error', message: error.message });
   }
 
+  logEvent('api_key_created', { user_id: req.user.id, api_key_id: data.id, key_prefix: data.key_prefix });
   res.status(201).json({ status: 'success', api_key: apiKey, key: data });
 });
 
@@ -2055,11 +2078,13 @@ app.delete('/api/api-keys/:id', requireUser, requireAgencyUser, async (req, res)
     return res.status(400).json({ status: 'error', message: error.message });
   }
 
+  logEvent('api_key_revoked', { user_id: req.user.id, api_key_id: req.params.id });
   res.json({ status: 'success' });
 });
 
 app.get('/api/v1/monitors', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
-  const { data, error } = await supabaseAdmin
+  const db = req.db || getSupabaseAdmin();
+  const { data, error } = await db
     .from('sites')
     .select('id, name, url, monitoring_enabled, last_status, last_score, last_response_time_ms, last_checked_at, created_at, updated_at')
     .eq('user_id', req.apiUser.id)
@@ -2074,7 +2099,8 @@ app.get('/api/v1/monitors', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, '
 
 app.get('/api/v1/monitors/:id/checks', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
-  const { data, error } = await supabaseAdmin
+  const db = req.db || getSupabaseAdmin();
+  const { data, error } = await db
     .from('checks')
     .select('id, site_id, status, score, status_code, response_time_ms, result, created_at')
     .eq('user_id', req.apiUser.id)
@@ -2091,7 +2117,8 @@ app.get('/api/v1/monitors/:id/checks', requireApiKey, apiKeyRateLimit(API_KEY_RE
 
 app.get('/api/v1/incidents', requireApiKey, apiKeyRateLimit(API_KEY_READ_LIMIT, 'read'), async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 100);
-  const { data, error } = await supabaseAdmin
+  const db = req.db || getSupabaseAdmin();
+  const { data, error } = await db
     .from('incidents')
     .select('id, site_id, status, title, details, resolved_at, duration_seconds, created_at')
     .eq('user_id', req.apiUser.id)
@@ -2218,6 +2245,10 @@ app.post('/jobs/run-checks', async (req, res) => {
     }
   }
 
+  logEvent('cron_checks_completed', {
+    checked: results.filter((result) => result.status !== 'skipped').length,
+    total: results.length
+  });
   res.json({ status: 'success', checked: results.filter((result) => result.status !== 'skipped').length, results });
 });
 
