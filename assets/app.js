@@ -681,6 +681,10 @@ function generateClientReport(site, checks, tier) {
   const levelCol = { fail: '#dc2626', warn: '#d97706', warning: '#d97706', pass: '#16a34a' };
   const levelBg  = { fail: '#fef2f2', warn: '#fffbeb', warning: '#fffbeb', pass: '#f0fdf4' };
   const levelBdr = { fail: '#fecaca', warn: '#fde68a', warning: '#fde68a', pass: '#bbf7d0' };
+  const insights = latestResult.insights || {};
+  const opportunities = Array.isArray(insights.content_opportunities) ? insights.content_opportunities : [];
+  const priorities = Array.isArray(insights.top_priorities) ? insights.top_priorities : [];
+  const plan = insights.optional_content_plan || null;
 
   const now = new Date().toLocaleString();
 
@@ -735,6 +739,10 @@ function generateClientReport(site, checks, tier) {
   .ping-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; text-align: center; }
   .ping-label { font-size: .65rem; color: #64748b; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
   .ping-value { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .report-callout { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; color: #334155; font-size: .82rem; line-height: 1.55; }
+  .opportunity-table td:first-child { font-weight: 700; }
+  .opportunity-table td { vertical-align: top; }
+  .plan-list { margin-left: 18px; color: #334155; font-size: .82rem; line-height: 1.7; }
 
   /* Issue rows */
   .issue-list { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
@@ -838,6 +846,45 @@ function generateClientReport(site, checks, tier) {
     </div>
   </section>
 
+  ${(insights.executive_summary || priorities.length) ? `
+  <section>
+    <div class="section-title">Executive Audit Insights</div>
+    ${insights.executive_summary ? `<div class="report-callout">${escapeHtml(insights.executive_summary)}</div>` : ''}
+    ${priorities.length ? `<div class="issue-list" style="margin-top:10px;">${priorities.map((item) => `
+      <div class="issue-row">
+        <span class="issue-badge" style="background:#f1f5f9;color:#334155;border:1px solid #e2e8f0;">${escapeHtml(item.priority || 'medium')}</span>
+        <div class="issue-body">
+          <div class="issue-title">${escapeHtml(item.issue || item.area || 'Priority')}</div>
+          <div class="issue-fix"><strong>Action:</strong> ${escapeHtml(item.action || '')}</div>
+        </div>
+      </div>`).join('')}</div>` : ''}
+  </section>` : ''}
+
+  ${opportunities.length ? `
+  <section>
+    <div class="section-title">Optional Content Opportunities</div>
+    <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+      <table class="opportunity-table">
+        <thead><tr><th>Priority</th><th>Topic / Page Idea</th><th>Primary Keyword</th><th>Supporting Keywords</th><th>Intent</th></tr></thead>
+        <tbody>${opportunities.map((item) => `<tr>
+          <td>${escapeHtml(item.priority || 'Medium')}</td>
+          <td>${escapeHtml(item.title || '')}</td>
+          <td>${escapeHtml(item.primary_keyword || '')}</td>
+          <td>${escapeHtml(Array.isArray(item.supporting_keywords) ? item.supporting_keywords.join(', ') : item.supporting_keywords || '')}</td>
+          <td>${escapeHtml(item.intent || '')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${plan ? `<div class="report-callout" style="margin-top:10px;">
+      <strong>Content improvement plan:</strong>
+      <ol class="plan-list">
+        <li>${escapeHtml(plan.phase_1 || '')}</li>
+        <li>${escapeHtml(plan.phase_2 || '')}</li>
+        <li>${escapeHtml(plan.phase_3 || '')}</li>
+      </ol>
+    </div>` : ''}
+  </section>` : ''}
+
   ${hasPing ? `
   <!-- Live Response Monitoring -->
   <section>
@@ -864,6 +911,9 @@ function generateClientReport(site, checks, tier) {
         <div class="ping-value" style="color:${pingTimeouts > 0 ? '#dc2626' : '#16a34a'};">${pingTimeouts}</div>
       </div>
     </div>
+    ${pingTimeouts > 0 ? `<div class="report-callout" style="margin-top:10px;">${escapeHtml(pingCur && pingCur.ms != null
+      ? 'This incident has been resolved, please refresh the ping. Browser ping failures may come from local network, CORS/browser limits, upstream provider errors, or temporary service incidents.'
+      : 'Browser ping failures were detected. These can be caused by local network issues, browser/CORS limits, upstream provider errors, or temporary service incidents. Scheduled scans remain the source of truth.')}</div>` : ''}
   </section>` : ''}
 
   <!-- Issues Found -->
@@ -1506,6 +1556,9 @@ function renderClientReport(data) {
   const metaChecks = checks.filter((c) => c.category === 'seo');
   const contentChecks = checks.filter((c) => c.category === 'content');
   const techChecks = checks.filter((c) => ['uptime', 'security', 'domain'].includes(c.category));
+  const insights = data.insights || {};
+  const opportunities = Array.isArray(insights.content_opportunities) ? insights.content_opportunities : [];
+  const plan = insights.optional_content_plan || null;
 
   const checkRow = (check) => `<tr class="rpt-check-row rpt-${check.level}"><td>${escapeHtml(check.title)}</td><td><span class="level-badge ${check.level}">${escapeHtml(check.level)}</span></td><td>${escapeHtml(String(check.value || ''))}</td><td>${escapeHtml(check.recommendation)}</td></tr>`;
 
@@ -1548,6 +1601,18 @@ function renderClientReport(data) {
       <h3 class="rpt-section-title">Priority Action Plan</h3>
       ${recommendations.length ? recItems : '<p class="rpt-empty">No open issues found.</p>'}
     </div>
+    ${(insights.executive_summary || opportunities.length) ? `<div class="rpt-section">
+      <h3 class="rpt-section-title">Executive Audit Insights</h3>
+      ${insights.executive_summary ? `<p class="rpt-empty" style="text-align:left;">${escapeHtml(insights.executive_summary)}</p>` : ''}
+      ${opportunities.length ? `<table class="rpt-table"><thead><tr><th>Priority</th><th>Topic / Page Idea</th><th>Primary Keyword</th><th>Supporting Keywords</th><th>Intent</th></tr></thead><tbody>${opportunities.map((item) => `<tr>
+        <td>${escapeHtml(item.priority || 'Medium')}</td>
+        <td>${escapeHtml(item.title || '')}</td>
+        <td>${escapeHtml(item.primary_keyword || '')}</td>
+        <td>${escapeHtml(Array.isArray(item.supporting_keywords) ? item.supporting_keywords.join(', ') : item.supporting_keywords || '')}</td>
+        <td>${escapeHtml(item.intent || '')}</td>
+      </tr>`).join('')}</tbody></table>` : ''}
+      ${plan ? `<p class="rpt-empty" style="text-align:left;margin-top:10px;"><strong>Optional plan:</strong> ${escapeHtml(plan.phase_1 || '')} ${escapeHtml(plan.phase_2 || '')} ${escapeHtml(plan.phase_3 || '')}</p>` : ''}
+    </div>` : ''}
     <div class="rpt-section">
       <h3 class="rpt-section-title">Metadata &amp; SEO</h3>
       ${sectionTable(metaChecks)}
@@ -2031,6 +2096,16 @@ async function runSiteCheck(siteId) {
   localStorage.setItem('st_last_scan_' + siteId, String(Date.now()));
 }
 
+async function deleteMonitor(siteId) {
+  if (!siteId) return;
+  if (!window.confirm(t('dashboard.deleteConfirm'))) return;
+  const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'DELETE', headers: authHeaders() });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || 'Could not delete monitor');
+  await loadDashboard();
+  setDashboardMessage(t('dashboard.saved'), 'success');
+}
+
 async function testAlertEmail() {
   const button = document.getElementById('testEmailBtn');
   if (button) button.disabled = true;
@@ -2450,12 +2525,14 @@ function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
   const statusEl    = document.getElementById('dbSelectedSiteStatus');
   const copyBtn     = document.getElementById('copyReportBtn');
   const pingRefresh = document.getElementById('refreshPingBtn');
+  const deleteBtn   = document.getElementById('deleteMonitorBtn');
 
   if (!site) {
     if (nameEl)      nameEl.textContent = 'Select a site';
     if (statusEl)    { statusEl.style.display = 'none'; statusEl.className = 'db-status-badge'; statusEl.textContent = ''; }
     if (copyBtn)     copyBtn.style.display = 'none';
     if (pingRefresh) pingRefresh.style.display = 'none';
+    if (deleteBtn)   deleteBtn.style.display = 'none';
     return;
   }
   if (nameEl) nameEl.textContent = site.name;
@@ -2468,6 +2545,10 @@ function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
     copyBtn.style.display = reportLocked ? 'none' : '';
   }
   if (pingRefresh) pingRefresh.style.display = '';
+  if (deleteBtn) {
+    deleteBtn.style.display = '';
+    deleteBtn.dataset.delete = site.id;
+  }
 }
 
 
@@ -2561,6 +2642,19 @@ class LivePingChart {
     set('lpMin',  valid.length ? fmt(Math.min(...valid)) : '–');
     set('lpMax',  valid.length ? fmt(Math.max(...valid)) : '–');
     set('lpTO',   String(timeouts), timeouts > 0 ? 'var(--red)' : '');
+
+    const note = document.getElementById('lpTimeoutNote');
+    if (note) {
+      if (timeouts <= 0) {
+        note.textContent = '';
+        note.style.display = 'none';
+      } else {
+        note.style.display = 'block';
+        note.textContent = cur && cur.ms !== null
+          ? 'This incident has been resolved, please refresh the ping. Browser ping failures can be caused by local network issues, CORS/browser limits, upstream provider errors, or temporary service incidents.'
+          : 'Browser ping failures detected. These can be caused by local network issues, CORS/browser limits, upstream provider errors, or temporary service incidents. Scheduled scans are the source of truth.';
+      }
+    }
   }
 
   _msColorHex(ms) {
@@ -2768,9 +2862,20 @@ function renderSiteDetail(site) {
   const status = statusLabel(site.last_status);
   const latestResult = latest && latest.result ? latest.result : null;
   const domainExpiry = latestResult && latestResult.domain_expiry ? latestResult.domain_expiry : null;
-  const importantChecks = latestResult && Array.isArray(latestResult.checks)
+  const restoredPingTimeouts = _savedPingPoints ? _savedPingPoints.filter(p => p.status === 'timeout' || p.status === 'error').length : 0;
+  const restoredPingLatest = _savedPingPoints && _savedPingPoints.length ? _savedPingPoints[_savedPingPoints.length - 1] : null;
+  let importantChecks = latestResult && Array.isArray(latestResult.checks)
     ? latestResult.checks.filter((check) => check.level !== 'pass').slice(0, 5).map(c => translateCheck(c, currentLocale))
     : [];
+  if (restoredPingTimeouts > 0) {
+    importantChecks = [{
+      level: restoredPingLatest && restoredPingLatest.ms != null ? 'warning' : 'fail',
+      title: restoredPingLatest && restoredPingLatest.ms != null ? 'Live ping recovered after failures' : 'Live ping failures detected',
+      description: `${restoredPingTimeouts} browser ping failure${restoredPingTimeouts === 1 ? '' : 's'} happened in this session. This can come from browser/network limits, CORS behavior, upstream provider errors, or a temporary service incident.`,
+      recommendation: restoredPingLatest && restoredPingLatest.ms != null ? 'This incident has been resolved, please refresh the ping.' : 'Compare against scheduled scans and provider status, then refresh the ping after the provider recovers.',
+      value: restoredPingTimeouts
+    }].concat(importantChecks).slice(0, 5);
+  }
 
   const issueHtml = importantChecks.length
     ? importantChecks.map((c) => `
@@ -2864,8 +2969,39 @@ function renderSiteDetail(site) {
       </div>
     </details>` : '';
 
-  const incidentRowsHtml = downChecks.length
-    ? downChecks.slice(0, 8).map((inc) => {
+  const insights = latestResult && latestResult.insights ? latestResult.insights : {};
+  const opportunities = Array.isArray(insights.content_opportunities) ? insights.content_opportunities : [];
+  const insightHtml = (insights.executive_summary || opportunities.length) ? `
+    <div class="detail-panel" style="margin:18px 0;">
+      <div class="detail-panel-head"><span>Audit insights</span></div>
+      ${insights.executive_summary ? `<div style="padding:14px 16px;color:var(--muted);font-size:.86rem;line-height:1.55;border-bottom:1px solid var(--border);">${escapeHtml(insights.executive_summary)}</div>` : ''}
+      ${opportunities.length ? `<div style="overflow-x:auto;">
+        <table class="checks-table">
+          <thead><tr><th>Priority</th><th>Topic idea</th><th>Primary keyword</th><th>Supporting keywords</th><th>Intent</th></tr></thead>
+          <tbody>${opportunities.map((item) => `<tr>
+            <td><span class="level-badge ${String(item.priority || '').toLowerCase() === 'high' ? 'fail' : 'warning'}">${escapeHtml(item.priority || 'Medium')}</span></td>
+            <td>${escapeHtml(item.title || '')}</td>
+            <td>${escapeHtml(item.primary_keyword || '')}</td>
+            <td>${escapeHtml(Array.isArray(item.supporting_keywords) ? item.supporting_keywords.join(', ') : item.supporting_keywords || '')}</td>
+            <td>${escapeHtml(item.intent || '')}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>` : ''}
+    </div>` : '';
+
+  const recoveryHtml = latest && latest.status === 'online' && lastDown
+    ? `<div class="rich-incident-row">
+          <div class="rich-incident-top">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg>
+            <strong>This incident has been resolved</strong>
+            <span class="rich-incident-time">${formatDateTime(latest.created_at)}</span>
+          </div>
+          <p class="rich-issue-desc" style="margin:4px 0 0;">Please refresh the ping to verify the current live response.</p>
+        </div>`
+    : '';
+
+  const incidentRowsHtml = downChecks.length || recoveryHtml
+    ? recoveryHtml + downChecks.slice(0, 8).map((inc) => {
         const scoreColor = inc.score >= 80 ? 'var(--green)' : inc.score >= 60 ? 'var(--amber)' : 'var(--red)';
         const respMs = inc.response_time_ms ? `${inc.response_time_ms}ms` : null;
         const incIssues = inc.result && Array.isArray(inc.result.checks)
@@ -2981,6 +3117,7 @@ function renderSiteDetail(site) {
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
         <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
       </div>
+      ${insightHtml}
       <div class="live-ping-wrap">
         <div class="live-ping-head">
           <span>${escapeHtml(t('dashboard.liveResponse'))}</span>
@@ -2995,6 +3132,7 @@ function renderSiteDetail(site) {
           <div class="live-ping-stat"><span class="muted">Max</span><strong id="lpMax">–</strong></div>
           <div class="live-ping-stat"><span class="muted">Timeouts</span><strong id="lpTO">0</strong></div>
         </div>
+        <div id="lpTimeoutNote" class="scan-cooldown-msg" style="display:none;margin-top:10px;"></div>
       </div>
       <div class="detail-grid">
         <div class="detail-panel">
@@ -3537,6 +3675,16 @@ async function initDashboard() {
 
   // Upgrade click handler (works anywhere in dashboard)
   document.getElementById('dashboardView').addEventListener('click', async (event) => {
+    const deleteButton = event.target.closest('#deleteMonitorBtn[data-delete]');
+    if (deleteButton) {
+      try {
+        await deleteMonitor(deleteButton.dataset.delete);
+      } catch (error) {
+        setDashboardMessage(error.message, 'error');
+      }
+      return;
+    }
+
     const button = event.target.closest('[data-dashboard-upgrade]');
     if (!button) return;
     try {
@@ -3622,11 +3770,7 @@ async function initDashboard() {
         renderDashboard();
       }
       if (deleteId) {
-        if (!window.confirm(t('dashboard.deleteConfirm'))) return;
-        const response = await fetch(apiPath(`/api/sites/${deleteId}`), { method: 'DELETE', headers: authHeaders() });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Could not delete monitor');
-        await loadDashboard();
+        await deleteMonitor(deleteId);
       }
     } catch (error) {
       const detail = document.getElementById('siteDetail');

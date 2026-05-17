@@ -840,6 +840,96 @@ function generateRecommendations(checks) {
     }));
 }
 
+function cleanWords(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 3 && !['with', 'from', 'that', 'this', 'your', 'about', 'have', 'what', 'when', 'where', 'their', 'will', 'site', 'page', 'home'].includes(word));
+}
+
+function titleCaseWords(value) {
+  return String(value || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function inferPrimaryTopic({ title, metaDescription, h1Text, hostname }) {
+  const source = [h1Text, title, metaDescription, hostname].filter(Boolean).join(' ');
+  const words = cleanWords(source);
+  const counts = new Map();
+  words.forEach((word) => counts.set(word, (counts.get(word) || 0) + 1));
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([word]) => word);
+  return ranked.slice(0, 3).join(' ') || hostname.replace(/^www\./, '').split('.')[0] || 'website';
+}
+
+function buildAuditInsights({ urlObj, title, metaDescription, h1Text, wordCount, internalLinks, checks, recommendations, pageContext }) {
+  const hostname = urlObj.hostname.replace(/^www\./, '');
+  const primaryTopic = inferPrimaryTopic({ title, metaDescription, h1Text, hostname });
+  const readableTopic = titleCaseWords(primaryTopic);
+  const failures = checks.filter((check) => check.level === 'fail').length;
+  const warnings = checks.filter((check) => check.level === 'warning' || check.level === 'warn').length;
+  const topPriorities = recommendations.slice(0, 3).map((rec) => ({
+    priority: rec.severity,
+    area: rec.category,
+    issue: rec.issueTitle,
+    action: rec.recommendedFix
+  }));
+
+  const contentOpportunities = [
+    {
+      priority: failures || wordCount < 250 ? 'High' : 'Medium',
+      title: `${readableTopic}: What Visitors Should Know Before Choosing`,
+      primary_keyword: primaryTopic,
+      supporting_keywords: [`${primaryTopic} guide`, `${primaryTopic} benefits`, `${primaryTopic} questions`],
+      intent: 'Informational'
+    },
+    {
+      priority: internalLinks < 3 ? 'High' : 'Medium',
+      title: `How to Choose the Right ${readableTopic} Option`,
+      primary_keyword: `choose ${primaryTopic}`,
+      supporting_keywords: [`best ${primaryTopic}`, `${primaryTopic} comparison`, `${primaryTopic} checklist`],
+      intent: 'Commercial'
+    },
+    {
+      priority: metaDescription && title ? 'Medium' : 'High',
+      title: `${readableTopic} FAQs: Answers for New Visitors`,
+      primary_keyword: `${primaryTopic} faq`,
+      supporting_keywords: [`what is ${primaryTopic}`, `${primaryTopic} cost`, `${primaryTopic} process`],
+      intent: 'BOFU'
+    }
+  ];
+
+  const quickWins = recommendations
+    .filter((rec) => ['title', 'meta_description', 'h1', 'canonical', 'structured_data', 'links'].includes(rec.checkId))
+    .slice(0, 5)
+    .map((rec) => rec.recommendedFix);
+
+  return {
+    executive_summary: failures
+      ? `This page has ${failures} critical audit issue${failures === 1 ? '' : 's'} and ${warnings} warning${warnings === 1 ? '' : 's'}. Fix the technical blockers first, then improve the content and search snippet.`
+      : `This page is reachable and has no critical audit failures. The next gains are likely content depth, internal linking, structured data, and search snippet polish.`,
+    page_profile: {
+      likely_topic: primaryTopic,
+      page_type: pageContext,
+      visible_word_count: wordCount,
+      internal_links: internalLinks
+    },
+    top_priorities: topPriorities,
+    quick_wins: quickWins,
+    content_opportunities: contentOpportunities,
+    optional_content_plan: {
+      phase_1: 'Confirm the page profile, target audience, and keyword map.',
+      phase_2: 'Pick the highest-priority content opportunities the client wants to use.',
+      phase_3: 'For each approved topic, prepare SEO title, meta description, H1, H2/H3 outline, FAQ section, internal links, CTA, and source notes.'
+    }
+  };
+}
+
 function summarize(checks) {
   return checks.reduce((summary, check) => {
     summary[check.level] = (summary[check.level] || 0) + 1;
@@ -890,6 +980,7 @@ function isInMaintenance(site, now = new Date()) {
 function failedAnalysis(site, locale, error) {
   const checks = [];
   addCheck(checks, locale, 'uptime', 'status_code', 'fail', 12, 'unreachable', 'statusFail');
+  const recommendations = generateRecommendations(checks);
 
   return {
     status: 'success',
@@ -909,6 +1000,20 @@ function failedAnalysis(site, locale, error) {
     summary: summarize(checks),
     ssl: null,
     checks,
+    recommendations,
+    insights: {
+      executive_summary: `The site could not be reached during this audit. Check hosting logs, recent deploys, DNS, firewall rules, or upstream provider incidents.`,
+      page_profile: { likely_topic: site.name || site.url, page_type: 'unreachable', visible_word_count: 0, internal_links: 0 },
+      top_priorities: recommendations.slice(0, 3).map((rec) => ({
+        priority: rec.severity,
+        area: rec.category,
+        issue: rec.issueTitle,
+        action: rec.recommendedFix
+      })),
+      quick_wins: ['Refresh the ping after the provider or hosting issue is resolved.', 'Run a full audit again once the page responds normally.'],
+      content_opportunities: [],
+      optional_content_plan: null
+    },
     error_detail: error.message
   };
 }
@@ -1494,6 +1599,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const robots = ($('meta[name="robots" i]').attr('content') || '').toLowerCase();
   const ogCount = $('meta[property^="og:" i]').length;
   const structuredDataCount = $('script[type="application/ld+json" i]').length;
+  const h1Text = ($('h1').first().text() || '').trim().replace(/\s+/g, ' ');
   const visibleText = $('body').text().replace(/\s+/g, ' ').trim();
   const wordCount = visibleText ? visibleText.split(/\s+/).filter(Boolean).length : 0;
   const internalLinks = $('a[href]').filter((_, link) => {
@@ -1575,6 +1681,17 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
 
   const score = calculateScore(checks);
   const recommendations = generateRecommendations(checks);
+  const insights = buildAuditInsights({
+    urlObj,
+    title,
+    metaDescription,
+    h1Text,
+    wordCount,
+    internalLinks,
+    checks,
+    recommendations,
+    pageContext
+  });
 
   return {
     status: 'success',
@@ -1600,7 +1717,8 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     ssl,
     domain_expiry: domainExpiry,
     checks,
-    recommendations
+    recommendations,
+    insights
   };
 }
 
