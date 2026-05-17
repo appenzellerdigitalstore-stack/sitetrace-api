@@ -2603,13 +2603,22 @@ class LivePingChart {
   async _poll() {
     const start = performance.now();
     const ac    = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 6000);
+    const timer = setTimeout(() => ac.abort(), 8000);
     try {
-      // Ping directly from browser — no-cors avoids CORS errors, works on any site
-      await fetch(this.url, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: ac.signal });
+      // Route ping through backend to avoid browser CORS/firewall blocks on strict sites
+      const res  = await fetch(apiPath('/api/ping?url=' + encodeURIComponent(this.url)), {
+        headers: authHeaders ? authHeaders() : {},
+        cache: 'no-store',
+        signal: ac.signal
+      });
       clearTimeout(timer);
-      const ms = Math.round(performance.now() - start);
-      this._push({ ms, status: 'ok', t: new Date() });
+      const data = res.ok ? await res.json() : null;
+      if (data) {
+        this._push({ ms: data.ms, status: data.status, t: new Date() });
+      } else {
+        const ms = Math.round(performance.now() - start);
+        this._push({ ms, status: 'error', t: new Date() });
+      }
     } catch (err) {
       clearTimeout(timer);
       const ms = Math.round(performance.now() - start);
