@@ -1120,10 +1120,6 @@ function initPreferences() {
       applyLanguage();
       if (page === 'dashboard' && state.sites.length) {
         renderDashboard();
-        if (state.selectedSiteId) {
-          const selSite = state.sites.find(s => s.id === state.selectedSiteId);
-          if (selSite) renderSiteDetail(selSite, state.selectedChecks || []);
-        }
       }
     });
     document.getElementById('themeToggle').addEventListener('click', () => {
