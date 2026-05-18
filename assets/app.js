@@ -3472,9 +3472,9 @@ function renderApiAccessPanel(detail) {
     '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:13px 15px;">' +
     '<p style="margin:0 0 8px;font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Resources</p>' +
     '<div style="display:grid;gap:7px;">' +
-    '<a href="https://raw.githubusercontent.com/appenzellerdigitalstore-stack/api-marketplace/main/openapi.yaml" target="_blank" style="display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--accent,#6366f1);text-decoration:none;">' +
+    '<a href="/docs" target="_blank" style="display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--accent,#6366f1);text-decoration:none;">' +
     '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
-    'OpenAPI spec</a>' +
+    'API Reference (interactive)</a>' +
     '<a href="https://rapidapi.com" target="_blank" style="display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--accent,#6366f1);text-decoration:none;">' +
     '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' +
     'RapidAPI marketplace</a>' +

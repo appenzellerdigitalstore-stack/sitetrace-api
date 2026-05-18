@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Reference – SiteTrace</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0d0f14;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .docs-topbar {
+      background: #0d0f14;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      padding: 0 32px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .docs-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      text-decoration: none;
+      color: #f1f5f9;
+      font-weight: 700;
+      font-size: .97rem;
+      letter-spacing: -.01em;
+    }
+    .docs-brand-mark {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .docs-brand-mark svg { width: 15px; height: 15px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; }
+    .docs-topbar-right { display: flex; align-items: center; gap: 14px; }
+    .docs-badge {
+      background: rgba(99,102,241,.15);
+      color: #818cf8;
+      border: 1px solid rgba(99,102,241,.25);
+      font-size: .72rem;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 99px;
+      letter-spacing: .04em;
+    }
+    .docs-topbar a.back {
+      font-size: .82rem;
+      color: #94a3b8;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: color .15s;
+    }
+    .docs-topbar a.back:hover { color: #e2e8f0; }
+
+    /* ── Hero banner ── */
+    .docs-hero {
+      background: linear-gradient(135deg, rgba(99,102,241,.12) 0%, rgba(139,92,246,.06) 100%);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      padding: 36px 32px 32px;
+    }
+    .docs-hero-inner { max-width: 860px; }
+    .docs-hero h1 { font-size: 1.55rem; font-weight: 800; color: #f1f5f9; margin-bottom: 8px; letter-spacing: -.02em; }
+    .docs-hero p  { font-size: .9rem; color: #94a3b8; line-height: 1.65; max-width: 580px; margin-bottom: 18px; }
+    .docs-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .docs-meta-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 6px;
+      padding: 5px 11px;
+      font-size: .78rem;
+      color: #cbd5e1;
+    }
+    .docs-meta-pill svg { width: 12px; height: 12px; fill: none; stroke: #818cf8; stroke-width: 2; stroke-linecap: round; flex-shrink: 0; }
+    .dot-green { width: 7px; height: 7px; background: #10b981; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── Auth callout ── */
+    .docs-auth-callout {
+      max-width: 860px;
+      margin: 20px 32px;
+      background: rgba(99,102,241,.08);
+      border: 1px solid rgba(99,102,241,.2);
+      border-radius: 9px;
+      padding: 13px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      font-size: .82rem;
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    .docs-auth-callout svg { width: 15px; height: 15px; fill: none; stroke: #818cf8; stroke-width: 2; stroke-linecap: round; flex-shrink: 0; margin-top: 1px; }
+    .docs-auth-callout code {
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: .79rem;
+      color: #a5b4fc;
+      font-family: monospace;
+    }
+
+    /* ── Swagger UI overrides ── */
+    #swagger-ui { max-width: 860px; margin: 0 32px 48px; }
+
+    .swagger-ui .topbar { display: none !important; }
+    .swagger-ui .info { display: none !important; } /* we replaced it with docs-hero */
+    .swagger-ui .scheme-container { display: none !important; }
+
+    .swagger-ui .opblock-tag {
+      border-bottom: 1px solid rgba(255,255,255,.07) !important;
+      color: #e2e8f0 !important;
+      font-size: .82rem !important;
+      font-weight: 700 !important;
+      letter-spacing: .06em !important;
+    }
+    .swagger-ui .opblock-tag:hover { background: rgba(255,255,255,.03) !important; }
+    .swagger-ui .opblock { border-radius: 8px !important; margin-bottom: 8px !important; border: 1px solid rgba(255,255,255,.07) !important; }
+    .swagger-ui .opblock .opblock-summary { border-radius: 8px !important; }
+    .swagger-ui .opblock.opblock-post { background: rgba(16,185,129,.07) !important; border-color: rgba(16,185,129,.2) !important; }
+    .swagger-ui .opblock.opblock-get  { background: rgba(99,102,241,.07) !important; border-color: rgba(99,102,241,.2) !important; }
+    .swagger-ui .opblock-summary-method {
+      border-radius: 5px !important;
+      font-size: .7rem !important;
+      font-weight: 800 !important;
+      min-width: 58px !important;
+    }
+    .swagger-ui .opblock-summary-path { color: #e2e8f0 !important; font-size: .83rem !important; }
+    .swagger-ui .opblock-summary-description { color: #94a3b8 !important; font-size: .8rem !important; }
+    .swagger-ui .opblock-body { background: #0d0f14 !important; }
+    .swagger-ui .opblock-section-header { background: rgba(255,255,255,.03) !important; border-bottom: 1px solid rgba(255,255,255,.06) !important; }
+    .swagger-ui .opblock-section-header h4 { color: #94a3b8 !important; font-size: .72rem !important; letter-spacing: .06em !important; }
+    .swagger-ui table thead tr th { color: #64748b !important; font-size: .7rem !important; border-bottom: 1px solid rgba(255,255,255,.06) !important; }
+    .swagger-ui .parameter__name { color: #e2e8f0 !important; font-size: .82rem !important; }
+    .swagger-ui .parameter__type { color: #818cf8 !important; font-size: .75rem !important; }
+    .swagger-ui .parameter__in   { color: #64748b !important; font-size: .72rem !important; }
+    .swagger-ui textarea, .swagger-ui input[type=text] {
+      background: rgba(255,255,255,.04) !important;
+      border: 1px solid rgba(255,255,255,.1) !important;
+      color: #e2e8f0 !important;
+      border-radius: 6px !important;
+    }
+    .swagger-ui .btn { border-radius: 6px !important; font-weight: 600 !important; font-size: .78rem !important; }
+    .swagger-ui .btn.execute { background: #6366f1 !important; border-color: #6366f1 !important; }
+    .swagger-ui .btn.execute:hover { background: #4f46e5 !important; }
+    .swagger-ui .response-col_status { color: #10b981 !important; font-weight: 700 !important; }
+    .swagger-ui .microlight, .swagger-ui pre.microlight {
+      background: #0a0c10 !important;
+      border-radius: 6px !important;
+      border: 1px solid rgba(255,255,255,.07) !important;
+      color: #a5b4fc !important;
+      font-size: .77rem !important;
+    }
+    .swagger-ui .model-box { background: rgba(255,255,255,.03) !important; border-radius: 6px !important; }
+    .swagger-ui section.models { border: 1px solid rgba(255,255,255,.07) !important; border-radius: 8px !important; }
+    .swagger-ui section.models h4 { color: #e2e8f0 !important; }
+    .swagger-ui .model-title { color: #a5b4fc !important; }
+    .swagger-ui .prop-type { color: #818cf8 !important; }
+    /* hide the "Authorize" global button — we have our own flow */
+    .swagger-ui .auth-wrapper { display: none !important; }
+    /* clean up wrapping */
+    .swagger-ui .wrapper { padding: 0 !important; }
+    .swagger-ui .opblock-description-wrapper p { color: #94a3b8 !important; font-size: .82rem !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Top bar -->
+  <div class="docs-topbar">
+    <a class="docs-brand" href="/">
+      <div class="docs-brand-mark">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+      </div>
+      SiteTrace
+    </a>
+    <div class="docs-topbar-right">
+      <span class="docs-badge">API v1</span>
+      <a href="/dashboard" class="back">
+        <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to dashboard
+      </a>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <div class="docs-hero">
+    <div class="docs-hero-inner">
+      <h1>SiteTrace API Reference</h1>
+      <p>Complete reference for the SiteTrace Website Intelligence API. Use your Agency API key to access monitoring data, run audits, and retrieve incident history for any of your monitored sites.</p>
+      <div class="docs-meta">
+        <div class="docs-meta-pill">
+          <span class="dot-green"></span>
+          API operational
+        </div>
+        <div class="docs-meta-pill">
+          <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Base URL: sitetrace-api.onrender.com
+        </div>
+        <div class="docs-meta-pill">
+          <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Agency plan required
+        </div>
+        <div class="docs-meta-pill">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          60 req / min rate limit
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth callout -->
+  <div class="docs-auth-callout">
+    <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span>
+      All endpoints require an <strong style="color:#e2e8f0;">Agency API key</strong>.
+      Add your key to every request as a header:
+      <code>Authorization: Bearer YOUR_API_KEY</code>
+      — generate yours in the <a href="/dashboard#api-access" style="color:#818cf8;text-decoration:none;">Dashboard → API Access</a> section.
+    </span>
+  </div>
+
+  <!-- Swagger UI -->
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    const OPENAPI_URL = 'https://raw.githubusercontent.com/appenzellerdigitalstore-stack/api-marketplace/main/openapi.yaml';
+
+    SwaggerUIBundle({
+      url: OPENAPI_URL,
+      dom_id: '#swagger-ui',
+      presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+      layout: 'StandaloneLayout',
+      deepLinking: true,
+      tryItOutEnabled: true,
+      defaultModelsExpandDepth: 0,
+      defaultModelExpandDepth: 1,
+      displayRequestDuration: true,
+      filter: true,
+      syntaxHighlight: { theme: 'agate' },
+      requestInterceptor: (req) => {
+        // Pre-fill auth header hint in the UI
+        return req;
+      }
+    });
+  </script>
+
+</body>
+</html>

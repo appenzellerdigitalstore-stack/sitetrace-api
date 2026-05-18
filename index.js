@@ -2517,6 +2517,10 @@ app.get('/api-docs', (req, res) => {
   res.sendFile(path.join(__dirname, 'api.html'));
 });
 
+app.get('/docs', (req, res) => {
+  res.sendFile(path.join(__dirname, 'docs.html'));
+});
+
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
