@@ -3410,39 +3410,83 @@ function renderApiAccessPanel(detail) {
     return;
   }
 
-  detail.innerHTML = '<div class="api-access-section" style="padding:20px;max-width:980px;">' +
-    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin-bottom:20px;">' +
-    '<h3 style="margin:0 0 6px;font-size:1rem;">' + escapeHtml(t('dashboard.apiKeyCreateTitle')) + '</h3>' +
-    '<p style="margin:0;color:var(--muted);font-size:.88rem;line-height:1.5;">' + escapeHtml(t('dashboard.apiKeyCreateHelp')) + '</p>' +
+  const planLimits = state.limits || {};
+  const rateLimit  = planLimits.api_calls_per_minute || 60;
+  const maxKeys    = planLimits.api_keys || 5;
+
+  detail.innerHTML = '<div class="api-access-section" style="padding:20px 20px 32px;max-width:1100px;">' +
+    '<div style="display:grid;grid-template-columns:1fr 290px;gap:24px;align-items:start;">' +
+
+    // ── LEFT COLUMN ──
+    '<div>' +
+    '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:8px;padding:10px 13px;margin-bottom:10px;display:flex;align-items:flex-start;gap:9px;">' +
+    '<svg viewBox="0 0 24 24" style="width:14px;height:14px;flex-shrink:0;margin-top:2px;fill:none;stroke:var(--accent,#6366f1);stroke-width:2;stroke-linecap:round;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+    '<p style="margin:0;font-size:.81rem;color:var(--text);"><strong style="color:var(--text);">' + escapeHtml(t('dashboard.apiKeyCreateTitle')) + '</strong> — ' + escapeHtml(t('dashboard.apiKeyCreateHelp')) + '</p>' +
     '</div>' +
-    '<div class="api-coming-soon-notice" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#0369a1;">' +
+    '<div style="background:var(--info-bg,rgba(99,102,241,.07));border:1px solid var(--info-border,rgba(99,102,241,.18));border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:.79rem;color:var(--muted);">' +
     escapeHtml(t('dashboard.apiAccessNotice')) + '</div>' +
-    '<form id="apiKeyForm" class="api-key-row" style="display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:10px;margin-bottom:14px;">' +
-    '<label style="display:grid;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">' +
+    '<form id="apiKeyForm" style="display:grid;grid-template-columns:1fr auto;align-items:end;gap:8px;margin-bottom:6px;">' +
+    '<label style="display:grid;gap:5px;font-size:.74rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">' +
     escapeHtml(t('dashboard.newKeyName')) +
-    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="e.g. Production, Staging, Client-XYZ" required style="width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--text);font-weight:500;">' +
+    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="e.g. Production, Staging, Client-XYZ" required ' +
+    'style="background:var(--input-bg,var(--bg));color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:.86rem;width:100%;outline:none;">' +
     '</label>' +
-    '<button class="button small secondary" type="submit">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
+    '<button class="button small" type="submit" style="white-space:nowrap;">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
     '</form>' +
-    '<span id="apiKeyNameError" style="display:none;color:var(--red,#ef4444);font-size:.82rem;margin-top:-10px;margin-bottom:10px;display:none;"></span>' +
-    '<div id="newApiKeyBox" style="display:none;margin-bottom:18px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">' +
-    '<p style="margin:0 0 10px;color:#047857;font-size:.82rem;font-weight:700;">' + escapeHtml(t('dashboard.apiKeyOneTime')) + '</p>' +
-    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-    '<code id="apiKeyDisplay" style="flex:1;min-width:220px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;font-size:.85rem;letter-spacing:.03em;overflow-x:auto;"></code>' +
+    '<span id="apiKeyNameError" style="display:none;color:var(--red,#ef4444);font-size:.77rem;margin-bottom:10px;"></span>' +
+    '<div id="newApiKeyBox" style="display:none;margin-bottom:14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:8px;padding:11px;">' +
+    '<p style="margin:0 0 7px;color:var(--green,#10b981);font-size:.79rem;font-weight:700;">⚠ ' + escapeHtml(t('dashboard.apiKeyOneTime')) + '</p>' +
+    '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+    '<code id="apiKeyDisplay" style="flex:1;min-width:180px;background:var(--bg2,var(--bg));color:var(--text);border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:.8rem;letter-spacing:.03em;word-break:break-all;"></code>' +
     '<button class="button small secondary" id="copyApiKeyBtn" type="button">' + escapeHtml(t('dashboard.copyKey')) + '</button>' +
     '</div></div>' +
-    '<h4 style="margin-bottom:12px;">' + escapeHtml(t('dashboard.endpointExamples')) + '</h4>' +
-    '<div style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-family:monospace;font-size:.8rem;line-height:2;">' +
-    '<div><span style="color:#94a3b8;">POST</span> /api/v1/analyze</div>' +
-    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors</div>' +
-    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/monitors/{id}/checks</div>' +
-    '<div><span style="color:#94a3b8;">GET</span>  /api/v1/incidents</div>' +
-    '</div>' +
-    '<h4 style="margin:16px 0 10px;">Example Request</h4>' +
-    '<pre style="background:#1a1a2e;color:#e2e8f0;border-radius:8px;padding:16px;font-size:.78rem;overflow-x:auto;">curl https://sitetrace-api.onrender.com/api/v1/monitors \\\n  -H "Authorization: Bearer YOUR_API_KEY"</pre>' +
-    '<h4 style="margin:18px 0 10px;">' + escapeHtml(t('dashboard.activeKeys')) + '</h4>' +
+    '<p style="margin:0 0 8px;font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);">' + escapeHtml(t('dashboard.activeKeys')) + '</p>' +
     '<div id="apiKeysList"><div class="empty subtle">Loading...</div></div>' +
-    '</div>';
+    '</div>' +
+
+    // ── RIGHT COLUMN ──
+    '<div style="display:grid;gap:10px;">' +
+
+    '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:13px 15px;">' +
+    '<p style="margin:0 0 9px;font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Your Plan</p>' +
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px;">' +
+    '<span style="background:var(--accent,#6366f1);color:#fff;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:99px;">Agency</span>' +
+    '<span style="font-size:.8rem;color:var(--text);">API Access</span>' +
+    '</div>' +
+    '<div style="display:grid;gap:5px;">' +
+    '<div style="display:flex;justify-content:space-between;font-size:.79rem;"><span style="color:var(--muted);">Rate limit</span><strong style="color:var(--text);">' + rateLimit + ' req/min</strong></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.79rem;"><span style="color:var(--muted);">Max keys</span><strong style="color:var(--text);">' + maxKeys + '</strong></div>' +
+    '<div style="display:flex;justify-content:space-between;font-size:.79rem;"><span style="color:var(--muted);">Auth</span><strong style="color:var(--text);">Bearer token</strong></div>' +
+    '</div></div>' +
+
+    '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:13px 15px;">' +
+    '<p style="margin:0 0 8px;font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Quick Start</p>' +
+    '<pre style="background:var(--code-bg,#0f0f1a);color:#e2e8f0;border-radius:6px;padding:9px 11px;font-size:.7rem;overflow-x:auto;margin:0;line-height:1.75;white-space:pre-wrap;word-break:break-all;">curl https://sitetrace-api.onrender.com/api/v1/monitors \\\n  -H "Authorization: Bearer YOUR_KEY"</pre>' +
+    '</div>' +
+
+    '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:13px 15px;">' +
+    '<p style="margin:0 0 9px;font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Endpoints</p>' +
+    '<div style="display:grid;gap:5px;font-family:monospace;font-size:.74rem;">' +
+    '<div><span style="color:var(--green,#10b981);font-weight:700;margin-right:4px;">POST</span><span style="color:var(--text);">/api/v1/analyze</span></div>' +
+    '<div><span style="color:var(--accent,#6366f1);font-weight:700;margin-right:4px;">GET</span><span style="color:var(--text);">/api/v1/monitors</span></div>' +
+    '<div><span style="color:var(--accent,#6366f1);font-weight:700;margin-right:4px;">GET</span><span style="color:var(--text);">/api/v1/monitors/{id}/checks</span></div>' +
+    '<div><span style="color:var(--accent,#6366f1);font-weight:700;margin-right:4px;">GET</span><span style="color:var(--text);">/api/v1/incidents</span></div>' +
+    '</div></div>' +
+
+    '<div style="background:var(--surface,var(--bg2));border:1px solid var(--border);border-radius:10px;padding:13px 15px;">' +
+    '<p style="margin:0 0 8px;font-size:.71rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);">Resources</p>' +
+    '<div style="display:grid;gap:7px;">' +
+    '<a href="/openapi.yaml" target="_blank" style="display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--accent,#6366f1);text-decoration:none;">' +
+    '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' +
+    'OpenAPI spec</a>' +
+    '<a href="https://rapidapi.com" target="_blank" style="display:flex;align-items:center;gap:7px;font-size:.8rem;color:var(--accent,#6366f1);text-decoration:none;">' +
+    '<svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>' +
+    'RapidAPI marketplace</a>' +
+    '</div></div>' +
+
+    '</div>' + // end right col
+    '</div>' + // end grid
+    '</div>';  // end section
 
   loadApiKeys();
   const form = document.getElementById('apiKeyForm');
@@ -3471,8 +3515,8 @@ function renderApiAccessPanel(detail) {
       }
     });
   }
-}
 
+}
 function renderPanel(panelName) {
   state.dashboardPanel = panelName;
 
