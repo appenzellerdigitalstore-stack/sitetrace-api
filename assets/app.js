@@ -3356,19 +3356,43 @@ async function loadApiKeys() {
 async function createApiKey(event) {
   event.preventDefault();
   const input = document.getElementById('apiKeyNameInput');
-  const response = await fetch(apiPath('/api/api-keys'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ name: input && input.value ? input.value : 'API key' })
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Could not create API key');
-  if (input) input.value = '';
-  const box = document.getElementById('newApiKeyBox');
-  const display = document.getElementById('apiKeyDisplay');
-  if (box) box.style.display = 'block';
-  if (display) display.textContent = data.api_key || '';
-  await loadApiKeys();
+  const errEl = document.getElementById('apiKeyNameError');
+  const name  = input ? input.value.trim() : '';
+
+  // Require a label
+  if (!name) {
+    if (input) {
+      input.style.borderColor = 'var(--red, #ef4444)';
+      input.focus();
+    }
+    if (errEl) { errEl.textContent = 'Please enter a label for this key (e.g. Production, Staging).'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  // Clear any previous error
+  if (input)  input.style.borderColor = '';
+  if (errEl)  errEl.style.display = 'none';
+
+  const submitBtn = document.querySelector('#apiKeyForm button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating…'; }
+
+  try {
+    const response = await fetch(apiPath('/api/api-keys'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ name })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Could not create API key');
+    if (input) input.value = '';
+    const box     = document.getElementById('newApiKeyBox');
+    const display = document.getElementById('apiKeyDisplay');
+    if (box)     box.style.display = 'block';
+    if (display) display.textContent = data.api_key || '';
+    await loadApiKeys();
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t('dashboard.generateKey'); }
+  }
 }
 
 function renderApiAccessPanel(detail) {
@@ -3396,10 +3420,11 @@ function renderApiAccessPanel(detail) {
     '<form id="apiKeyForm" class="api-key-row" style="display:grid;grid-template-columns:minmax(220px,1fr) auto;align-items:end;gap:10px;margin-bottom:14px;">' +
     '<label style="display:grid;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">' +
     escapeHtml(t('dashboard.newKeyName')) +
-    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="Production" style="width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--text);font-weight:500;">' +
+    '<input id="apiKeyNameInput" type="text" maxlength="80" placeholder="e.g. Production, Staging, Client-XYZ" required style="width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--text);font-weight:500;">' +
     '</label>' +
     '<button class="button small secondary" type="submit">' + escapeHtml(t('dashboard.generateKey')) + '</button>' +
     '</form>' +
+    '<span id="apiKeyNameError" style="display:none;color:var(--red,#ef4444);font-size:.82rem;margin-top:-10px;margin-bottom:10px;display:none;"></span>' +
     '<div id="newApiKeyBox" style="display:none;margin-bottom:18px;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:8px;padding:12px;">' +
     '<p style="margin:0 0 10px;color:#047857;font-size:.82rem;font-weight:700;">' + escapeHtml(t('dashboard.apiKeyOneTime')) + '</p>' +
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
@@ -3424,6 +3449,14 @@ function renderApiAccessPanel(detail) {
   if (form) {
     form.addEventListener('submit', (event) => {
       createApiKey(event).catch((error) => setDashboardMessage(error.message, 'error'));
+    });
+  }
+  const keyInput = document.getElementById('apiKeyNameInput');
+  if (keyInput) {
+    keyInput.addEventListener('input', () => {
+      keyInput.style.borderColor = '';
+      const errEl = document.getElementById('apiKeyNameError');
+      if (errEl) errEl.style.display = 'none';
     });
   }
   const copyBtn = document.getElementById('copyApiKeyBtn');
