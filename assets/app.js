@@ -1861,13 +1861,20 @@ async function initAuth() {
     return;
   }
 
-  // Don't auto-redirect if this is a password recovery flow
-  const hashParams = Object.fromEntries(new URLSearchParams(window.location.hash.slice(1)));
-  if (state.session && hashParams.type !== 'recovery') {
+  // Don't auto-redirect if URL has a PKCE code param (could be PASSWORD_RECOVERY)
+  const urlHasCode = new URLSearchParams(window.location.search).has('code');
+  if (state.session && !urlHasCode) {
     message.textContent = 'Opening dashboard...';
     setAuthBusy(true);
     window.location.replace('/dashboard');
     return;
+  }
+  // If code present, onAuthStateChange will handle it:
+  // PASSWORD_RECOVERY -> show reset form, SIGNED_IN -> go to dashboard
+  if (urlHasCode) {
+    state.supabase.auth.onAuthStateChange((event2) => {
+      if (event2 === 'SIGNED_IN') window.location.replace('/dashboard');
+    });
   }
 
   form.addEventListener('submit', async (event) => {
