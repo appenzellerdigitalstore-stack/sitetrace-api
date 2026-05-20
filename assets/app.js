@@ -1849,7 +1849,9 @@ async function initAuth() {
     return;
   }
 
-  if (state.session) {
+  // Don't auto-redirect if this is a password recovery flow
+  const hashParams = Object.fromEntries(new URLSearchParams(window.location.hash.slice(1)));
+  if (state.session && hashParams.type !== 'recovery') {
     message.textContent = 'Opening dashboard...';
     setAuthBusy(true);
     window.location.replace('/dashboard');
