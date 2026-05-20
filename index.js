@@ -2529,6 +2529,15 @@ app.get('/signin', (req, res) => {
   res.sendFile(path.join(__dirname, 'signin.html'));
 });
 
+
+app.get('/terms', (req, res) => {
+  res.sendFile(path.join(__dirname, 'terms.html'));
+});
+
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'privacy.html'));
+});
+
 app.get('/status/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'status.html'));
 });

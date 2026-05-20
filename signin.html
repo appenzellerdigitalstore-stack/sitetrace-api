@@ -48,15 +48,19 @@
         <p class="lead" style="font-size:.95rem; margin-top:6px;">Sign in to manage your monitored sites.</p>
       </div>
 
+      <!-- Sign in / Sign up form -->
       <form id="authForm" class="auth-form">
         <label class="form-label">
           Email
           <input id="authEmail" type="email" autocomplete="email" placeholder="you@example.com" required>
         </label>
-        <label class="form-label">
+        <label class="form-label" id="passwordField">
           Password
           <input id="authPassword" type="password" autocomplete="current-password" placeholder="Password" required>
         </label>
+        <div style="text-align:right; margin-top:-8px; margin-bottom:8px;">
+          <button type="button" id="forgotPasswordBtn" style="background:none;border:none;color:var(--green);font-size:.85rem;cursor:pointer;padding:0;">Forgot password?</button>
+        </div>
         <button class="button" type="submit" style="width:100%; margin-top:4px;">Sign in</button>
 
         <div class="auth-divider">or</div>
@@ -66,8 +70,31 @@
         <p class="message" id="authMessage" style="text-align:center; margin-top:4px;"></p>
       </form>
 
+      <!-- Forgot password form -->
+      <form id="resetForm" class="auth-form" style="display:none;">
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:16px;">Enter your email and we'll send you a reset link.</p>
+        <label class="form-label">
+          Email
+          <input id="resetEmail" type="email" autocomplete="email" placeholder="you@example.com" required>
+        </label>
+        <button class="button" type="submit" style="width:100%;">Send reset link</button>
+        <button type="button" id="backToSigninBtn" style="width:100%;margin-top:8px;background:none;border:none;color:var(--muted);font-size:.9rem;cursor:pointer;">← Back to sign in</button>
+        <p class="message" id="resetMessage" style="text-align:center; margin-top:8px;"></p>
+      </form>
+
+      <!-- New password form (shown after clicking reset link) -->
+      <form id="newPasswordForm" class="auth-form" style="display:none;">
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:16px;">Choose a new password for your account.</p>
+        <label class="form-label">
+          New password
+          <input id="newPassword" type="password" autocomplete="new-password" placeholder="New password" required minlength="6">
+        </label>
+        <button class="button" type="submit" style="width:100%;">Set new password</button>
+        <p class="message" id="newPasswordMessage" style="text-align:center; margin-top:8px;"></p>
+      </form>
+
       <p style="text-align:center; margin-top:20px; font-size:.85rem; color:var(--muted);">
-        By continuing you agree to our <a href="#" style="color:var(--green);">Terms</a> and <a href="#" style="color:var(--green);">Privacy Policy</a>.
+        By continuing you agree to our <a href="/terms" style="color:var(--green);">Terms</a> and <a href="/privacy" style="color:var(--green);">Privacy Policy</a>.
       </p>
     </div>
   </main>
@@ -82,6 +109,82 @@
     }
     const mainNav=document.getElementById('mainNav');
     if(mainNav)window.addEventListener('scroll',()=>mainNav.classList.toggle('scrolled',scrollY>10),{passive:true});
+
+    // Password reset flow
+    (async function initPasswordReset() {
+      const authForm       = document.getElementById('authForm');
+      const resetForm      = document.getElementById('resetForm');
+      const newPasswordForm= document.getElementById('newPasswordForm');
+      const forgotBtn      = document.getElementById('forgotPasswordBtn');
+      const backBtn        = document.getElementById('backToSigninBtn');
+      const heading        = document.querySelector('.auth-card h1');
+      const subheading     = document.querySelector('.auth-card .lead');
+
+      // Check if we landed here via a password reset link (hash contains type=recovery)
+      const hash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+      if (hash.type === 'recovery' && hash.access_token) {
+        authForm.style.display = 'none';
+        newPasswordForm.style.display = '';
+        if (heading) heading.textContent = 'Set new password';
+        if (subheading) subheading.style.display = 'none';
+      }
+
+      forgotBtn && forgotBtn.addEventListener('click', () => {
+        authForm.style.display = 'none';
+        resetForm.style.display = '';
+        if (heading) heading.textContent = 'Reset password';
+        if (subheading) subheading.style.display = 'none';
+      });
+
+      backBtn && backBtn.addEventListener('click', () => {
+        resetForm.style.display = 'none';
+        authForm.style.display = '';
+        if (heading) heading.textContent = 'Welcome back';
+        if (subheading) subheading.style.display = '';
+      });
+
+      resetForm && resetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg   = document.getElementById('resetMessage');
+        const email = document.getElementById('resetEmail').value.trim();
+        const btn   = resetForm.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'Sending…';
+        try {
+          await window._supabaseInit;
+          const { error } = await window._supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + '/signin'
+          });
+          if (error) throw error;
+          msg.style.color = 'var(--green)';
+          msg.textContent = 'Check your inbox for a reset link.';
+          btn.textContent = 'Sent!';
+        } catch (err) {
+          msg.style.color = 'var(--red, #ef4444)';
+          msg.textContent = err.message || 'Something went wrong.';
+          btn.disabled = false; btn.textContent = 'Send reset link';
+        }
+      });
+
+      newPasswordForm && newPasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('newPasswordMessage');
+        const pw  = document.getElementById('newPassword').value;
+        const btn = newPasswordForm.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'Saving…';
+        try {
+          await window._supabaseInit;
+          const { error } = await window._supabase.auth.updateUser({ password: pw });
+          if (error) throw error;
+          msg.style.color = 'var(--green)';
+          msg.textContent = 'Password updated! Redirecting…';
+          setTimeout(() => window.location.href = '/dashboard', 1500);
+        } catch (err) {
+          msg.style.color = 'var(--red, #ef4444)';
+          msg.textContent = err.message || 'Something went wrong.';
+          btn.disabled = false; btn.textContent = 'Set new password';
+        }
+      });
+    })();
   </script>
 </body>
 </html>
