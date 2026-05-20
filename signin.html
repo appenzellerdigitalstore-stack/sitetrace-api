@@ -128,7 +128,14 @@
         return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
       }
 
-      // Recovery form is shown by app.js onAuthStateChange PASSWORD_RECOVERY event
+      // Show reset form immediately if hash contains type=recovery (OTP flow)
+      const hash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+      if (hash.type === 'recovery' && hash.access_token) {
+        authForm.style.display = 'none';
+        newPasswordForm.style.display = '';
+        if (heading) heading.textContent = 'Set new password';
+        if (subheading) subheading.style.display = 'none';
+      }
 
       forgotBtn && forgotBtn.addEventListener('click', () => {
         authForm.style.display = 'none';
