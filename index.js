@@ -2529,6 +2529,15 @@ app.get('/signin', (req, res) => {
   res.sendFile(path.join(__dirname, 'signin.html'));
 });
 
+// Auth confirmation redirect — keeps links on our domain instead of supabase.co
+app.get('/auth/confirm', (req, res) => {
+  const { token_hash, type, next } = req.query;
+  if (!token_hash || !type) return res.redirect('/signin');
+  const redirectTo = (next && next.startsWith('/')) ? next : '/signin';
+  // Redirect to signin with token_hash so Supabase JS can exchange it
+  res.redirect(`${redirectTo}?token_hash=${encodeURIComponent(token_hash)}&type=${encodeURIComponent(type)}`);
+});
+
 
 app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'terms.html'));

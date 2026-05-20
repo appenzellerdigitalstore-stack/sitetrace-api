@@ -1861,14 +1861,29 @@ async function initAuth() {
     return;
   }
 
-  // Don't auto-redirect if this is a recovery flow (OTP hash or PKCE code)
+  // Don't auto-redirect if this is a recovery flow (OTP hash or PKCE code or token_hash)
   const hashParams2 = Object.fromEntries(new URLSearchParams(window.location.hash.slice(1)));
-  const isRecoveryFlow = new URLSearchParams(window.location.search).has('code') || hashParams2.type === 'recovery';
+  const searchParams2 = new URLSearchParams(window.location.search);
+  const isRecoveryFlow = searchParams2.has('code') || hashParams2.type === 'recovery' || searchParams2.has('token_hash');
   if (state.session && !isRecoveryFlow) {
     message.textContent = 'Opening dashboard...';
     setAuthBusy(true);
     window.location.replace('/dashboard');
     return;
+  }
+
+  // Handle token_hash flow (email link goes through /auth/confirm → /signin?token_hash=…&type=recovery)
+  const tokenHash = searchParams2.get('token_hash');
+  const tokenType = searchParams2.get('type');
+  if (tokenHash && tokenType) {
+    (async () => {
+      const { error } = await state.supabase.auth.verifyOtp({ token_hash: tokenHash, type: tokenType });
+      if (error) {
+        message.style.color = 'var(--red, #ef4444)';
+        message.textContent = error.message || 'Reset link is invalid or expired. Please request a new one.';
+      }
+      // On success, onAuthStateChange fires PASSWORD_RECOVERY and shows the new password form
+    })();
   }
 
   form.addEventListener('submit', async (event) => {
