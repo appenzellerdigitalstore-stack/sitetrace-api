@@ -120,13 +120,12 @@
       const heading        = document.querySelector('.auth-card h1');
       const subheading     = document.querySelector('.auth-card .lead');
 
-      // Get Supabase client — app.js exposes it as window._stSupabase after init
+      // Initialize Supabase client directly using the API service URL
       async function getSupabase() {
-        for (let i = 0; i < 20; i++) {
-          if (window._stSupabase) return window._stSupabase;
-          await new Promise(r => setTimeout(r, 150));
-        }
-        throw new Error('Supabase not initialized');
+        const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+          ? '' : 'https://sitetrace-api.onrender.com';
+        const cfg = await fetch(apiBase + '/config').then(r => r.json());
+        return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
       }
 
       // Check if we landed here via a password reset link (hash contains type=recovery)
