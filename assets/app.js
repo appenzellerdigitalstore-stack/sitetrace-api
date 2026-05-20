@@ -3917,7 +3917,48 @@ async function initBilling() {
   const buttons = document.querySelectorAll('[data-upgrade]');
   if (!buttons.length) return;
   await initSupabase();
+
+  // If logged in, fetch current plan and update button states
+  if (state.session) {
+    try {
+      const me = await fetch(apiPath('/api/me'), { headers: authHeaders() }).then(r => r.json());
+      const currentPlan = me.plan || (me.profile && me.profile.plan) || 'free';
+      const planRank = { free: 0, starter: 1, agency: 2 };
+      const currentRank = planRank[currentPlan] || 0;
+
+      const starterBtn = document.getElementById('starterBtn');
+      const agencyBtn  = document.getElementById('agencyBtn');
+
+      if (starterBtn) {
+        if (currentPlan === 'starter') {
+          starterBtn.textContent = '✓ Current plan';
+          starterBtn.disabled = true;
+          starterBtn.classList.add('secondary');
+          starterBtn.style.opacity = '.55';
+          starterBtn.style.cursor = 'default';
+        } else if (currentRank > 1) {
+          starterBtn.textContent = 'Downgrade';
+          starterBtn.classList.add('secondary');
+        }
+      }
+
+      if (agencyBtn) {
+        if (currentPlan === 'agency') {
+          agencyBtn.textContent = '✓ Current plan';
+          agencyBtn.disabled = true;
+          agencyBtn.style.opacity = '.55';
+          agencyBtn.style.cursor = 'default';
+        } else if (currentRank < 2) {
+          agencyBtn.textContent = 'Upgrade to Agency';
+          agencyBtn.classList.add('button');
+          agencyBtn.classList.remove('secondary');
+        }
+      }
+    } catch (_) { /* silently ignore */ }
+  }
+
   buttons.forEach((button) => button.addEventListener('click', async () => {
+    if (button.disabled) return;
     const message = document.getElementById('pageMessage');
     if (!state.session) {
       window.location.href = '/signin';
@@ -3926,7 +3967,7 @@ async function initBilling() {
     try {
       await startUpgrade(button.dataset.upgrade);
     } catch (error) {
-      message.textContent = error.message;
+      if (message) message.textContent = error.message;
     }
   }));
 }

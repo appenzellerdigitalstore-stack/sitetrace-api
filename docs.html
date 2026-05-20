@@ -244,29 +244,62 @@
     </span>
   </div>
 
+  <!-- Loading skeleton -->
+  <div id="docsLoading" style="max-width:860px;margin:24px 32px;display:flex;flex-direction:column;gap:12px;">
+    <div style="height:40px;background:rgba(255,255,255,.05);border-radius:8px;animation:pulse 1.4s ease-in-out infinite;"></div>
+    <div style="height:56px;background:rgba(255,255,255,.04);border-radius:8px;animation:pulse 1.4s ease-in-out infinite .1s;"></div>
+    <div style="height:56px;background:rgba(255,255,255,.04);border-radius:8px;animation:pulse 1.4s ease-in-out infinite .2s;"></div>
+    <div style="height:56px;background:rgba(255,255,255,.04);border-radius:8px;animation:pulse 1.4s ease-in-out infinite .3s;"></div>
+    <p style="text-align:center;color:#475569;font-size:.8rem;margin-top:8px;">Loading API reference…</p>
+  </div>
+  <style>
+    @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  </style>
+
   <!-- Swagger UI -->
-  <div id="swagger-ui"></div>
+  <div id="swagger-ui" style="display:none;"></div>
 
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
   <script>
     const OPENAPI_URL = 'https://raw.githubusercontent.com/appenzellerdigitalstore-stack/api-marketplace/main/openapi.yaml';
 
-    SwaggerUIBundle({
+    // Read API key from localStorage (set by the dashboard)
+    const storedKey = localStorage.getItem('st_api_key') || '';
+
+    const ui = SwaggerUIBundle({
       url: OPENAPI_URL,
       dom_id: '#swagger-ui',
       presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
       layout: 'StandaloneLayout',
-      deepLinking: true,
+      deepLinking: false,          // prevent auto-jumping to #/Reports/getHealth
       tryItOutEnabled: true,
-      defaultModelsExpandDepth: 0,
+      defaultModelsExpandDepth: 0, // collapse schemas by default — cleaner
       defaultModelExpandDepth: 1,
+      docExpansion: 'list',        // show tag groups collapsed, not all endpoints open
       displayRequestDuration: true,
       filter: true,
+      persistAuthorization: true,
       syntaxHighlight: { theme: 'agate' },
-      requestInterceptor: (req) => {
-        // Pre-fill auth header hint in the UI
-        return req;
+      onComplete: () => {
+        // Hide skeleton, show UI
+        document.getElementById('docsLoading').style.display = 'none';
+        document.getElementById('swagger-ui').style.display = '';
+
+        // Auto-authorize with stored API key
+        if (storedKey) {
+          ui.preauthorizeApiKey('BearerAuth', storedKey);
+          // Small banner to confirm key was loaded
+          const banner = document.createElement('div');
+          banner.style.cssText = 'max-width:860px;margin:0 32px 10px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.25);border-radius:7px;padding:8px 13px;font-size:.78rem;color:#6ee7b7;display:flex;align-items:center;gap:8px;';
+          banner.innerHTML = '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;flex-shrink:0;"><polyline points="20 6 9 17 4 12"/></svg> API key loaded from your dashboard — "Try it out" is ready to use.';
+          document.getElementById('swagger-ui').insertAdjacentElement('beforebegin', banner);
+        } else {
+          const banner = document.createElement('div');
+          banner.style.cssText = 'max-width:860px;margin:0 32px 10px;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:7px;padding:8px 13px;font-size:.78rem;color:#a5b4fc;display:flex;align-items:center;gap:8px;';
+          banner.innerHTML = '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> No API key found. <a href="/dashboard" style="color:#818cf8;margin-left:4px;">Generate one in the dashboard →</a>';
+          document.getElementById('swagger-ui').insertAdjacentElement('beforebegin', banner);
+        }
       }
     });
   </script>
