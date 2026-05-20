@@ -120,6 +120,12 @@
       const heading        = document.querySelector('.auth-card h1');
       const subheading     = document.querySelector('.auth-card .lead');
 
+      // Initialize Supabase client for this page
+      async function getSupabase() {
+        const cfg = await fetch('/api/config').then(r => r.json());
+        return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
+      }
+
       // Check if we landed here via a password reset link (hash contains type=recovery)
       const hash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
       if (hash.type === 'recovery' && hash.access_token) {
@@ -150,8 +156,8 @@
         const btn   = resetForm.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Sending…';
         try {
-          await window._supabaseInit;
-          const { error } = await window._supabase.auth.resetPasswordForEmail(email, {
+          const sb = await getSupabase();
+          const { error } = await sb.auth.resetPasswordForEmail(email, {
             redirectTo: window.location.origin + '/signin'
           });
           if (error) throw error;
@@ -172,8 +178,8 @@
         const btn = newPasswordForm.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Saving…';
         try {
-          await window._supabaseInit;
-          const { error } = await window._supabase.auth.updateUser({ password: pw });
+          const sb = await getSupabase();
+          const { error } = await sb.auth.updateUser({ password: pw });
           if (error) throw error;
           msg.style.color = 'var(--green)';
           msg.textContent = 'Password updated! Redirecting…';
