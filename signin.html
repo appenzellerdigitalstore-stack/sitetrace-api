@@ -122,7 +122,7 @@
 
       // Initialize Supabase client for this page
       async function getSupabase() {
-        const cfg = await fetch('/api/config').then(r => r.json());
+        const cfg = await fetch('/config').then(r => r.json());
         return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
       }
 
