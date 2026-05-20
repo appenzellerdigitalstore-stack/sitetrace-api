@@ -1513,6 +1513,7 @@ async function initSupabaseOnce() {
   state.config = await fetch(apiPath('/config')).then((res) => res.json());
   if (state.config.supabase_url && state.config.supabase_anon_key) {
     state.supabase = window.supabase.createClient(state.config.supabase_url, state.config.supabase_anon_key);
+    window._stSupabase = state.supabase;
     const { data } = await state.supabase.auth.getSession();
     state.session = data.session;
     state.supabase.auth.onAuthStateChange((event, session) => {

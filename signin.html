@@ -120,10 +120,13 @@
       const heading        = document.querySelector('.auth-card h1');
       const subheading     = document.querySelector('.auth-card .lead');
 
-      // Initialize Supabase client for this page
+      // Get Supabase client — app.js exposes it as window._stSupabase after init
       async function getSupabase() {
-        const cfg = await fetch('/config').then(r => r.json());
-        return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
+        for (let i = 0; i < 20; i++) {
+          if (window._stSupabase) return window._stSupabase;
+          await new Promise(r => setTimeout(r, 150));
+        }
+        throw new Error('Supabase not initialized');
       }
 
       // Check if we landed here via a password reset link (hash contains type=recovery)
