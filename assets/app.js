@@ -1520,6 +1520,18 @@ async function initSupabaseOnce() {
       state.session = session;
       updateAuthNav();
       if (page === 'dashboard') loadDashboard();
+      if (event === 'PASSWORD_RECOVERY' && page === 'signin') {
+        const authForm        = document.getElementById('authForm');
+        const resetForm       = document.getElementById('resetForm');
+        const newPasswordForm = document.getElementById('newPasswordForm');
+        const heading         = document.querySelector('.auth-card h1');
+        const subheading      = document.querySelector('.auth-card .lead');
+        if (authForm)        authForm.style.display = 'none';
+        if (resetForm)       resetForm.style.display = 'none';
+        if (newPasswordForm) newPasswordForm.style.display = '';
+        if (heading)         heading.textContent = 'Set new password';
+        if (subheading)      subheading.style.display = 'none';
+      }
     });
   }
 }

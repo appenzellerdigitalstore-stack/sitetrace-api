@@ -128,14 +128,7 @@
         return window.supabase.createClient(cfg.supabase_url, cfg.supabase_anon_key);
       }
 
-      // Check if we landed here via a password reset link (hash contains type=recovery)
-      const hash = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
-      if (hash.type === 'recovery' && hash.access_token) {
-        authForm.style.display = 'none';
-        newPasswordForm.style.display = '';
-        if (heading) heading.textContent = 'Set new password';
-        if (subheading) subheading.style.display = 'none';
-      }
+      // Recovery form is shown by app.js onAuthStateChange PASSWORD_RECOVERY event
 
       forgotBtn && forgotBtn.addEventListener('click', () => {
         authForm.style.display = 'none';
@@ -180,7 +173,8 @@
         const btn = newPasswordForm.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Saving…';
         try {
-          const sb = await getSupabase();
+          // Must use the same client that holds the recovery session
+          const sb = window._stSupabase || await getSupabase();
           const { error } = await sb.auth.updateUser({ password: pw });
           if (error) throw error;
           msg.style.color = 'var(--green)';
