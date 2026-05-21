@@ -2538,6 +2538,42 @@ app.get('/auth/confirm', (req, res) => {
   res.redirect(`${redirectTo}?token_hash=${encodeURIComponent(token_hash)}&type=${encodeURIComponent(type)}`);
 });
 
+// Send password-changed confirmation email
+app.post('/auth/password-changed', express.json(), async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || !RESEND_API_KEY) return res.json({ sent: false });
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+      body: JSON.stringify({
+        from: ALERT_FROM_EMAIL,
+        reply_to: ALERT_REPLY_TO_EMAIL,
+        to: [email],
+        subject: 'Your SiteTrace password was changed',
+        html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
+  <div style="margin-bottom:24px;">
+    <span style="display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:#111;">
+      <span style="background:#10b981;color:#fff;border-radius:6px;padding:4px 8px;font-size:.85rem;">ST</span>
+      SiteTrace
+    </span>
+  </div>
+  <h2 style="font-size:1.3rem;font-weight:700;color:#111;margin:0 0 8px;">Password changed</h2>
+  <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">Your SiteTrace password was successfully updated. You can now sign in with your new password.</p>
+  <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">If you did not make this change, please contact us immediately at <a href="mailto:support@sitetrace.it.com" style="color:#10b981;">support@sitetrace.it.com</a>.</p>
+  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+  <p style="color:#9ca3af;font-size:.8rem;margin:0;">SiteTrace &mdash; Website health monitoring</p>
+</div>`,
+        text: `Your SiteTrace password was successfully updated.\n\nIf you did not make this change, contact us at support@sitetrace.it.com immediately.`,
+      }),
+    });
+    const result = await response.json();
+    res.json({ sent: true, id: result.id });
+  } catch (err) {
+    res.json({ sent: false, error: err.message });
+  }
+});
+
 
 app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'terms.html'));

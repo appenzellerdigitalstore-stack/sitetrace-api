@@ -180,10 +180,21 @@
         const btn = newPasswordForm.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Saving…';
         try {
-          // Must use the same client that holds the recovery session
           const sb = window._stSupabase || await getSupabase();
+          if (!sb) throw new Error('Please wait a moment and try again.');
           const { error } = await sb.auth.updateUser({ password: pw });
           if (error) throw error;
+          // Send password-changed confirmation email (fire and forget)
+          const { data: { user } } = await sb.auth.getUser().catch(() => ({ data: {} }));
+          if (user?.email) {
+            const apiBase = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+              ? '' : 'https://sitetrace-api.onrender.com';
+            fetch(apiBase + '/auth/password-changed', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: user.email }),
+            }).catch(() => {});
+          }
           msg.style.color = 'var(--green)';
           msg.textContent = 'Password updated! Redirecting…';
           setTimeout(() => window.location.href = '/dashboard', 1500);

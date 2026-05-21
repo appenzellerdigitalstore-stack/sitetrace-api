@@ -1877,12 +1877,20 @@ async function initAuth() {
   const tokenType = searchParams2.get('type');
   if (tokenHash && tokenType) {
     (async () => {
-      const { error } = await state.supabase.auth.verifyOtp({ token_hash: tokenHash, type: tokenType });
+      const { data, error } = await state.supabase.auth.verifyOtp({ token_hash: tokenHash, type: tokenType });
       if (error) {
         message.style.color = 'var(--red, #ef4444)';
         message.textContent = error.message || 'Reset link is invalid or expired. Please request a new one.';
+        return;
       }
-      // On success, onAuthStateChange fires PASSWORD_RECOVERY and shows the new password form
+      // PKCE flow may not auto-persist the recovery session — set it explicitly so updateUser works
+      if (data?.session) {
+        await state.supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+      // onAuthStateChange fires PASSWORD_RECOVERY which shows the new password form
     })();
   }
 
