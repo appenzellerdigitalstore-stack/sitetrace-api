@@ -1441,14 +1441,19 @@ function renderRecentChecksTable(checks) {
 
 async function startUpgrade(plan) {
   if (!plan) return;
-  const response = await fetch(apiPath('/billing/create-checkout-session'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ plan })
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.message || 'Billing is not configured');
-  window.location.href = data.url;
+  try {
+    const response = await fetch(apiPath('/billing/create-checkout-session'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ plan })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || 'Billing not configured');
+    window.location.href = data.url;
+  } catch (_) {
+    // Stripe not yet configured — send user to pricing page
+    window.location.href = '/pricing';
+  }
 }
 
 function renderPlanUsage() {
