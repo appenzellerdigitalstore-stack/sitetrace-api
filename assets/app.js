@@ -1917,11 +1917,33 @@ async function initAuth() {
   signUpButton.addEventListener('click', async () => {
     const email = normalizeEmail(document.getElementById('authEmail').value);
     const password = document.getElementById('authPassword').value;
+    if (!email || !password) {
+      message.textContent = 'Please enter your email and a password.';
+      return;
+    }
     message.textContent = 'Creating account...';
+    message.style.color = '';
     setAuthBusy(true);
     try {
-      const { error } = await state.supabase.auth.signUp({ email, password });
-      message.textContent = error ? error.message : 'Account created. You can sign in now.';
+      const { data, error } = await state.supabase.auth.signUp({ email, password });
+      if (error) {
+        message.style.color = 'var(--red, #ef4444)';
+        message.textContent = error.message;
+        return;
+      }
+      // If session is returned immediately, email confirmation is off — go straight to dashboard
+      if (data?.session) {
+        state.session = data.session;
+        message.textContent = 'Account created! Opening dashboard...';
+        window.location.replace('/dashboard');
+        return;
+      }
+      // Otherwise Supabase requires email confirmation
+      message.style.color = 'var(--green)';
+      message.textContent = 'Account created! Check your email to confirm before signing in.';
+    } catch (err) {
+      message.style.color = 'var(--red, #ef4444)';
+      message.textContent = err.message || 'Something went wrong. Please try again.';
     } finally {
       setAuthBusy(false);
     }
