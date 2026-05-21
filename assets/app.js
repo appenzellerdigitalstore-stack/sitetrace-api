@@ -2601,7 +2601,18 @@ function syncContentHeader(site, status, reportText, reportLocked, reportUrl) {
   if (copyBtn) {
     copyBtn.style.display = reportLocked ? 'none' : '';
   }
-  if (pingRefresh) pingRefresh.style.display = '';
+  if (pingRefresh) {
+    pingRefresh.style.display = '';
+    if (state.plan === 'free') {
+      pingRefresh.innerHTML = '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Scan';
+      pingRefresh.title = 'Run a manual scan';
+      pingRefresh.dataset.freeScanSite = site.id;
+    } else {
+      pingRefresh.innerHTML = '<svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh Live Ping';
+      pingRefresh.title = 'Reset live ping chart';
+      pingRefresh.dataset.freeScanSite = '';
+    }
+  }
   if (deleteBtn) {
     deleteBtn.style.display = '';
     deleteBtn.dataset.delete = site.id;
@@ -3115,68 +3126,117 @@ function renderSiteDetail(site) {
 
   syncContentHeader(site, status, reportText, reportLocked, reportUrl);
 
-  // Free tier: rich scan results, single compact upgrade row
-  if (state.plan === 'free' && !hasFeature('in_app_alerts')) {
-    const allIssues = (latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [])
-      .map(c => translateCheck(c, currentLocale))
-      .filter(c => c.level !== 'pass');
-    const issueRowsFree = allIssues.length
-      ? allIssues.map((c) => `
-          <div class="rich-issue-row rich-issue-${c.level}">
-            <div class="rich-issue-top">
-              <span class="rich-issue-icon lvl-${c.level}">
-                ${c.level === 'fail'
-                  ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
-                  : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
-              </span>
-              <span class="rich-issue-title">${escapeHtml(c.title)}</span>
-              ${c.value ? `<span class="scan-check-value">${escapeHtml(c.value)}</span>` : ''}
-              <span class="level-badge ${c.level}" style="margin-left:auto;">${escapeHtml(c.level)}</span>
-            </div>
-            ${c.description ? `<p class="rich-issue-desc">${escapeHtml(c.description)}</p>` : ''}
-            ${c.recommendation ? `<p class="rich-issue-fix"><strong>How to fix:</strong> ${escapeHtml(c.recommendation)}</p>` : ''}
-          </div>`).join('')
-      : `<div class="empty subtle">No issues found in this scan.</div>`;
+  // Build shared context object for tier renderers
+  const tierCtx = {
+    avgMs, domainExpiry, latestResult, issueHtml, insightHtml,
+    incidentRowsHtml, scanBreakdownHtml, respChartHtml, bars, historyHtml,
+    publicUrl, reportUrl, reportText, alertsLocked, statusLocked, reportLocked,
+    lastDown,
+  };
 
-    detail.innerHTML = `
-      <div class="scan-proof-bar">
-        <span class="scan-interval-badge">Free · Every 20 min</span>
-        <span>Last scan: <strong id="lastScanTime">–</strong></span>
-        <span>·</span>
-        <span><strong id="scanCountdown">–</strong></span>
-      </div>
-      <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
-      <p style="font-size:.82rem;color:var(--muted);margin:0 0 16px;">Your Free plan allows one scan every 20 minutes.</p>
-      <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
-        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
-        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
-        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
-        <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
-      </div>
-      <div class="free-issues-block" style="margin-bottom:20px;">
-        <div class="free-section-head">
-          <strong>Issues found</strong>
-          <span style="font-size:.8rem;color:var(--muted);margin-left:8px;">${allIssues.filter(c=>c.level==='fail').length} fail · ${allIssues.filter(c=>c.level!=='fail').length} warning</span>
-        </div>
-        ${issueRowsFree}
-      </div>
-      ${scanBreakdownHtml}
-      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;margin:20px 0 16px;flex-wrap:wrap;">
-        <span style="font-size:.85rem;color:var(--muted);flex:1;min-width:180px;">Want 30-day history, response graphs, alerts, and client reports?</span>
-        <button class="button small" type="button" data-dashboard-upgrade="starter">Upgrade to Starter</button>
-      </div>
-      <div class="detail-actions">
-        <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
-        <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
-      </div>`;
-    startScanCountdown(site.last_checked_at, site.id);
+  // Route to tier-specific renderer
+  if (state.plan === 'free') {
+    renderFreeDetail(site, checks, detail, tierCtx);
     return;
   }
+  if (state.plan === 'agency') {
+    renderAgencyDetail(site, checks, detail, tierCtx);
+  } else {
+    renderStarterDetail(site, checks, detail, tierCtx);
+  }
+
+  // Paid-tier post-render: wire tabs, start countdown, mount live ping
+  const tabsEl = document.getElementById('detailTabs');
+  if (tabsEl) {
+    tabsEl.addEventListener('click', (e) => {
+      const tab = e.target.closest('.detail-tab');
+      if (!tab) return;
+      const panelName = tab.dataset.tab;
+      tabsEl.querySelectorAll('.detail-tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      detail.querySelectorAll('.detail-tab-panel').forEach((p) => {
+        p.classList.toggle('hidden', p.dataset.panel !== panelName);
+      });
+    });
+  }
+
+  startScanCountdown(site.last_checked_at, site.id);
+
+  const pingCanvas = document.getElementById('livePingCanvas');
+  if (pingCanvas) {
+    state.livePingChart = new LivePingChart(pingCanvas, { url: site.url });
+    if (_savedPingUrl === site.url && _savedPingPoints && _savedPingPoints.length) {
+      state.livePingChart.points = _savedPingPoints;
+      state.livePingChart._updateStats();
+    }
+    state.livePingChart.start();
+  }
+}
+
+// ── Free tier detail renderer ─────────────────────────────────────────────────
+function renderFreeDetail(site, checks, detail, ctx) {
+  const { avgMs, domainExpiry, latestResult, scanBreakdownHtml } = ctx;
+
+  const allIssues = (latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [])
+    .map(c => translateCheck(c, currentLocale))
+    .filter(c => c.level !== 'pass');
+
+  const issueRowsFree = allIssues.length
+    ? allIssues.map((c) => `
+        <div class="rich-issue-row rich-issue-${c.level}">
+          <div class="rich-issue-top">
+            <span class="rich-issue-icon lvl-${c.level}">
+              ${c.level === 'fail'
+                ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+                : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
+            </span>
+            <span class="rich-issue-title">${escapeHtml(c.title)}</span>
+            ${c.value ? `<span class="scan-check-value">${escapeHtml(c.value)}</span>` : ''}
+            <span class="level-badge ${c.level}" style="margin-left:auto;">${escapeHtml(c.level)}</span>
+          </div>
+          ${c.description ? `<p class="rich-issue-desc">${escapeHtml(c.description)}</p>` : ''}
+          ${c.recommendation ? `<p class="rich-issue-fix"><strong>How to fix:</strong> ${escapeHtml(c.recommendation)}</p>` : ''}
+        </div>`).join('')
+    : `<div class="empty subtle">No issues found in this scan.</div>`;
 
   detail.innerHTML = `
-    <!-- Scan proof bar -->
     <div class="scan-proof-bar">
-      <span class="scan-interval-badge">${escapeHtml(state.plan === 'agency' ? t('dashboard.planAgency') : state.plan === 'starter' ? t('dashboard.planStarter') : t('dashboard.planFree'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
+      <span class="scan-interval-badge">Free · Every 20 min</span>
+      <span>Last scan: <strong id="lastScanTime">–</strong></span>
+      <span>·</span>
+      <span><strong id="scanCountdown">–</strong></span>
+    </div>
+    <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
+    <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
+      <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
+      <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
+    </div>
+    <div class="free-issues-block" style="margin-bottom:20px;">
+      <div class="free-section-head">
+        <strong>Issues found</strong>
+        <span style="font-size:.8rem;color:var(--muted);margin-left:8px;">${allIssues.filter(c=>c.level==='fail').length} fail · ${allIssues.filter(c=>c.level!=='fail').length} warning</span>
+      </div>
+      ${issueRowsFree}
+    </div>
+    ${scanBreakdownHtml}
+    <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;margin:20px 0 0;flex-wrap:wrap;">
+      <span style="font-size:.85rem;color:var(--muted);flex:1;min-width:180px;">Want 30-day history, response graphs, alerts, and client reports?</span>
+      <button class="button small" type="button" data-dashboard-upgrade="starter">Upgrade to Starter →</button>
+    </div>`;
+
+  startScanCountdown(site.last_checked_at, site.id);
+}
+
+// ── Starter tier detail renderer ──────────────────────────────────────────────
+function renderStarterDetail(site, checks, detail, ctx) {
+  const { avgMs, domainExpiry, issueHtml, insightHtml, incidentRowsHtml,
+          scanBreakdownHtml, lastDown } = ctx;
+
+  detail.innerHTML = `
+    <div class="scan-proof-bar">
+      <span class="scan-interval-badge">${escapeHtml(t('dashboard.planStarter'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
       <span>${escapeHtml(t('dashboard.lastScan'))}: <strong id="lastScanTime">–</strong></span>
       <span>·</span>
       <span><strong id="scanCountdown">–</strong></span>
@@ -3189,7 +3249,6 @@ function renderSiteDetail(site) {
       <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
     </div>
 
-    <!-- Overview -->
     <div class="detail-tab-panel" data-panel="overview" style="padding-top:24px;">
       <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);">
         <h2 style="margin:0 0 6px;font-size:1.2rem;font-weight:700;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
@@ -3244,7 +3303,6 @@ function renderSiteDetail(site) {
       ${scanBreakdownHtml}
     </div>
 
-    <!-- Incidents -->
     <div class="detail-tab-panel hidden" data-panel="incidents">
       <div style="padding:20px;">
         <div class="detail-panel">
@@ -3258,7 +3316,6 @@ function renderSiteDetail(site) {
       </div>
     </div>
 
-    <!-- Recent Checks -->
     <div class="detail-tab-panel hidden" data-panel="checks">
       <div class="detail-panel" style="margin:0 0 16px;">
         <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.recentChecks'))}</span></div>
@@ -3267,37 +3324,105 @@ function renderSiteDetail(site) {
         </div>
       </div>
     </div>
-
     `;
+}
 
-  // Tab switching
-  const tabsEl = document.getElementById('detailTabs');
-  if (tabsEl) {
-    tabsEl.addEventListener('click', (e) => {
-      const tab = e.target.closest('.detail-tab');
-      if (!tab) return;
-      const panelName = tab.dataset.tab;
-      tabsEl.querySelectorAll('.detail-tab').forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
-      detail.querySelectorAll('.detail-tab-panel').forEach((p) => {
-        p.classList.toggle('hidden', p.dataset.panel !== panelName);
-      });
-    });
-  }
+// ── Agency tier detail renderer ───────────────────────────────────────────────
+function renderAgencyDetail(site, checks, detail, ctx) {
+  const { avgMs, domainExpiry, issueHtml, insightHtml, incidentRowsHtml,
+          scanBreakdownHtml, lastDown } = ctx;
 
-  // Start live scan countdown
-  startScanCountdown(site.last_checked_at, site.id);
+  detail.innerHTML = `
+    <div class="scan-proof-bar">
+      <span class="scan-interval-badge">${escapeHtml(t('dashboard.planAgency'))} · ${state.limits ? (state.sites ? state.sites.length : 0) + '/' + (state.limits.sites || '?') + ' ' + t('dashboard.sitesUsed') : planIntervalLabel()}</span>
+      <span>${escapeHtml(t('dashboard.lastScan'))}: <strong id="lastScanTime">–</strong></span>
+      <span>·</span>
+      <span><strong id="scanCountdown">–</strong></span>
+    </div>
+    <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
 
-  // Mount live ping chart — restore history if same site re-renders (e.g. after audit)
-  const pingCanvas = document.getElementById('livePingCanvas');
-  if (pingCanvas) {
-    state.livePingChart = new LivePingChart(pingCanvas, { url: site.url });
-    if (_savedPingUrl === site.url && _savedPingPoints && _savedPingPoints.length) {
-      state.livePingChart.points = _savedPingPoints;
-      state.livePingChart._updateStats();
-    }
-    state.livePingChart.start();
-  }
+    <div class="detail-tabs" id="detailTabs">
+      <button class="detail-tab active" type="button" data-tab="overview">${escapeHtml(t('dashboard.overview'))}</button>
+      <button class="detail-tab" type="button" data-tab="incidents">${escapeHtml(t('dashboard.recentIncidents'))}</button>
+      <button class="detail-tab" type="button" data-tab="checks">${escapeHtml(t('dashboard.recentChecks'))}</button>
+    </div>
+
+    <div class="detail-tab-panel" data-panel="overview" style="padding-top:24px;">
+      <div style="margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);">
+        <h2 style="margin:0 0 6px;font-size:1.2rem;font-weight:700;">${escapeHtml(t('dashboard.websiteHealthOverview'))}</h2>
+        <p style="margin:0;font-size:.88rem;color:var(--muted);">${escapeHtml(t('dashboard.websiteHealthSubtitle'))}</p>
+      </div>
+      <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);">
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
+        <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
+        <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
+      </div>
+      ${insightHtml}
+      <div class="live-ping-wrap">
+        <div class="live-ping-head">
+          <span>${escapeHtml(t('dashboard.liveResponse'))}</span>
+          <span class="live-ping-badge"><span class="live-dot-blink"></span>Live</span>
+          <span style="font-size:.78rem;color:var(--muted);margin-left:auto;">Pinging every 2s · independent of scans</span>
+        </div>
+        <canvas id="livePingCanvas" class="live-ping-canvas"></canvas>
+        <div class="live-ping-stats">
+          <div class="live-ping-stat"><span class="muted">Current</span><strong id="lpCurrent">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Average</span><strong id="lpAvg">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Min</span><strong id="lpMin">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Max</span><strong id="lpMax">–</strong></div>
+          <div class="live-ping-stat"><span class="muted">Timeouts</span><strong id="lpTO">0</strong></div>
+        </div>
+        <div id="lpTimeoutNote" class="scan-cooldown-msg" style="display:none;margin-top:10px;"></div>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>${escapeHtml(t('dashboard.latestIssues'))}</span>
+            <svg viewBox="0 0 24 24" class="icon-amber"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </div>
+          ${issueHtml}
+        </div>
+        <div class="detail-panel">
+          <div class="detail-panel-head">
+            <span>${escapeHtml(t('dashboard.recentIncidents'))}</span>
+            <svg viewBox="0 0 24 24" class="icon-red"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </div>
+          ${incidentRowsHtml}
+        </div>
+      </div>
+      <div class="audit-cta-band">
+        <div class="audit-cta-left">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:18px;height:18px;flex-shrink:0;color:var(--muted)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>Issues are from the last scheduled scan. Run a full audit to get the latest SEO, SSL and performance results.</span>
+        </div>
+        <button class="button small" id="auditCtaBtn" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runFullAudit'))}</button>
+      </div>
+      ${scanBreakdownHtml}
+    </div>
+
+    <div class="detail-tab-panel hidden" data-panel="incidents">
+      <div style="padding:20px;">
+        <div class="detail-panel">
+          <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.recentIncidents'))}</span></div>
+          ${incidentRowsHtml}
+        </div>
+        <div style="margin-top:16px; font-size:.85rem; color:var(--muted);">
+          Domain expiry: <strong>${escapeHtml(domainExpiryLabel(domainExpiry))}</strong> &nbsp;·&nbsp;
+          Since last down: <strong>${formatDurationSince(lastDown && lastDown.created_at)}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-tab-panel hidden" data-panel="checks">
+      <div class="detail-panel" style="margin:0 0 16px;">
+        <div class="detail-panel-head"><span>${escapeHtml(t('dashboard.recentChecks'))}</span></div>
+        <div style="overflow-x:auto;padding:0 4px;">
+          ${renderRecentChecksTable(state.selectedChecks)}
+        </div>
+      </div>
+    </div>
+    `;
 }
 
 // ── Sidebar panel rendering ───────────────────────────────────────────────────
@@ -3782,10 +3907,33 @@ async function initDashboard() {
     });
   }
 
-  // Refresh Ping button (header)
+  // Refresh Ping / Run Scan button (header)
   const refreshPingBtn = document.getElementById('refreshPingBtn');
   if (refreshPingBtn) {
-    refreshPingBtn.addEventListener('click', () => {
+    refreshPingBtn.addEventListener('click', async () => {
+      // Free tier: button triggers a manual scan
+      const freeSiteId = refreshPingBtn.dataset.freeScanSite;
+      if (freeSiteId) {
+        const _stored = localStorage.getItem('st_last_scan_' + freeSiteId);
+        if (_stored) {
+          const _elapsed = Date.now() - Number(_stored);
+          const _cooldownMs = planIntervalMinutes() * 60 * 1000;
+          if (_elapsed < _cooldownMs) {
+            const _rem = Math.ceil((_cooldownMs - _elapsed) / 1000);
+            const _mm = String(Math.floor(_rem / 60)).padStart(2, '0');
+            const _ss = String(_rem % 60).padStart(2, '0');
+            setDashboardMessage('Scan cooldown active. Next scan in ' + _mm + ':' + _ss + '.', 'error');
+            return;
+          }
+        }
+        try {
+          await runSiteCheck(freeSiteId);
+        } catch (err) {
+          setDashboardMessage(err.message || 'Scan failed.', 'error');
+        }
+        return;
+      }
+      // Paid tiers: reset live ping chart
       if (state.livePingChart) {
         state.livePingChart.stop();
         state.livePingChart.points = [];
