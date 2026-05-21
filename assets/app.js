@@ -3839,8 +3839,9 @@ async function initDashboard() {
 
   document.getElementById('siteForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    if (!hasFeature('monitored_sites')) {
-      setDashboardMessage(t('dashboard.monitoringUnavailable'), 'error');
+    const siteLimit = state.limits ? (state.limits.sites || 1) : 1;
+    if (state.sites.length >= siteLimit) {
+      setDashboardMessage(t('dashboard.limitReached'), 'error');
       return;
     }
     const siteUrl = normalizePublicUrl(document.getElementById('siteUrl').value);

@@ -45,10 +45,10 @@ const PLAN_LIMITS = {
 const PLAN_FEATURES = {
   free: {
     instant_audit: true,
-    monitored_sites: false,
-    scheduled_checks: false,
+    monitored_sites: true,   // 1 site max, enforced by PLAN_LIMITS
+    scheduled_checks: true,  // 20-min interval, enforced by PLAN_LIMITS
     in_app_alerts: false,
-    email_alerts: false, // kept for future re-enable; currently disabled platform-wide
+    email_alerts: false,
     status_pages: false,
     client_reports: false,
     webhooks: false,
