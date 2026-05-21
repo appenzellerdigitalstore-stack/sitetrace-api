@@ -1468,7 +1468,7 @@ function renderPlanUsage() {
       </div>
       ${upgrade ? `<button class="button small secondary" type="button" data-dashboard-upgrade="${upgrade}">${escapeHtml(upgrade === 'starter' ? t('dashboard.upgradeStarter') : t('dashboard.upgradeAgency'))}</button>` : ''}
     </div>
-    ${reached && upgrade ? `<div class="message error">${escapeHtml(t('dashboard.limitReached'))} ${escapeHtml(t('dashboard.upgradePrompt'))}</div>` : ''}`;
+    ${reached && upgrade ? `<div style="font-size:.78rem;color:var(--muted);padding:4px 0 0;">${escapeHtml(t('dashboard.upgradePrompt'))}</div>` : ''}`;
 }
 
 function renderPaidFeaturePanel() {
@@ -3115,8 +3115,29 @@ function renderSiteDetail(site) {
 
   syncContentHeader(site, status, reportText, reportLocked, reportUrl);
 
-  // Free tier: show upgrade gate instead of full detail
+  // Free tier: rich scan results, single compact upgrade row
   if (state.plan === 'free' && !hasFeature('in_app_alerts')) {
+    const allIssues = (latestResult && Array.isArray(latestResult.checks) ? latestResult.checks : [])
+      .map(c => translateCheck(c, currentLocale))
+      .filter(c => c.level !== 'pass');
+    const issueRowsFree = allIssues.length
+      ? allIssues.map((c) => `
+          <div class="rich-issue-row rich-issue-${c.level}">
+            <div class="rich-issue-top">
+              <span class="rich-issue-icon lvl-${c.level}">
+                ${c.level === 'fail'
+                  ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+                  : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'}
+              </span>
+              <span class="rich-issue-title">${escapeHtml(c.title)}</span>
+              ${c.value ? `<span class="scan-check-value">${escapeHtml(c.value)}</span>` : ''}
+              <span class="level-badge ${c.level}" style="margin-left:auto;">${escapeHtml(c.level)}</span>
+            </div>
+            ${c.description ? `<p class="rich-issue-desc">${escapeHtml(c.description)}</p>` : ''}
+            ${c.recommendation ? `<p class="rich-issue-fix"><strong>How to fix:</strong> ${escapeHtml(c.recommendation)}</p>` : ''}
+          </div>`).join('')
+      : `<div class="empty subtle">No issues found in this scan.</div>`;
+
     detail.innerHTML = `
       <div class="scan-proof-bar">
         <span class="scan-interval-badge">Free · Every 20 min</span>
@@ -3125,29 +3146,26 @@ function renderSiteDetail(site) {
         <span><strong id="scanCountdown">–</strong></span>
       </div>
       <div id="scanCooldownMsg" class="scan-cooldown-msg"></div>
+      <p style="font-size:.82rem;color:var(--muted);margin:0 0 16px;">Your Free plan allows one scan every 20 minutes.</p>
       <div class="detail-metrics" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px;">
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.healthScore'))}</span><h3 style="color:${site.last_score >= 80 ? 'var(--green)' : site.last_score >= 60 ? 'var(--amber)' : 'var(--red)'}">${site.last_score ? `${site.last_score}/100` : '-'}</h3></div>
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.uptimeSample'))}</span><h3>${uptimePercent(checks)}</h3></div>
         <div class="dash-card"><span class="muted">${escapeHtml(t('dashboard.avgResponse'))}</span><h3>${avgMs}</h3></div>
         <div class="dash-card"><span class="muted">SSL / Domain</span><h3>${escapeHtml(domainExpiryLabel(domainExpiry))}</h3></div>
       </div>
-      <div class="free-issues-block" style="margin-bottom:16px;">
-        <div class="free-section-head"><strong>Top issues</strong></div>
-        ${importantChecks.length ? importantChecks.slice(0,3).map((c) => `<div class="free-issue-row"><svg viewBox="0 0 24 24" class="icon-${c.level === 'fail' ? 'red' : 'amber'}" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div><strong>${escapeHtml(c.title)}</strong><p style="margin:2px 0 0;font-size:.8rem;color:var(--muted);">${escapeHtml(c.recommendation)}</p></div><span class="level-badge ${c.level}">${c.level}</span></div>`).join('') : `<div class="free-issue-row">No critical issues.</div>`}
+      <div class="free-issues-block" style="margin-bottom:20px;">
+        <div class="free-section-head">
+          <strong>Issues found</strong>
+          <span style="font-size:.8rem;color:var(--muted);margin-left:8px;">${allIssues.filter(c=>c.level==='fail').length} fail · ${allIssues.filter(c=>c.level!=='fail').length} warning</span>
+        </div>
+        ${issueRowsFree}
       </div>
-      <div class="free-locked-section"><div class="free-locked-inner">
-        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:6px;"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-        <strong>Response time graph &amp; full check history</strong>
-        <p>30-day monitoring graphs and incident timeline available in Starter.</p>
-        <button class="button small" type="button" data-dashboard-upgrade="starter" style="margin-top:10px;">Upgrade to Starter</button>
-      </div></div>
-      <div class="free-locked-section"><div class="free-locked-inner">
-        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;margin-bottom:6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        <strong>Client reports &amp; status pages</strong>
-        <p>Share professional health summaries with clients. Available in Agency.</p>
-        <button class="button small secondary" type="button" data-dashboard-upgrade="agency" style="margin-top:10px;">Upgrade to Agency</button>
-      </div></div>
-      <div class="detail-actions" style="margin-top:16px;">
+      ${scanBreakdownHtml}
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;margin:20px 0 16px;flex-wrap:wrap;">
+        <span style="font-size:.85rem;color:var(--muted);flex:1;min-width:180px;">Want 30-day history, response graphs, alerts, and client reports?</span>
+        <button class="button small" type="button" data-dashboard-upgrade="starter">Upgrade to Starter</button>
+      </div>
+      <div class="detail-actions">
         <button class="button" type="button" data-run="${site.id}">${escapeHtml(t('dashboard.runCheck'))}</button>
         <button class="button danger" type="button" data-delete="${site.id}">${escapeHtml(t('dashboard.delete'))}</button>
       </div>`;
