@@ -2083,6 +2083,7 @@ function renderSidebarPlanUsage() {
   const cadence = planIntervalLabel();
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   const upgrade = planUpgradeTarget();
+  const isPaid = state.plan === 'starter' || state.plan === 'agency';
   target.innerHTML = `
     <div class="plan-usage-card">
       <div class="plan-usage-head">
@@ -2093,9 +2094,33 @@ function renderSidebarPlanUsage() {
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--muted);">
         <span>${escapeHtml(cadence)}</span>
         ${upgrade ? `<button class="link-button small" type="button" data-dashboard-upgrade="${upgrade}" style="font-size:.78rem;">Upgrade</button>` : ''}
+        ${isPaid && !upgrade ? `<button class="link-button small" type="button" id="manageSubBtn" style="font-size:.78rem;">Manage billing</button>` : ''}
       </div>
       ${reached && upgrade ? `<p class="plan-usage-note" style="margin-top:6px;">${escapeHtml(t('dashboard.limitReached'))}</p>` : ''}
     </div>`;
+
+  const manageSubBtn = document.getElementById('manageSubBtn');
+  if (manageSubBtn) {
+    manageSubBtn.addEventListener('click', async () => {
+      manageSubBtn.disabled = true;
+      manageSubBtn.textContent = 'Opening...';
+      try {
+        const res = await fetch(apiPath('/billing/portal'), { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() } });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          setDashboardMessage(data.message || 'Could not open billing portal.', 'error');
+          manageSubBtn.disabled = false;
+          manageSubBtn.textContent = 'Manage billing';
+        }
+      } catch (_) {
+        setDashboardMessage('Could not reach billing portal.', 'error');
+        manageSubBtn.disabled = false;
+        manageSubBtn.textContent = 'Manage billing';
+      }
+    });
+  }
 }
 
 function renderDashboard() {
@@ -3881,6 +3906,17 @@ function renderPanel(panelName) {
 
 async function initDashboard() {
   if (page !== 'dashboard') return;
+
+  // Handle Stripe redirect params
+  const _billingParam = new URLSearchParams(window.location.search).get('billing');
+  if (_billingParam === 'success') {
+    setDashboardMessage('🎉 Subscription activated! Your plan has been upgraded.', 'success');
+    window.history.replaceState({}, '', '/dashboard');
+  } else if (_billingParam === 'cancel') {
+    setDashboardMessage('Checkout cancelled — no changes were made.', 'info');
+    window.history.replaceState({}, '', '/dashboard');
+  }
+
   await loadDashboard();
 
   const _rdb = document.getElementById('refreshDashboardBtn');

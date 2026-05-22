@@ -172,6 +172,30 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
       }
     }
 
+    if (event.type === 'customer.subscription.updated') {
+      const subscription = event.data.object;
+      const customerId = subscription.customer;
+      const priceId = subscription.items && subscription.items.data[0] && subscription.items.data[0].price
+        ? subscription.items.data[0].price.id : null;
+      const plan = priceId === STRIPE_AGENCY_PRICE_ID ? 'agency' : 'starter';
+      const subStatus = subscription.status === 'active' ? 'active' : subscription.status;
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({ plan, subscription_status: subStatus, updated_at: new Date().toISOString() })
+        .eq('stripe_customer_id', customerId);
+    }
+
+    if (event.type === 'invoice.payment_failed') {
+      const invoice = event.data.object;
+      const customerId = invoice.customer;
+
+      await supabaseAdmin
+        .from('profiles')
+        .update({ subscription_status: 'past_due', updated_at: new Date().toISOString() })
+        .eq('stripe_customer_id', customerId);
+    }
+
     if (event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       const customerId = subscription.customer;
@@ -2456,6 +2480,32 @@ app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
   });
 
   res.json({ url: session.url });
+});
+
+app.post('/billing/portal', requireUser, async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ status: 'error', message: 'Stripe is not configured' });
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', req.user.id)
+    .single();
+
+  if (!profile || !profile.stripe_customer_id) {
+    return res.status(400).json({ status: 'error', message: 'No billing account found. Please upgrade first.' });
+  }
+
+  try {
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: profile.stripe_customer_id,
+      return_url: `${APP_URL}/dashboard`
+    });
+    res.json({ url: portalSession.url });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
 });
 
 // ── Scheduled checks core ─────────────────────────────────────────────────────
