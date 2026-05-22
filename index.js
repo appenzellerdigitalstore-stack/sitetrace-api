@@ -2458,51 +2458,87 @@ app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
   res.json({ url: session.url });
 });
 
+// ── Scheduled checks core ─────────────────────────────────────────────────────
+// Shared by the HTTP endpoint and the internal scheduler.
+// Processes all monitoring-enabled sites with:
+//   - Per-user plan caching (one DB hit per user, not per site)
+//   - Concurrent processing in batches of SCHED_CONCURRENCY
+//   - shouldRunForPlan cadence gate (skips sites not yet due)
+const SCHED_CONCURRENCY = 10;
+let _schedulerRunning = false;
+
+async function runScheduledChecks() {
+  if (!supabaseAdmin) return { status: 'error', message: 'Supabase not configured' };
+  // Prevent overlapping runs if a previous tick is still in flight
+  if (_schedulerRunning) return { status: 'skipped', reason: 'previous_run_in_progress' };
+  _schedulerRunning = true;
+  try {
+    const { data: sites, error } = await supabaseAdmin
+      .from('sites')
+      .select('*')
+      .eq('monitoring_enabled', true)
+      .limit(500);
+
+    if (error) return { status: 'error', message: error.message };
+
+    const now = new Date();
+    const planCache = {};
+    const results = [];
+    const sitesToCheck = [];
+
+    // Phase 1: filter — resolve plans (cached per user) and apply cadence gate
+    for (const site of sites || []) {
+      if (!planCache[site.user_id]) {
+        planCache[site.user_id] = await loadUserPlan(site.user_id);
+      }
+      const plan = planCache[site.user_id];
+      const features = planFeatures(plan);
+      if (!features.scheduled_checks) {
+        results.push({ site_id: site.id, status: 'skipped', reason: 'plan', plan });
+        continue;
+      }
+      if (!shouldRunForPlan(site, plan, now)) {
+        results.push({ site_id: site.id, status: 'skipped', reason: 'cadence', plan });
+        continue;
+      }
+      sitesToCheck.push({ site, plan });
+    }
+
+    // Phase 2: run checks in concurrent batches
+    for (let i = 0; i < sitesToCheck.length; i += SCHED_CONCURRENCY) {
+      const batch = sitesToCheck.slice(i, i + SCHED_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map(({ site, plan }) =>
+          runMonitorCheck(site, 'en', site.user_id)
+            .then(({ analysis, level, incident }) => ({
+              site_id: site.id, status: level,
+              score: analysis.score, plan,
+              incident: Boolean(incident && incident.incident)
+            }))
+            .catch(err => ({ site_id: site.id, status: 'error', error: err.message }))
+        )
+      );
+      settled.forEach(r => results.push(r.status === 'fulfilled' ? r.value : { site_id: null, status: 'error', error: String(r.reason) }));
+    }
+
+    const checked = results.filter(r => r.status !== 'skipped').length;
+    logEvent('cron_checks_completed', { checked, total: results.length, queued: sitesToCheck.length });
+    return { status: 'success', checked, total: results.length, results };
+  } finally {
+    _schedulerRunning = false;
+  }
+}
+
 app.post('/jobs/run-checks', async (req, res) => {
   if (!CRON_SECRET || req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
     return res.status(401).json({ status: 'error', message: 'Unauthorized' });
   }
-
   if (!supabaseAdmin) {
     return res.status(503).json({ status: 'error', message: 'Supabase server credentials are not configured' });
   }
-
-  const { data: sites, error } = await supabaseAdmin
-    .from('sites')
-    .select('*')
-    .eq('monitoring_enabled', true)
-    .limit(100);
-
-  if (error) {
-    return res.status(500).json({ status: 'error', message: error.message });
-  }
-
-  const results = [];
-
-  for (const site of sites || []) {
-    try {
-      const plan = await loadUserPlan(site.user_id);
-      const features = planFeatures(plan);
-      if (!features.scheduled_checks) {
-        results.push({ site_id: site.id, status: 'skipped', reason: 'plan_does_not_include_scheduled_checks', plan });
-        continue;
-      }
-      if (!shouldRunForPlan(site, plan)) {
-        results.push({ site_id: site.id, status: 'skipped', reason: 'plan_cadence', plan });
-        continue;
-      }
-      const { analysis, level, incident } = await runMonitorCheck(site, 'en', site.user_id);
-      results.push({ site_id: site.id, status: level, score: analysis.score, plan, incident: Boolean(incident && incident.incident) });
-    } catch (error) {
-      results.push({ site_id: site.id, status: 'error', error: error.message });
-    }
-  }
-
-  logEvent('cron_checks_completed', {
-    checked: results.filter((result) => result.status !== 'skipped').length,
-    total: results.length
-  });
-  res.json({ status: 'success', checked: results.filter((result) => result.status !== 'skipped').length, results });
+  const result = await runScheduledChecks();
+  if (result.status === 'error') return res.status(500).json(result);
+  res.json(result);
 });
 
 app.get('/pricing', (req, res) => {
@@ -2630,6 +2666,25 @@ app.get('*', (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log('SiteTrace API listening on port ' + PORT);
+
+    // ── Internal scheduler ──────────────────────────────────────────────────
+    // Runs every 60 seconds. shouldRunForPlan() gates each site by its plan
+    // interval (free=20min, starter=5min, agency=1min), so ticking every
+    // minute is the right granularity for agency-tier sites.
+    if (CRON_SECRET && supabaseAdmin) {
+      console.log('Scheduler started — running checks every 60 s');
+      setInterval(async () => {
+        try {
+          const result = await runScheduledChecks();
+          if (result.status === 'skipped') return; // previous run still in flight
+          console.log(`[scheduler] checked=${result.checked} total=${result.total}`);
+        } catch (err) {
+          console.error('[scheduler] unexpected error:', err.message);
+        }
+      }, 60 * 1000);
+    } else {
+      console.warn('Scheduler disabled — set CRON_SECRET and configure Supabase to enable automated checks');
+    }
   });
 }
 
