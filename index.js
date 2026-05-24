@@ -1359,6 +1359,58 @@ async function sendIncidentNotifications({ to, site, status, analysis, incident,
   return { email, slack, teams };
 }
 
+async function sendOnboardingEmail(email) {
+  if (!RESEND_API_KEY || !email) return;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: 'Welcome to SiteTrace — here\'s how to get started',
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
+  <div style="background:#6366f1;padding:28px 32px;">
+    <div style="display:inline-flex;align-items:center;gap:10px;">
+      <span style="background:rgba(255,255,255,.2);border-radius:8px;padding:6px 10px;font-weight:800;font-size:1.1rem;color:#fff;letter-spacing:-.02em;">ST</span>
+      <span style="color:#fff;font-weight:700;font-size:1.15rem;">SiteTrace</span>
+    </div>
+  </div>
+  <div style="padding:32px 32px 24px;">
+    <h1 style="margin:0 0 8px;font-size:1.4rem;font-weight:800;color:#1a1a2e;letter-spacing:-.02em;">Welcome aboard 👋</h1>
+    <p style="margin:0 0 24px;color:#64748b;line-height:1.6;">Your SiteTrace account is ready. Here's how to get the most out of it in the next 5 minutes.</p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px 22px;margin-bottom:20px;">
+      <div style="font-size:.7rem;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Step 1 — Add your first site</div>
+      <p style="margin:0 0 10px;color:#334155;font-size:.9rem;line-height:1.55;">Click <strong>Add new site</strong> in your dashboard sidebar and paste in any URL. SiteTrace will run an instant health check and start monitoring it automatically.</p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px 22px;margin-bottom:20px;">
+      <div style="font-size:.7rem;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Step 2 — Understand your health score</div>
+      <p style="margin:0 0 10px;color:#334155;font-size:.9rem;line-height:1.55;">Every scan produces a score from 0–100 covering uptime, SSL, SEO, performance, and security. Issues are ranked by severity so you know what to fix first.</p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:20px 22px;margin-bottom:28px;">
+      <div style="font-size:.7rem;font-weight:800;color:#6366f1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Step 3 — Set up alerts</div>
+      <p style="margin:0;color:#334155;font-size:.9rem;line-height:1.55;">Go to <strong>Monitor settings</strong> and make sure email alerts are on. You'll get notified the moment a site goes down — and again when it recovers.</p>
+    </div>
+
+    <a href="${APP_URL}/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:13px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:.95rem;letter-spacing:-.01em;">Open your dashboard →</a>
+
+    <p style="margin:24px 0 0;font-size:.82rem;color:#94a3b8;line-height:1.6;">Questions? Reply to this email — we read every one.<br>You're on the <strong>Free plan</strong>. <a href="${APP_URL}/pricing" style="color:#6366f1;text-decoration:none;">Upgrade anytime</a> for scheduled checks, alerts, and client reports.</p>
+  </div>
+  <div style="padding:16px 32px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:.75rem;color:#94a3b8;">SiteTrace · sitetrace.it.com</span>
+    <a href="${APP_URL}" style="font-size:.75rem;color:#6366f1;text-decoration:none;">Visit site</a>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+  logEvent('onboarding_email_sent', { email });
+}
+
 async function loadProfileEmail(userId) {
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
   const authEmail = authData && authData.user && authData.user.email ? authData.user.email : null;
@@ -2048,6 +2100,16 @@ app.get('/api/me', requireUser, async (req, res) => {
       .select('*')
       .single();
     profile = repaired || profile;
+  }
+
+  // Send onboarding email on first login (non-blocking)
+  if (profile && !profile.onboarding_email_sent && RESEND_API_KEY) {
+    sendOnboardingEmail(req.user.email).then(() => {
+      supabaseAdmin.from('profiles')
+        .update({ onboarding_email_sent: true, updated_at: new Date().toISOString() })
+        .eq('id', req.user.id)
+        .then(() => {});
+    }).catch(() => {});
   }
 
   const plan = profile && PLAN_LIMITS[profile.plan] && profile.subscription_status !== 'canceled' ? profile.plan : 'free';
