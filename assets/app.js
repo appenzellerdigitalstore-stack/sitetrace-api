@@ -765,6 +765,33 @@ function generateClientReport(site, checks, tier) {
   .chip-row { display: flex; flex-wrap: wrap; gap: 5px; }
   .chip { font-size: .7rem; font-weight: 600; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 7px; font-variant-numeric: tabular-nums; }
 
+  /* Incident detail modal */
+  .incident-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1200; display: flex; align-items: flex-end; justify-content: center; animation: fadeInOverlay .15s ease; }
+  @keyframes fadeInOverlay { from { opacity:0 } to { opacity:1 } }
+  .incident-modal { background: var(--card, #fff); border-radius: 16px 16px 0 0; width: 100%; max-width: 680px; max-height: 85vh; overflow-y: auto; padding: 0; box-shadow: 0 -4px 40px rgba(0,0,0,.18); animation: slideUpModal .22s ease; }
+  @keyframes slideUpModal { from { transform: translateY(60px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+  .incident-modal-head { display: flex; align-items: center; gap: 12px; padding: 20px 24px 16px; border-bottom: 1px solid var(--border, #e2e8f0); position: sticky; top:0; background: var(--card, #fff); z-index: 1; }
+  .incident-modal-title { flex: 1; font-weight: 700; font-size: 1rem; }
+  .incident-modal-close { background: none; border: none; cursor: pointer; color: var(--muted, #64748b); padding: 4px; border-radius: 6px; display: flex; align-items: center; }
+  .incident-modal-close:hover { background: var(--bg-subtle, #f8fafc); }
+  .incident-modal-body { padding: 20px 24px 28px; }
+  .incident-modal-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .incident-modal-chip { font-size: .75rem; font-weight: 600; padding: 4px 10px; border-radius: 6px; background: var(--bg-subtle, #f8fafc); border: 1px solid var(--border, #e2e8f0); }
+  .incident-modal-chip.red { color: #dc2626; background: #fef2f2; border-color: #fecaca; }
+  .incident-modal-chip.amber { color: #b45309; background: #fffbeb; border-color: #fde68a; }
+  .incident-modal-chip.green { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+  .incident-modal-section { margin-bottom: 18px; }
+  .incident-modal-section-title { font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--muted, #64748b); margin-bottom: 10px; }
+  .incident-check-row { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border, #f1f5f9); }
+  .incident-check-row:last-child { border-bottom: none; }
+  .incident-check-icon { flex-shrink: 0; width: 15px; height: 15px; margin-top: 1px; }
+  .incident-check-body { flex: 1; }
+  .incident-check-title { font-size: .84rem; font-weight: 600; margin-bottom: 2px; }
+  .incident-check-desc { font-size: .75rem; color: var(--muted, #64748b); line-height: 1.4; }
+  .rich-incident-row { padding: 12px 16px; border-bottom: 1px solid var(--border, #e2e8f0); cursor: pointer; transition: background .1s; border-radius: 0; }
+  .rich-incident-row:hover { background: var(--bg-subtle, #f8fafc); }
+  .rich-incident-row:last-child { border-bottom: none; }
+
   /* Recent checks table */
   table { width: 100%; border-collapse: collapse; font-size: .8rem; }
   th { background: #f8fafc; font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #64748b; padding: 8px 10px; text-align: left; border-bottom: 2px solid #e2e8f0; }
@@ -3107,18 +3134,25 @@ function renderSiteDetail(site) {
         </div>`
     : '';
 
+  // Store incidents in global registry for modal access
+  window._incidentRegistry = window._incidentRegistry || [];
+  const _regStart = window._incidentRegistry.length;
+  downChecks.slice(0, 8).forEach(inc => window._incidentRegistry.push(inc));
+
   const incidentRowsHtml = downChecks.length || recoveryHtml
-    ? recoveryHtml + downChecks.slice(0, 8).map((inc) => {
+    ? recoveryHtml + downChecks.slice(0, 8).map((inc, _i) => {
+        const idx = _regStart + _i;
         const scoreColor = inc.score >= 80 ? 'var(--green)' : inc.score >= 60 ? 'var(--amber)' : 'var(--red)';
         const respMs = inc.response_time_ms ? `${inc.response_time_ms}ms` : null;
         const incIssues = inc.result && Array.isArray(inc.result.checks)
           ? inc.result.checks.filter(c => c.level === 'fail').slice(0, 2)
           : [];
-        return `<div class="rich-incident-row">
+        return `<div class="rich-incident-row" onclick="openIncidentModal(${idx})" title="Click for full details">
           <div class="rich-incident-top">
             <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
             <strong>Downtime detected</strong>
             <span class="rich-incident-time">${formatDateTime(inc.created_at)}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--muted,#94a3b8)" stroke-width="2" style="width:12px;height:12px;flex-shrink:0;margin-left:2px;"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
           <div class="rich-incident-meta">
             <span class="rich-meta-chip">HTTP ${inc.status_code || 'unreachable'}</span>
@@ -4172,19 +4206,93 @@ async function initStatusPage() {
   const site = data.site;
   const status = statusLabel(site.last_status);
   const bars = checks.slice(0, 50).reverse().map((check) => `<span class="uptime-bar ${statusLabel(check.status)}" title="${escapeHtml(check.status)} ${formatDateTime(check.created_at)}"></span>`).join('');
+
+  const statusBannerClass = status === 'online' ? 'green' : status === 'warning' ? 'amber' : 'red';
+  const statusBannerText  = status === 'online'
+    ? '✓ All systems operational'
+    : status === 'warning' ? '⚠ Partial service disruption' : '✗ Service disruption detected';
+
+  const formatDuration = (seconds) => {
+    if (!seconds || seconds < 60) return `${seconds || 0}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
+  const incidentRowsHtml = incidents.length
+    ? incidents.map((incident) => {
+        const iResolved = incident.status === 'resolved';
+        const dotClass  = iResolved ? '' : (incident.status === 'warning' ? 'warning' : 'down');
+        const durationStr = incident.duration_seconds ? ` · Duration: ${formatDuration(incident.duration_seconds)}` : '';
+        return `<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border,#e2e8f0);">
+          <span class="dot ${dotClass}" style="margin-top:5px;flex-shrink:0;"></span>
+          <div style="flex:1;">
+            <div style="font-weight:600;font-size:.88rem;margin-bottom:3px;">${escapeHtml(incident.title)}</div>
+            <div style="font-size:.76rem;color:var(--muted,#64748b);">
+              ${formatDateTime(incident.created_at)}
+              ${incident.resolved_at ? ` → resolved ${formatDateTime(incident.resolved_at)}` : ' — <span style="color:#dc2626;font-weight:600;">Ongoing</span>'}
+              ${durationStr}
+            </div>
+          </div>
+          <span style="font-size:.7rem;font-weight:700;padding:3px 9px;border-radius:6px;flex-shrink:0;${iResolved ? 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;' : 'background:#fef2f2;color:#dc2626;border:1px solid #fecaca;'}">${iResolved ? 'Resolved' : 'Active'}</span>
+        </div>`;
+      }).join('')
+    : '<div style="padding:20px 0;text-align:center;color:var(--muted,#64748b);font-size:.88rem;">No incidents reported. All systems have been healthy.</div>';
+
   target.innerHTML = `
-    <div class="public-status-card">
-      <div class="detail-hero">
-        <div><p class="eyebrow compact">Public status</p><h1>${escapeHtml(site.name)}</h1><p class="muted">${escapeHtml(site.url)}</p></div>
-        <span class="status-pill ${status}"><span class="dot ${status === 'online' ? '' : status}"></span>${escapeHtml(statusCopy(status))}</span>
+    <div style="max-width:680px;margin:0 auto;padding:0 0 60px;">
+      <!-- Status banner -->
+      <div style="border-radius:16px;padding:28px 32px;margin-bottom:28px;background:${status === 'online' ? '#f0fdf4' : status === 'warning' ? '#fffbeb' : '#fef2f2'};border:1px solid ${status === 'online' ? '#bbf7d0' : status === 'warning' ? '#fde68a' : '#fecaca'};">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <span class="dot ${status === 'online' ? '' : status}" style="width:14px;height:14px;flex-shrink:0;"></span>
+          <div style="flex:1;">
+            <h1 style="margin:0 0 4px;font-size:1.3rem;font-weight:700;color:${status === 'online' ? '#166534' : status === 'warning' ? '#92400e' : '#991b1b'};">${statusBannerText}</h1>
+            <p style="margin:0;font-size:.85rem;color:var(--muted,#64748b);">${escapeHtml(site.name)} · <a href="${escapeHtml(site.url)}" target="_blank" rel="noopener" style="color:inherit;">${escapeHtml(site.url)}</a></p>
+          </div>
+        </div>
       </div>
-      <div class="detail-metrics">
-        <div class="dash-card"><span class="muted">Uptime sample</span><h3>${uptimePercent(checks)}</h3></div>
-        <div class="dash-card"><span class="muted">Response</span><h3>${site.last_response_time_ms ? `${site.last_response_time_ms}ms` : '-'}</h3></div>
-        <div class="dash-card"><span class="muted">Last check</span><h3>${formatDurationSince(site.last_checked_at)}</h3></div>
+
+      <!-- Metric cards -->
+      <div class="detail-metrics" style="grid-template-columns:repeat(3,1fr);margin-bottom:28px;">
+        <div class="dash-card" style="text-align:center;">
+          <span class="muted" style="font-size:.75rem;">Uptime (sample)</span>
+          <h3 style="margin:6px 0 0;">${uptimePercent(checks)}</h3>
+        </div>
+        <div class="dash-card" style="text-align:center;">
+          <span class="muted" style="font-size:.75rem;">Avg response</span>
+          <h3 style="margin:6px 0 0;">${site.last_response_time_ms ? site.last_response_time_ms + 'ms' : '–'}</h3>
+        </div>
+        <div class="dash-card" style="text-align:center;">
+          <span class="muted" style="font-size:.75rem;">Last checked</span>
+          <h3 style="margin:6px 0 0;">${formatDurationSince(site.last_checked_at)}</h3>
+        </div>
       </div>
-      <div class="uptime-strip">${bars}</div>
-      <div class="panel flat-panel"><div class="panel-top"><strong>Incident history</strong></div><div class="timeline">${incidents.length ? incidents.map((incident) => `<div class="timeline-row"><span class="dot ${incident.status === 'resolved' ? '' : incident.status}"></span><div><strong>${escapeHtml(incident.title)}</strong><small>${formatDateTime(incident.created_at)}${incident.resolved_at ? ` - resolved ${formatDateTime(incident.resolved_at)}` : ''}</small></div></div>`).join('') : '<div class="empty subtle">No incidents reported.</div>'}</div></div>
+
+      <!-- Uptime history -->
+      <div class="detail-panel" style="margin-bottom:28px;">
+        <div class="detail-panel-head">
+          <span style="font-size:.82rem;font-weight:700;">Uptime history</span>
+          <span style="font-size:.74rem;color:var(--muted,#64748b);">Last ${checks.length} checks</span>
+        </div>
+        <div style="padding:16px 20px;">
+          <div class="uptime-strip" style="gap:3px;">${bars || '<span style="color:var(--muted);font-size:.82rem;">No checks yet</span>'}</div>
+          <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted,#64748b);margin-top:8px;"><span>Oldest</span><span>Most recent</span></div>
+        </div>
+      </div>
+
+      <!-- Incident history -->
+      <div class="detail-panel" style="margin-bottom:28px;">
+        <div class="detail-panel-head"><span style="font-size:.82rem;font-weight:700;">Incident history</span></div>
+        <div style="padding:0 20px;">${incidentRowsHtml}</div>
+      </div>
+
+      <!-- Powered by -->
+      <div style="text-align:center;padding-top:8px;">
+        <a href="/" style="font-size:.78rem;color:var(--muted,#94a3b8);text-decoration:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;vertical-align:middle;margin-right:4px;"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+          Powered by SiteTrace
+        </a>
+      </div>
     </div>`;
 }
 
@@ -4245,6 +4353,79 @@ async function initBilling() {
       if (message) message.textContent = error.message;
     }
   }));
+}
+
+// ── Incident detail modal ────────────────────────────────────────────────────
+function openIncidentModal(idx) {
+  const inc = (window._incidentRegistry || [])[idx];
+  if (!inc) return;
+  const allChecks = inc.result && Array.isArray(inc.result.checks) ? inc.result.checks : [];
+  const fails    = allChecks.filter(c => c.level === 'fail');
+  const warns    = allChecks.filter(c => c.level === 'warn');
+  const passes   = allChecks.filter(c => c.level === 'pass');
+  const scoreColor = (inc.score >= 80) ? 'green' : (inc.score >= 60) ? 'amber' : 'red';
+
+  const iconSvg = (level) => {
+    if (level === 'fail') return `<svg class="incident-check-icon" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+    if (level === 'warn') return `<svg class="incident-check-icon" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`;
+    return `<svg class="incident-check-icon" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`;
+  };
+
+  const checksSection = (label, items) => items.length ? `
+    <div class="incident-modal-section">
+      <div class="incident-modal-section-title">${label} (${items.length})</div>
+      ${items.map(c => `<div class="incident-check-row">
+        ${iconSvg(c.level)}
+        <div class="incident-check-body">
+          <div class="incident-check-title">${escapeHtml(c.title || c.id || '')}</div>
+          ${c.description ? `<div class="incident-check-desc">${escapeHtml(c.description)}</div>` : ''}
+          ${c.value ? `<div class="incident-check-desc" style="color:var(--text);font-weight:600;">${escapeHtml(String(c.value))}</div>` : ''}
+        </div>
+      </div>`).join('')}
+    </div>` : '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'incident-modal-overlay';
+  overlay.id = 'incidentModalOverlay';
+  overlay.innerHTML = `
+    <div class="incident-modal" role="dialog" aria-modal="true" aria-label="Incident details">
+      <div class="incident-modal-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2" style="width:20px;height:20px;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span class="incident-modal-title">Incident Details</span>
+        <button class="incident-modal-close" onclick="closeIncidentModal()" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="incident-modal-body">
+        <div class="incident-modal-meta">
+          <span class="incident-modal-chip red">Downtime detected</span>
+          <span class="incident-modal-chip">HTTP ${inc.status_code || 'unreachable'}</span>
+          ${inc.response_time_ms ? `<span class="incident-modal-chip">${inc.response_time_ms}ms response</span>` : ''}
+          ${inc.score ? `<span class="incident-modal-chip ${scoreColor}">Score ${inc.score}/100</span>` : ''}
+          <span class="incident-modal-chip">${formatDateTime(inc.created_at)}</span>
+        </div>
+        ${checksSection('Critical failures', fails)}
+        ${checksSection('Warnings', warns)}
+        ${passes.length ? `<div class="incident-modal-section">
+          <div class="incident-modal-section-title">Passing checks (${passes.length})</div>
+          <div class="incident-check-desc" style="padding:4px 0;">${passes.map(c => escapeHtml(c.title || c.id || '')).join(' · ')}</div>
+        </div>` : ''}
+        ${!allChecks.length ? '<p style="color:var(--muted);font-size:.88rem;">No detailed check data available for this incident.</p>' : ''}
+      </div>
+    </div>`;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeIncidentModal(); });
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', _incidentModalKeyClose);
+}
+
+function _incidentModalKeyClose(e) {
+  if (e.key === 'Escape') closeIncidentModal();
+}
+
+function closeIncidentModal() {
+  const el = document.getElementById('incidentModalOverlay');
+  if (el) el.remove();
+  document.removeEventListener('keydown', _incidentModalKeyClose);
 }
 
 async function init() {

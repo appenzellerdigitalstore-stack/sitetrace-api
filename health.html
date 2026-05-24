@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Health - SiteTrace</title>
+  <link rel="icon" href="/public/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/styles.css">
+  <style>
+    body { font-family: Inter, system-ui, sans-serif; background: var(--bg, #f8fafc); color: var(--text, #1a1a2e); margin: 0; }
+    .h-container { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+    .h-header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; }
+    .h-brand { font-weight: 800; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; text-decoration: none; color: inherit; }
+    .h-brand svg { width: 22px; height: 22px; stroke: #6366f1; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { margin: 0 0 6px; font-size: 1.8rem; font-weight: 800; }
+    .h-ts { font-size: .82rem; color: #64748b; }
+    .h-auth { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 28px; max-width: 400px; margin: 80px auto; text-align: center; }
+    .h-auth h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .h-auth p { margin: 0 0 20px; font-size: .88rem; color: #64748b; }
+    .h-auth input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: .9rem; margin-bottom: 12px; }
+    .h-auth button { width: 100%; padding: 10px; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: .9rem; font-weight: 600; cursor: pointer; }
+    .h-auth button:hover { background: #4f46e5; }
+    .status-banner { border-radius: 12px; padding: 20px 24px; margin-bottom: 28px; display: flex; align-items: center; gap: 14px; font-weight: 700; font-size: 1.05rem; }
+    .status-banner.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .status-banner.degraded { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .h-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .h-dot.ok { background: #16a34a; }
+    .h-dot.degraded { background: #dc2626; }
+    .h-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+    .h-section-head { padding: 14px 20px; border-bottom: 1px solid #e2e8f0; font-weight: 700; font-size: .82rem; text-transform: uppercase; letter-spacing: .07em; color: #64748b; background: #f8fafc; }
+    .h-row { display: flex; align-items: center; gap: 12px; padding: 13px 20px; border-bottom: 1px solid #f1f5f9; }
+    .h-row:last-child { border-bottom: none; }
+    .h-row-label { flex: 1; font-size: .9rem; font-weight: 500; }
+    .h-badge { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
+    .h-badge.pass { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .h-badge.fail { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .h-badge.warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .h-warnings { background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-size: .86rem; }
+    .h-warnings strong { color: #92400e; }
+    .h-errors { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; font-size: .86rem; }
+    .h-errors strong { color: #991b1b; }
+    .h-refresh { background: none; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: .84rem; font-weight: 600; color: #475569; margin-top: 4px; }
+    .h-refresh:hover { background: #f8fafc; }
+    .h-loading { text-align: center; padding: 60px 0; color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="h-container">
+  <div class="h-header">
+    <a class="h-brand" href="/">
+      <svg viewBox="0 0 24 24"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+      SiteTrace
+    </a>
+    <span style="color:#e2e8f0;font-size:.9rem;">|</span>
+    <span style="font-size:.9rem;color:#64748b;">System Health</span>
+    <button class="h-refresh" id="refreshBtn" style="margin-left:auto;" onclick="loadHealth()">Refresh</button>
+  </div>
+
+  <div id="authForm" class="h-auth" style="display:none;">
+    <h2>Health Dashboard</h2>
+    <p>Enter your HEALTH_SECRET to view system status.</p>
+    <input type="password" id="secretInput" placeholder="Bearer secret..." />
+    <button onclick="saveAndLoad()">View Status</button>
+    <div id="authError" style="margin-top:10px;color:#dc2626;font-size:.82rem;"></div>
+  </div>
+
+  <div id="healthRoot">
+    <div class="h-loading">Loading system status...</div>
+  </div>
+</div>
+
+<script>
+  const SECRET_KEY = 'sitetrace_health_secret';
+  let secret = sessionStorage.getItem(SECRET_KEY) || '';
+
+  function saveAndLoad() {
+    const val = document.getElementById('secretInput').value.trim();
+    if (!val) return;
+    secret = val;
+    sessionStorage.setItem(SECRET_KEY, secret);
+    document.getElementById('authForm').style.display = 'none';
+    loadHealth();
+  }
+
+  async function loadHealth() {
+    const root = document.getElementById('healthRoot');
+    root.innerHTML = '<div class="h-loading">Loading...</div>';
+    const headers = {};
+    if (secret) headers['Authorization'] = secret.startsWith('Bearer ') ? secret : `Bearer ${secret}`;
+    try {
+      const res = await fetch('/health/deep', { headers });
+      if (res.status === 401) {
+        document.getElementById('authForm').style.display = 'block';
+        root.innerHTML = '';
+        document.getElementById('authError').textContent = 'Invalid secret. Try again.';
+        return;
+      }
+      const data = await res.json();
+      renderHealth(data);
+    } catch (err) {
+      root.innerHTML = `<div class="h-loading">Error loading health data: ${err.message}</div>`;
+    }
+  }
+
+  function renderCheck(label, value, isWarning) {
+    const cls = isWarning ? 'warn' : (value ? 'pass' : 'fail');
+    const txt = isWarning ? 'Optional' : (value ? 'OK' : 'Not configured');
+    return `<div class="h-row">
+      <span class="h-row-label">${label}</span>
+      <span class="h-badge ${cls}">${txt}</span>
+    </div>`;
+  }
+
+  function renderHealth(data) {
+    const root = document.getElementById('healthRoot');
+    const ok = data.status === 'ok';
+    const c = data.checks || {};
+    const warnings = data.warnings || [];
+    const errors = data.errors || [];
+    const ts = data.timestamp ? new Date(data.timestamp).toLocaleString() : '–';
+
+    const criticalRows = [
+      renderCheck('Supabase configured', c.supabase_configured),
+      renderCheck('Supabase reachable', c.supabase_reachable),
+      renderCheck('APP_URL configured', c.app_url_configured),
+      renderCheck('API key limits configured', c.api_key_limits_configured),
+    ].join('');
+
+    const billingRows = [
+      renderCheck('Stripe configured', c.stripe_configured, !c.stripe_configured),
+      renderCheck('CRON_SECRET configured', c.cron_configured, !c.cron_configured),
+    ].join('');
+
+    const alertRows = [
+      renderCheck('Resend (email alerts)', c.resend_configured, !c.resend_configured),
+      renderCheck('Slack webhook', c.slack_alerts_configured, !c.slack_alerts_configured),
+      renderCheck('Teams webhook', c.teams_alerts_configured, !c.teams_alerts_configured),
+    ].join('');
+
+    const warningHtml = warnings.length
+      ? `<div class="h-warnings"><strong>Warnings</strong> — ${warnings.map(w => w.replace(/_/g, ' ')).join(', ')}</div>`
+      : '';
+
+    const errorHtml = errors.length
+      ? `<div class="h-errors"><strong>Errors</strong><ul style="margin:6px 0 0;padding-left:18px;">${errors.map(e => `<li>${e.service}: ${e.message}</li>`).join('')}</ul></div>`
+      : '';
+
+    root.innerHTML = `
+      <div style="margin-bottom:8px;display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;">
+        <h1>System Health</h1>
+        <span class="h-ts">Last checked: ${ts}</span>
+      </div>
+      <div class="status-banner ${ok ? 'ok' : 'degraded'}">
+        <span class="h-dot ${ok ? 'ok' : 'degraded'}"></span>
+        ${ok ? 'All systems operational' : 'Service degraded — check critical section below'}
+      </div>
+      ${errorHtml}
+      ${warningHtml}
+      <div class="h-section">
+        <div class="h-section-head">Critical — Required for service</div>
+        ${criticalRows}
+      </div>
+      <div class="h-section">
+        <div class="h-section-head">Billing &amp; Scheduler</div>
+        ${billingRows}
+      </div>
+      <div class="h-section">
+        <div class="h-section-head">External Alerts (optional)</div>
+        ${alertRows}
+      </div>
+    `;
+  }
+
+  // Try without auth first, then show auth form if needed
+  if (!secret) {
+    fetch('/health/deep').then(r => {
+      if (r.status === 401) {
+        document.getElementById('healthRoot').innerHTML = '';
+        document.getElementById('authForm').style.display = 'block';
+      } else {
+        loadHealth();
+      }
+    }).catch(() => loadHealth());
+  } else {
+    loadHealth();
+  }
+</script>
+</body>
+</html>

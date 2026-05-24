@@ -1979,6 +1979,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'sitetrace-api' });
 });
 
+app.get('/health-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'health.html'));
+});
+
 function requireHealthSecret(req, res, next) {
   if (!HEALTH_SECRET) return next();
   if (req.headers.authorization !== `Bearer ${HEALTH_SECRET}`) {
