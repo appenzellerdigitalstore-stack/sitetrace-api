@@ -270,6 +270,8 @@ const messages = {
       domainWarning: ['Domain registration expires soon', 'The domain registration is close to expiration.', 'Renew the domain or confirm auto-renew is working.'],
       domainFail: ['Domain registration is critically close to expiry', 'The domain may stop resolving if it is not renewed soon.', 'Renew the domain immediately and confirm the registrar account is in good standing.'],
       domainUnknown: ['Domain expiry could not be confirmed', 'The registry did not return a clear expiration date.', 'Check the registrar manually if this is a critical domain.'],
+      dnsChanged: ['DNS records changed', 'One or more DNS records (A, MX, or NS) changed since the last check.', 'Verify this change was intentional. Unexpected DNS changes can indicate a misconfiguration or hijack.'],
+      dnsStable: ['DNS records are stable', 'No DNS record changes detected since the last check.', 'Keep monitoring for unexpected changes.'],
       structuredData: ['Structured data found', 'The page includes machine-readable structured data.', 'Keep schema markup accurate and aligned with the visible content.'],
       structuredDataWarning: ['Structured data missing', 'Search engines may have fewer clues for rich results.', 'Add JSON-LD schema for organization, local business, article, product, or FAQ content when relevant.'],
       wordCount: ['Content depth looks useful', 'The page has enough visible text for users and search engines to understand it.', 'Keep important pages specific and helpful.'],
@@ -335,6 +337,8 @@ const messages = {
       domainWarning: ['El dominio vence pronto', 'El registro del dominio esta cerca de vencer.', 'Renueva el dominio o confirma que auto-renew esta funcionando.'],
       domainFail: ['El dominio esta criticamente cerca de vencer', 'El dominio podria dejar de resolver si no se renueva pronto.', 'Renueva el dominio de inmediato y revisa la cuenta del registrador.'],
       domainUnknown: ['No pudimos confirmar el vencimiento del dominio', 'El registro no devolvio una fecha clara de vencimiento.', 'Revisa el registrador manualmente si este dominio es critico.'],
+      dnsChanged: ['Los registros DNS cambiaron', 'Uno o mas registros DNS (A, MX o NS) cambiaron desde el ultimo check.', 'Verifica que el cambio fue intencional. Cambios inesperados pueden indicar mala configuracion o secuestro.'],
+      dnsStable: ['Los registros DNS estan estables', 'No se detectaron cambios en los registros DNS desde el ultimo check.', 'Sigue monitoreando para detectar cambios inesperados.'],
       structuredData: ['Structured data encontrado', 'La pagina incluye datos estructurados legibles por buscadores.', 'Manten el schema alineado con el contenido visible.'],
       structuredDataWarning: ['Falta structured data', 'Los buscadores pueden tener menos senales para rich results.', 'Agrega JSON-LD de organization, local business, article, product o FAQ cuando aplique.'],
       wordCount: ['El contenido tiene buena profundidad', 'La pagina tiene suficiente texto visible para explicar su valor.', 'Manten paginas importantes especificas y utiles.'],
@@ -765,6 +769,29 @@ async function getDomainExpiryInfo(hostname) {
     source: 'rdap',
     error: 'expiry_not_found'
   };
+}
+
+async function getDnsSnapshot(hostname) {
+  try {
+    const [aRec, mxRec, nsRec] = await Promise.allSettled([
+      dns.resolve4(hostname),
+      dns.resolveMx(hostname),
+      dns.resolveNs(hostname)
+    ]);
+    return {
+      a:  aRec.status  === 'fulfilled' ? [...aRec.value].sort()                           : [],
+      mx: mxRec.status === 'fulfilled' ? mxRec.value.map(r => r.exchange).sort()          : [],
+      ns: nsRec.status === 'fulfilled' ? [...nsRec.value].sort()                           : []
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function dnsSnapshotChanged(prev, curr) {
+  if (!prev || !curr) return false;
+  const join = obj => [obj.a, obj.mx, obj.ns].map(arr => (arr || []).join(',')).join('|');
+  return join(prev) !== join(curr);
 }
 
 function addDomainExpiryCheck(checks, locale, domainExpiry) {
@@ -1379,7 +1406,7 @@ async function createInAppAlert(userId, siteId, type, severity, title, message) 
   return data;
 }
 
-async function resolveOpenIncidents({ site, analysis }) {
+async function resolveOpenIncidents({ site, analysis, skipAlert = false }) {
   const { data: openIncidents } = await supabaseAdmin
     .from('incidents')
     .select('*')
@@ -1406,13 +1433,17 @@ async function resolveOpenIncidents({ site, analysis }) {
 
     if (!error && updated) {
       const durationMin = updated.duration_seconds ? Math.round(updated.duration_seconds / 60) : null;
-      await createInAppAlert(
-        site.user_id, site.id, 'resolved', 'info',
-        `${site.name} is back online`,
-        `The monitor recovered after ${durationMin != null ? `${durationMin} minute${durationMin !== 1 ? 's' : ''}` : 'a downtime window'}. Health score: ${analysis.score}/100.`
-      );
-      const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
-      resolved.push({ incident: updated, notifications });
+      if (!skipAlert) {
+        await createInAppAlert(
+          site.user_id, site.id, 'resolved', 'info',
+          `${site.name} is back online`,
+          `The monitor recovered after ${durationMin != null ? `${durationMin} minute${durationMin !== 1 ? 's' : ''}` : 'a downtime window'}. Health score: ${analysis.score}/100.`
+        );
+        const notifications = await sendIncidentNotifications({ to: await loadProfileEmail(site.user_id), site, status: 'resolved', analysis, incident: updated });
+        resolved.push({ incident: updated, notifications });
+      } else {
+        resolved.push({ incident: updated, notifications: { skipped: 'notify_on_recovery_disabled' } });
+      }
     }
   }
 
@@ -1429,6 +1460,10 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
   }
 
   if (level === 'online') {
+    // notify_on_recovery preference (#32): default true (column: alert_on_recovery)
+    if (site.alert_on_recovery === false) {
+      return resolveOpenIncidents({ site, analysis, skipAlert: true });
+    }
     return resolveOpenIncidents({ site, analysis });
   }
 
@@ -1436,16 +1471,19 @@ async function recordIncidentIfNeeded({ site, level, analysis }) {
     return null;
   }
 
+  // alert_threshold preference (#32): how many consecutive failures before opening
+  // an incident. Default 2 (existing behaviour).
+  const threshold = Math.max(1, Number(site.alert_threshold || 2));
+
   const { data: recentChecks } = await supabaseAdmin
     .from('checks')
     .select('status, created_at')
     .eq('site_id', site.id)
     .order('created_at', { ascending: false })
-    .limit(2);
+    .limit(threshold);
 
-  const previousCheck = recentChecks && recentChecks[1];
-  const confirmed = previousCheck && previousCheck.status === level;
-  if (!confirmed) {
+  const confirmedCount = (recentChecks || []).filter(c => c.status === level).length;
+  if (confirmedCount < threshold) {
     return { pending_confirmation: true };
   }
 
@@ -1585,6 +1623,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const urlObj = await validatePublicUrl(rawUrl);
   const startedAt = Date.now();
   const sslPromise = getSslInfo(urlObj);
+  const dnsSnapshotPromise = getDnsSnapshot(urlObj.hostname);
   const domainExpiryPromise = getDomainExpiryInfo(urlObj.hostname).catch((error) => ({
     domain: urlObj.hostname,
     expires_at: null,
@@ -1608,7 +1647,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
   const pageSizeBytes = Buffer.byteLength(html, 'utf8');
   const $ = cheerio.load(html);
   const headers = response.headers || {};
-  const [ssl, domainExpiry] = await Promise.all([sslPromise, domainExpiryPromise]);
+  const [ssl, domainExpiry, dnsSnapshot] = await Promise.all([sslPromise, domainExpiryPromise, dnsSnapshotPromise]);
   const checks = [];
 
   const title = ($('title').first().text() || '').trim().replace(/\s+/g, ' ');
@@ -1740,6 +1779,7 @@ async function analyzeWebsite(rawUrl, locale, options = {}) {
     summary: summarize(checks),
     ssl,
     domain_expiry: domainExpiry,
+    dns_snapshot: dnsSnapshot,
     checks,
     recommendations,
     insights
@@ -1805,7 +1845,51 @@ async function runMonitorCheck(site, locale, userId) {
   } catch (error) {
     analysis = failedAnalysis(site, locale, error);
   }
-  const level = monitoringStatus(analysis);
+
+  // ── Retry-before-down (#33) ─────────────────────────────────────────────
+  // If the first attempt returns down, wait 15 s and try once more before
+  // recording. This eliminates most false positives from transient blips.
+  let level = monitoringStatus(analysis);
+  if (level === 'down') {
+    await new Promise(resolve => setTimeout(resolve, 15000));
+    try {
+      const retry = await analyzeWebsite(site.url, locale, {
+        keyword: site.keyword,
+        keyword_should_exist: site.keyword_should_exist
+      });
+      level = monitoringStatus(retry);
+      if (level !== 'down') analysis = retry; // site recovered — use the good result
+    } catch (_) { /* keep original down result */ }
+  }
+
+  // ── DNS change detection (#30) ──────────────────────────────────────────
+  // Fetch the previous check's dns_snapshot and inject a dns_changed check
+  // into analysis.checks if records differ.
+  if (analysis.dns_snapshot) {
+    try {
+      const { data: prevCheck } = await supabaseAdmin
+        .from('checks')
+        .select('result')
+        .eq('site_id', site.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      const prevSnap = prevCheck && prevCheck.result && prevCheck.result.dns_snapshot;
+      if (prevSnap) {
+        const changed = dnsSnapshotChanged(prevSnap, analysis.dns_snapshot);
+        if (changed) {
+          analysis.checks.push({
+            category: 'domain', id: 'dns_changed', level: 'warn', weight: 15,
+            value: 'Changed',
+            title: checkText(locale, 'dnsChanged')[0],
+            description: checkText(locale, 'dnsChanged')[1],
+            recommendation: checkText(locale, 'dnsChanged')[2]
+          });
+          analysis.dns_changed = true;
+        }
+      }
+    } catch (_) { /* non-fatal */ }
+  }
 
   const { data: check, error: checkError } = await supabaseAdmin
     .from('checks')
@@ -2573,11 +2657,109 @@ async function runScheduledChecks() {
 
     const checked = results.filter(r => r.status !== 'skipped').length;
     logEvent('cron_checks_completed', { checked, total: results.length, queued: sitesToCheck.length });
+
+    // ── Domain expiry alerts (#31) ────────────────────────────────────────
+    // Run once per scheduler tick. Send email if domain expires in 30, 14,
+    // or 7 days and an alert at that threshold hasn't been sent yet today.
+    if (RESEND_API_KEY && supabaseAdmin) {
+      try { await sendDomainExpiryAlerts(sites || []); } catch (_) { /* non-fatal */ }
+    }
+
     return { status: 'success', checked, total: results.length, results };
   } finally {
     _schedulerRunning = false;
   }
 }
+
+// ── Domain expiry alert mailer (#31) ─────────────────────────────────────────
+const EXPIRY_THRESHOLDS = [30, 14, 7];
+async function sendDomainExpiryAlerts(sites) {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  for (const site of sites) {
+    try {
+      const { data: lastCheck } = await supabaseAdmin
+        .from('checks')
+        .select('result, created_at')
+        .eq('site_id', site.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (!lastCheck) continue;
+      const expiry = lastCheck.result && lastCheck.result.domain_expiry;
+      if (!expiry || expiry.days_remaining === null) continue;
+      const days = Number(expiry.days_remaining);
+      const threshold = EXPIRY_THRESHOLDS.find(t => days <= t);
+      if (!threshold) continue;
+
+      // Throttle: store last alert key in site metadata
+      const alertKey = `domain_expiry_alert_${threshold}`;
+      const lastAlerted = site[alertKey] || null;
+      if (lastAlerted && lastAlerted.slice(0, 10) === today) continue;
+
+      // Fetch user email
+      const { data: profile } = await supabaseAdmin
+        .from('profiles')
+        .select('email')
+        .eq('id', site.user_id)
+        .single();
+      const email = profile && profile.email;
+      if (!email) continue;
+
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+        body: JSON.stringify({
+          from: ALERT_FROM_EMAIL,
+          reply_to: ALERT_REPLY_TO_EMAIL,
+          to: [email],
+          subject: `⚠️ Domain expiring in ${days} days — ${site.name}`,
+          html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;">
+  <div style="margin-bottom:20px;font-weight:700;font-size:1.1rem;">SiteTrace — Domain Expiry Alert</div>
+  <p>The domain for <strong>${escapeForEmail(site.name)}</strong> is expiring in <strong>${days} days</strong>.</p>
+  <p><strong>Site:</strong> ${escapeForEmail(site.url)}<br>
+     <strong>Domain:</strong> ${escapeForEmail(expiry.domain || site.url)}<br>
+     <strong>Expires:</strong> ${expiry.expires_at ? new Date(expiry.expires_at).toDateString() : 'Unknown'}</p>
+  <p>Renew your domain before it expires to avoid downtime and losing your name.</p>
+  <a href="https://www.sitetrace.it.com/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;margin-top:8px;">Open Dashboard</a>
+  <p style="margin-top:24px;font-size:.8rem;color:#94a3b8;">SiteTrace · sitetrace.it.com</p>
+</div>`
+        })
+      });
+
+      logEvent('domain_expiry_alert_sent', { site_id: site.id, days, threshold, email });
+    } catch (_) { /* skip individual failures */ }
+  }
+}
+
+function escapeForEmail(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+app.post('/billing/portal', requireUser, async (req, res) => {
+  if (!stripe) {
+    return res.status(503).json({ status: 'error', message: 'Stripe is not configured' });
+  }
+
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('stripe_customer_id')
+    .eq('id', req.user.id)
+    .single();
+
+  if (!profile || !profile.stripe_customer_id) {
+    return res.status(400).json({ status: 'error', message: 'No billing account found. Please upgrade first.' });
+  }
+
+  try {
+    const portalSession = await stripe.billingPortal.sessions.create({
+      customer: profile.stripe_customer_id,
+      return_url: `${APP_URL}/dashboard`
+    });
+    res.json({ url: portalSession.url });
+  } catch (err) {
+    res.status(500).json({ status: 'error', message: err.message });
+  }
+});
 
 app.post('/jobs/run-checks', async (req, res) => {
   if (!CRON_SECRET || req.headers.authorization !== `Bearer ${CRON_SECRET}`) {
@@ -2591,76 +2773,6 @@ app.post('/jobs/run-checks', async (req, res) => {
   res.json(result);
 });
 
-app.get('/pricing', (req, res) => {
-  res.sendFile(path.join(__dirname, 'pricing.html'));
-});
-
-app.get('/demo', (req, res) => {
-  res.sendFile(path.join(__dirname, 'demo.html'));
-});
-
-app.get('/api-docs', (req, res) => {
-  res.sendFile(path.join(__dirname, 'api.html'));
-});
-
-app.get('/docs', (req, res) => {
-  res.sendFile(path.join(__dirname, 'docs.html'));
-});
-
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dashboard.html'));
-});
-
-app.get('/signin', (req, res) => {
-  res.sendFile(path.join(__dirname, 'signin.html'));
-});
-
-// Auth confirmation redirect — keeps links on our domain instead of supabase.co
-app.get('/auth/confirm', (req, res) => {
-  const { token_hash, type, next } = req.query;
-  if (!token_hash || !type) return res.redirect('/signin');
-  const redirectTo = (next && next.startsWith('/')) ? next : '/signin';
-  // Redirect to signin with token_hash so Supabase JS can exchange it
-  res.redirect(`${redirectTo}?token_hash=${encodeURIComponent(token_hash)}&type=${encodeURIComponent(type)}`);
-});
-
-// Send password-changed confirmation email
-app.post('/auth/password-changed', express.json(), async (req, res) => {
-  const { email } = req.body || {};
-  if (!email || !RESEND_API_KEY) return res.json({ sent: false });
-  try {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({
-        from: ALERT_FROM_EMAIL,
-        reply_to: ALERT_REPLY_TO_EMAIL,
-        to: [email],
-        subject: 'Your SiteTrace password was changed',
-        html: `<div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#fff;">
-  <div style="margin-bottom:24px;">
-    <span style="display:inline-flex;align-items:center;gap:8px;font-weight:700;font-size:1.1rem;color:#111;">
-      <span style="background:#10b981;color:#fff;border-radius:6px;padding:4px 8px;font-size:.85rem;">ST</span>
-      SiteTrace
-    </span>
-  </div>
-  <h2 style="font-size:1.3rem;font-weight:700;color:#111;margin:0 0 8px;">Password changed</h2>
-  <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">Your SiteTrace password was successfully updated. You can now sign in with your new password.</p>
-  <p style="color:#4b5563;line-height:1.6;margin:0 0 20px;">If you did not make this change, please contact us immediately at <a href="mailto:support@sitetrace.it.com" style="color:#10b981;">support@sitetrace.it.com</a>.</p>
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-  <p style="color:#9ca3af;font-size:.8rem;margin:0;">SiteTrace &mdash; Website health monitoring</p>
-</div>`,
-        text: `Your SiteTrace password was successfully updated.\n\nIf you did not make this change, contact us at support@sitetrace.it.com immediately.`,
-      }),
-    });
-    const result = await response.json();
-    res.json({ sent: true, id: result.id });
-  } catch (err) {
-    res.json({ sent: false, error: err.message });
-  }
-});
-
-
 app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'terms.html'));
 });
@@ -2673,7 +2785,6 @@ app.get('/status/:slug', (req, res) => {
   res.sendFile(path.join(__dirname, 'status.html'));
 });
 
-// Public Client Report endpoint
 app.get('/public/report/:slug', async (req, res) => {
   if (!supabaseAdmin) {
     return res.status(503).json({ status: 'error', message: 'Not configured' });
@@ -2717,16 +2828,12 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log('SiteTrace API listening on port ' + PORT);
 
-    // ── Internal scheduler ──────────────────────────────────────────────────
-    // Runs every 60 seconds. shouldRunForPlan() gates each site by its plan
-    // interval (free=20min, starter=5min, agency=1min), so ticking every
-    // minute is the right granularity for agency-tier sites.
     if (CRON_SECRET && supabaseAdmin) {
       console.log('Scheduler started — running checks every 60 s');
       setInterval(async () => {
         try {
           const result = await runScheduledChecks();
-          if (result.status === 'skipped') return; // previous run still in flight
+          if (result.status === 'skipped') return;
           console.log(`[scheduler] checked=${result.checked} total=${result.total}`);
         } catch (err) {
           console.error('[scheduler] unexpected error:', err.message);

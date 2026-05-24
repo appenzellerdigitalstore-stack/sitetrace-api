@@ -35,6 +35,7 @@ alter table public.sites add column if not exists email_alerts_enabled boolean n
 alter table public.sites add column if not exists alert_on_down boolean not null default true;
 alter table public.sites add column if not exists alert_on_warning boolean not null default true;
 alter table public.sites add column if not exists alert_on_recovery boolean not null default true;
+alter table public.sites add column if not exists alert_threshold integer not null default 2;
 
 create table if not exists public.checks (
   id uuid primary key default gen_random_uuid(),
@@ -213,4 +214,4 @@ create index if not exists sites_public_slug_idx on public.sites(public_slug);
 create index if not exists checks_site_id_created_at_idx on public.checks(site_id, created_at desc);
 create index if not exists checks_user_id_created_at_idx on public.checks(user_id, created_at desc);
 create index if not exists incidents_site_id_created_at_idx on public.incidents(site_id, created_at desc);
-create index if not exists incidents_user_id_created_at_idx on public.incidents(user_id, created_at desc);
+create index 

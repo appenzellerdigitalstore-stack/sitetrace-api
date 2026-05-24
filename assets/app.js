@@ -3513,6 +3513,11 @@ function buildSettingsForm(site) {
     '<label class="toggle-row ' + (alertsLocked ? 'locked-control' : '') + '">' +
     '<input id="alertRecoveryInput" type="checkbox" ' + (boolValue(site.alert_on_recovery) ? 'checked' : '') + ' ' + (alertsLocked ? 'disabled' : '') + '>' +
     '<span>' + escapeHtml(t('dashboard.alertRecovery')) + '</span></label>' +
+    '<label style="display:grid;gap:6px;font-size:.9rem;font-weight:500;" class="' + (alertsLocked ? 'locked-control' : '') + '">' +
+    '<span style="color:var(--muted);font-size:.85rem;">Alert threshold <span style="font-weight:400;">(consecutive failures before opening an incident)</span></span>' +
+    '<select id="alertThresholdInput" ' + (alertsLocked ? 'disabled' : '') + ' style="width:120px;">' +
+    [1,2,3,5].map(n => '<option value="' + n + '"' + (Number(site.alert_threshold || 2) === n ? ' selected' : '') + '>' + n + ' check' + (n > 1 ? 's' : '') + '</option>').join('') +
+    '</select></label>' +
     '<label class="toggle-row ' + (statusLocked ? 'locked-control' : '') + '">' +
     '<input id="statusPageInput" type="checkbox" ' + (site.status_page_enabled ? 'checked' : '') + ' ' + (statusLocked ? 'disabled' : '') + '>' +
     '<span>' + escapeHtml(t('dashboard.statusPage')) + '</span></label>' +
@@ -4142,6 +4147,7 @@ async function initDashboard() {
       alert_on_down: hasFeature('in_app_alerts') ? document.getElementById('alertDownInput').checked : false,
       alert_on_warning: hasFeature('in_app_alerts') ? document.getElementById('alertWarningInput').checked : false,
       alert_on_recovery: hasFeature('in_app_alerts') ? document.getElementById('alertRecoveryInput').checked : false,
+      alert_threshold: hasFeature('in_app_alerts') ? Number(document.getElementById('alertThresholdInput').value || 2) : 2,
       status_page_enabled: hasFeature('status_pages') ? document.getElementById('statusPageInput').checked : false
     };
     const response = await fetch(apiPath(`/api/sites/${siteId}`), { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
