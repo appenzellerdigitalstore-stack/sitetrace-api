@@ -169,6 +169,11 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
           subscription_status: 'active',
           updated_at: new Date().toISOString()
         });
+        // Send upgrade confirmation email (#52)
+        if (RESEND_API_KEY) {
+          const { data: prof } = await supabaseAdmin.from('profiles').select('email').eq('id', userId).single();
+          if (prof && prof.email) sendUpgradeConfirmationEmail(prof.email, plan).catch(() => {});
+        }
       }
     }
 
@@ -194,16 +199,36 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
         .from('profiles')
         .update({ subscription_status: 'past_due', updated_at: new Date().toISOString() })
         .eq('stripe_customer_id', customerId);
+
+      // Send payment failed email (#54)
+      if (RESEND_API_KEY) {
+        const { data: prof } = await supabaseAdmin.from('profiles').select('email, plan').eq('stripe_customer_id', customerId).single();
+        if (prof && prof.email) {
+          const planLabel = prof.plan === 'agency' ? 'Agency' : 'Starter';
+          const retryDate = invoice.next_payment_attempt
+            ? new Date(invoice.next_payment_attempt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : null;
+          sendPaymentFailedEmail(prof.email, { planLabel, retryDate }).catch(() => {});
+        }
+      }
     }
 
     if (event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       const customerId = subscription.customer;
 
+      // Fetch email before downgrading
+      const { data: prof } = await supabaseAdmin.from('profiles').select('email').eq('stripe_customer_id', customerId).single();
+
       await supabaseAdmin
         .from('profiles')
         .update({ plan: 'free', subscription_status: 'canceled', updated_at: new Date().toISOString() })
         .eq('stripe_customer_id', customerId);
+
+      // Send offboarding email (#53)
+      if (RESEND_API_KEY && prof && prof.email) {
+        sendOffboardingEmail(prof.email).catch(() => {});
+      }
     }
   } catch (error) {
     console.error('Stripe webhook handling error:', error.message);
@@ -1217,6 +1242,292 @@ async function sendAlertEmail({ to, site, status, analysis, incident }) {
   return { sent: true, id: data && data.id ? data.id : null };
 }
 
+
+// ── Weekly digest email (#49) ─────────────────────────────────────────────────
+async function sendWeeklyDigestEmail(email, { sites, totalIncidents, overallUptime, slowestSite, expiringDomains }) {
+  if (!RESEND_API_KEY) return;
+  const statusColor = overallUptime >= 99 ? '#22c55e' : overallUptime >= 95 ? '#f59e0b' : '#ef4444';
+  const siteRows = sites.map(s => `
+    <tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;">${escapeForEmail(s.name)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;">
+        <span style="background:${s.uptime >= 99 ? '#dcfce7' : s.uptime >= 95 ? '#fef3c7' : '#fee2e2'};color:${s.uptime >= 99 ? '#166534' : s.uptime >= 95 ? '#92400e' : '#991b1b'};padding:2px 8px;border-radius:9999px;font-size:.75rem;font-weight:600;">${s.uptime.toFixed(1)}%</span>
+      </td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${s.incidents} incident${s.incidents !== 1 ? 's' : ''}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;text-align:center;color:#64748b;">${s.avgResponseMs ? s.avgResponseMs + ' ms' : '—'}</td>
+    </tr>`).join('');
+  const expirySection = expiringDomains.length > 0 ? `
+    <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:20px 0;">
+      <strong style="color:#92400e;">⚠️ Domains expiring soon</strong>
+      <ul style="margin:8px 0 0;padding-left:20px;color:#78350f;">
+        ${expiringDomains.map(d => `<li>${escapeForEmail(d.name)} — ${d.days} days remaining</li>`).join('')}
+      </ul>
+    </div>` : '';
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `Your SiteTrace weekly report — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px 28px;display:flex;align-items:center;gap:12px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;letter-spacing:-.5px;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;">SiteTrace Weekly Report</span>
+    </div>
+    <div style="padding:28px;">
+      <p style="margin:0 0 4px;color:#64748b;font-size:.85rem;">Week ending ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p>
+      <h2 style="margin:0 0 24px;font-size:1.4rem;color:#0f172a;">Here's how your sites performed</h2>
+      <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:120px;background:#f8fafc;border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:1.8rem;font-weight:700;color:${statusColor};">${overallUptime.toFixed(1)}%</div>
+          <div style="color:#64748b;font-size:.8rem;margin-top:4px;">Overall uptime</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:#f8fafc;border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:1.8rem;font-weight:700;color:${totalIncidents > 0 ? '#ef4444' : '#22c55e'};">${totalIncidents}</div>
+          <div style="color:#64748b;font-size:.8rem;margin-top:4px;">Incidents this week</div>
+        </div>
+        <div style="flex:1;min-width:120px;background:#f8fafc;border-radius:8px;padding:16px;text-align:center;">
+          <div style="font-size:1.8rem;font-weight:700;color:#6366f1;">${sites.length}</div>
+          <div style="color:#64748b;font-size:.8rem;margin-top:4px;">Sites monitored</div>
+        </div>
+      </div>
+      ${sites.length > 0 ? `
+      <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="padding:8px 12px;text-align:left;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Site</th>
+            <th style="padding:8px 12px;text-align:center;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Uptime</th>
+            <th style="padding:8px 12px;text-align:center;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Incidents</th>
+            <th style="padding:8px 12px;text-align:center;color:#64748b;font-weight:600;border-bottom:2px solid #e2e8f0;">Avg. Response</th>
+          </tr>
+        </thead>
+        <tbody>${siteRows}</tbody>
+      </table>` : '<p style="color:#64748b;">No monitored sites yet. <a href="https://www.sitetrace.it.com/dashboard" style="color:#6366f1;">Add your first site →</a></p>'}
+      ${slowestSite ? `<p style="margin-top:16px;font-size:.85rem;color:#64748b;">🐢 Slowest site this week: <strong>${escapeForEmail(slowestSite.name)}</strong> (avg ${slowestSite.avgResponseMs} ms)</p>` : ''}
+      ${expirySection}
+      <div style="margin-top:28px;text-align:center;">
+        <a href="https://www.sitetrace.it.com/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">View Full Dashboard</a>
+      </div>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a> · You're receiving this because you have an active SiteTrace account.<br>
+      <a href="https://www.sitetrace.it.com/dashboard" style="color:#6366f1;">Manage notification preferences</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
+// ── Re-engagement email (#50) ─────────────────────────────────────────────────
+async function sendReEngagementEmail(email, { siteCount, lastCheckAt }) {
+  if (!RESEND_API_KEY) return;
+  const daysSince = lastCheckAt ? Math.floor((Date.now() - new Date(lastCheckAt).getTime()) / 86400000) : 14;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `Your sites are still being watched — here's a quick update`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px 28px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;margin-left:8px;">SiteTrace</span>
+    </div>
+    <div style="padding:28px;">
+      <h2 style="margin:0 0 12px;font-size:1.3rem;color:#0f172a;">We've been keeping an eye on things</h2>
+      <p style="color:#475569;line-height:1.6;">It's been ${daysSince} days since your last visit. SiteTrace has been quietly monitoring your ${siteCount} site${siteCount !== 1 ? 's' : ''} the whole time.</p>
+      <p style="color:#475569;line-height:1.6;">Pop back in to see uptime history, response times, and any incidents we caught while you were away.</p>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Check Your Dashboard</a>
+      </div>
+      <p style="color:#94a3b8;font-size:.8rem;line-height:1.5;">Got feedback or questions? Just reply to this email — we read every message.</p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
+// ── Upgrade nudge email (#51) ─────────────────────────────────────────────────
+async function sendUpgradeNudgeEmail(email, { plan, limit, siteName }) {
+  if (!RESEND_API_KEY) return;
+  const nextPlan = plan === 'free' ? 'Starter' : 'Agency';
+  const nextLimit = plan === 'free' ? 10 : 50;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `You've hit your site limit — upgrade to monitor more`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px 28px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;margin-left:8px;">SiteTrace</span>
+    </div>
+    <div style="padding:28px;">
+      <h2 style="margin:0 0 12px;font-size:1.3rem;color:#0f172a;">You've reached your ${limit}-site limit</h2>
+      <p style="color:#475569;line-height:1.6;">You tried to add <strong>${escapeForEmail(siteName || 'a new site')}</strong>, but your current plan only supports <strong>${limit} monitored site${limit !== 1 ? 's' : ''}</strong>.</p>
+      <p style="color:#475569;line-height:1.6;">Upgrade to <strong>${nextPlan}</strong> to monitor up to <strong>${nextLimit} sites</strong> with 1-minute checks, full incident history, and team features.</p>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/pricing" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Upgrade Now</a>
+      </div>
+      <p style="color:#94a3b8;font-size:.8rem;">Questions? Reply to this email and we'll help you find the right plan.</p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
+// ── Plan upgrade confirmation email (#52) ─────────────────────────────────────
+async function sendUpgradeConfirmationEmail(email, plan) {
+  if (!RESEND_API_KEY) return;
+  const planLabel = plan === 'agency' ? 'Agency' : 'Starter';
+  const planLimit = plan === 'agency' ? 50 : 10;
+  const planInterval = plan === 'agency' ? '1 minute' : '5 minutes';
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `You're on SiteTrace ${planLabel} — welcome to the upgrade`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);padding:24px 28px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;margin-left:8px;">SiteTrace ${planLabel}</span>
+    </div>
+    <div style="padding:28px;">
+      <h2 style="margin:0 0 8px;font-size:1.4rem;color:#0f172a;">Welcome to ${planLabel}! 🎉</h2>
+      <p style="color:#475569;line-height:1.6;margin-top:0;">Your upgrade is active. Here's what you now have access to:</p>
+      <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="color:#22c55e;font-size:1.1rem;">✓</span><span style="color:#1e293b;">Monitor up to <strong>${planLimit} sites</strong></span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="color:#22c55e;font-size:1.1rem;">✓</span><span style="color:#1e293b;">Checks every <strong>${planInterval}</strong></span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="color:#22c55e;font-size:1.1rem;">✓</span><span style="color:#1e293b;"><strong>Full incident history</strong> and timeline</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;"><span style="color:#22c55e;font-size:1.1rem;">✓</span><span style="color:#1e293b;"><strong>Slack & Teams</strong> notifications</span></div>
+        ${plan === 'agency' ? `<div style="display:flex;align-items:center;gap:10px;"><span style="color:#22c55e;font-size:1.1rem;">✓</span><span style="color:#1e293b;"><strong>API access</strong> and white-label reports</span></div>` : ''}
+      </div>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Go to Dashboard</a>
+      </div>
+      <p style="color:#94a3b8;font-size:.8rem;">Manage your subscription anytime from the dashboard billing page. Questions? Reply to this email.</p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
+// ── Offboarding / cancellation email (#53) ────────────────────────────────────
+async function sendOffboardingEmail(email) {
+  if (!RESEND_API_KEY) return;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `Your SiteTrace subscription has been cancelled`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px 28px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;margin-left:8px;">SiteTrace</span>
+    </div>
+    <div style="padding:28px;">
+      <h2 style="margin:0 0 12px;font-size:1.3rem;color:#0f172a;">Sorry to see you go</h2>
+      <p style="color:#475569;line-height:1.6;">Your subscription has been cancelled and your account has been moved back to the free plan. Your data and monitored sites are still there if you ever want to come back.</p>
+      <p style="color:#475569;line-height:1.6;">We'd love to know what we could have done better. It takes 30 seconds:</p>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/feedback?reason=cancellation" style="display:inline-block;background:#f1f5f9;color:#0f172a;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;border:1px solid #e2e8f0;">Share feedback (30 sec)</a>
+      </div>
+      <p style="color:#475569;line-height:1.6;">Changed your mind? You can resubscribe anytime from the dashboard.</p>
+      <div style="margin:16px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/pricing" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Resubscribe</a>
+      </div>
+      <p style="color:#94a3b8;font-size:.8rem;margin-top:24px;">If you believe this was a mistake, reply to this email and we'll sort it out.</p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
+// ── Payment failed email (#54) ────────────────────────────────────────────────
+async function sendPaymentFailedEmail(email, { planLabel, retryDate }) {
+  if (!RESEND_API_KEY) return;
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${RESEND_API_KEY}` },
+    body: JSON.stringify({
+      from: ALERT_FROM_EMAIL,
+      reply_to: ALERT_REPLY_TO_EMAIL,
+      to: [email],
+      subject: `Action needed: payment failed for SiteTrace ${planLabel}`,
+      html: `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;background:#f8fafc;font-family:Inter,'Helvetica Neue',Arial,sans-serif;">
+<div style="max-width:520px;margin:0 auto;padding:32px 16px;">
+  <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);">
+    <div style="background:#0f172a;padding:24px 28px;">
+      <span style="color:#6366f1;font-weight:800;font-size:1.1rem;">ST</span>
+      <span style="color:#fff;font-weight:600;font-size:1rem;margin-left:8px;">SiteTrace</span>
+    </div>
+    <div style="padding:28px;">
+      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+        <strong style="color:#991b1b;">⚠️ Payment failed</strong>
+        <p style="color:#7f1d1d;margin:6px 0 0;font-size:.9rem;">We were unable to charge your card for SiteTrace ${planLabel}.</p>
+      </div>
+      <p style="color:#475569;line-height:1.6;">Your monitoring will continue while we retry, but your account may be paused if the payment can't be processed${retryDate ? ' by ' + retryDate : ''}.</p>
+      <p style="color:#475569;line-height:1.6;">Please update your payment method to avoid any interruption:</p>
+      <div style="margin:24px 0;text-align:center;">
+        <a href="https://www.sitetrace.it.com/dashboard" style="display:inline-block;background:#6366f1;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;">Update Payment Method</a>
+      </div>
+      <p style="color:#94a3b8;font-size:.8rem;">If you think this is an error or need help, just reply to this email.</p>
+    </div>
+    <div style="background:#f8fafc;padding:16px 28px;font-size:.75rem;color:#94a3b8;text-align:center;">
+      SiteTrace · <a href="https://www.sitetrace.it.com" style="color:#94a3b8;">sitetrace.it.com</a>
+    </div>
+  </div>
+</div>
+</body></html>`
+    })
+  });
+}
+
 async function sendPlainDiagnosticEmail({ to }) {
   if (!RESEND_API_KEY || !to) {
     return { sent: false, reason: 'email_not_configured' };
@@ -2180,6 +2491,18 @@ app.post('/api/sites', requireUser, async (req, res) => {
   }
 
   if ((count || 0) >= limits.sites) {
+    // Send upgrade nudge email (#51) — fire-and-forget, one per account per 7 days
+    if (RESEND_API_KEY && supabaseAdmin) {
+      supabaseAdmin.from('profiles').select('email, upgrade_nudge_sent_at').eq('id', req.user.id).single()
+        .then(({ data: prof }) => {
+          if (!prof || !prof.email) return;
+          const daysSince = prof.upgrade_nudge_sent_at
+            ? (Date.now() - new Date(prof.upgrade_nudge_sent_at).getTime()) / 86400000 : 999;
+          if (daysSince < 7) return;
+          sendUpgradeNudgeEmail(prof.email, { plan, limit: limits.sites, siteName: req.body && req.body.name }).catch(() => {});
+          supabaseAdmin.from('profiles').update({ upgrade_nudge_sent_at: new Date().toISOString() }).eq('id', req.user.id).then(() => {});
+        }).catch(() => {});
+    }
     return res.status(402).json({
       status: 'error',
       code: 'plan_limit_reached',
@@ -2734,6 +3057,19 @@ async function runScheduledChecks() {
     const checked = results.filter(r => r.status !== 'skipped').length;
     logEvent('cron_checks_completed', { checked, total: results.length, queued: sitesToCheck.length });
 
+
+    // ── Weekly digest (#49) ──────────────────────────────────────────────────
+    // Runs every Monday. Checks last_digest_sent to avoid duplicates.
+    if (RESEND_API_KEY && supabaseAdmin) {
+      try { await runWeeklyDigests(); } catch (_) { /* non-fatal */ }
+    }
+
+    // ── Re-engagement (#50) ──────────────────────────────────────────────────
+    // Checks for users inactive 14+ days and sends one re-engagement email.
+    if (RESEND_API_KEY && supabaseAdmin) {
+      try { await runReEngagement(); } catch (_) { /* non-fatal */ }
+    }
+
     // ── Domain expiry alerts (#31) ────────────────────────────────────────
     // Run once per scheduler tick. Send email if domain expires in 30, 14,
     // or 7 days and an alert at that threshold hasn't been sent yet today.
@@ -2804,6 +3140,145 @@ async function sendDomainExpiryAlerts(sites) {
 
       logEvent('domain_expiry_alert_sent', { site_id: site.id, days, threshold, email });
     } catch (_) { /* skip individual failures */ }
+  }
+}
+
+
+// ── Weekly digest runner (#49) ────────────────────────────────────────────────
+async function runWeeklyDigests() {
+  const now = new Date();
+  // Only run on Mondays (day 1)
+  if (now.getUTCDay() !== 1) return;
+  const todayKey = now.toISOString().slice(0, 10);
+
+  // Fetch all users
+  const { data: profiles } = await supabaseAdmin.from('profiles').select('id, email, plan, subscription_status');
+  if (!profiles || profiles.length === 0) return;
+
+  for (const profile of profiles) {
+    try {
+      if (!profile.email) continue;
+
+      // Throttle: skip if already sent today
+      const { data: sent } = await supabaseAdmin
+        .from('profiles')
+        .select('weekly_digest_sent_at')
+        .eq('id', profile.id)
+        .single();
+      if (sent && sent.weekly_digest_sent_at && sent.weekly_digest_sent_at.slice(0, 10) === todayKey) continue;
+
+      // Fetch this user's sites
+      const { data: sites } = await supabaseAdmin
+        .from('sites')
+        .select('id, name, url, domain_expires_at')
+        .eq('user_id', profile.id);
+      if (!sites || sites.length === 0) continue;
+
+      // Fetch last 7 days of checks per site
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+      const siteStats = [];
+      let totalUptime = 0;
+      let totalIncidents = 0;
+      const expiringDomains = [];
+
+      for (const site of sites) {
+        const { data: checks } = await supabaseAdmin
+          .from('checks')
+          .select('status, response_time_ms, created_at')
+          .eq('site_id', site.id)
+          .gte('created_at', sevenDaysAgo);
+
+        const total = checks ? checks.length : 0;
+        const up = checks ? checks.filter(c => c.status === 'up').length : 0;
+        const uptime = total > 0 ? (up / total) * 100 : 100;
+        const avgMs = total > 0 ? Math.round(checks.reduce((s, c) => s + (c.response_time_ms || 0), 0) / total) : null;
+
+        const { count: incCount } = await supabaseAdmin
+          .from('incidents')
+          .select('id', { count: 'exact', head: true })
+          .eq('site_id', site.id)
+          .gte('created_at', sevenDaysAgo);
+
+        siteStats.push({ name: site.name, uptime, incidents: incCount || 0, avgResponseMs: avgMs });
+        totalUptime += uptime;
+        totalIncidents += incCount || 0;
+
+        // Check domain expiry
+        if (site.domain_expires_at) {
+          const days = Math.ceil((new Date(site.domain_expires_at) - now) / 86400000);
+          if (days > 0 && days <= 30) expiringDomains.push({ name: site.name, days });
+        }
+      }
+
+      const overallUptime = sites.length > 0 ? totalUptime / sites.length : 100;
+      const slowestSite = siteStats.reduce((s, c) => (c.avgResponseMs || 0) > (s ? s.avgResponseMs || 0 : 0) ? c : s, null);
+
+      await sendWeeklyDigestEmail(profile.email, { sites: siteStats, totalIncidents, overallUptime, slowestSite, expiringDomains });
+
+      // Mark as sent
+      await supabaseAdmin.from('profiles')
+        .update({ weekly_digest_sent_at: now.toISOString(), updated_at: now.toISOString() })
+        .eq('id', profile.id);
+
+      logEvent('weekly_digest_sent', { user_id: profile.id, sites: sites.length });
+    } catch (_) { /* skip individual user */ }
+  }
+}
+
+// ── Re-engagement runner (#50) ────────────────────────────────────────────────
+async function runReEngagement() {
+  const now = new Date();
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000).toISOString();
+
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, email, plan, re_engagement_sent_at');
+  if (!profiles) return;
+
+  for (const profile of profiles) {
+    try {
+      if (!profile.email) continue;
+      // Skip if already sent a re-engagement recently (within 30 days)
+      if (profile.re_engagement_sent_at) {
+        const daysSince = (now - new Date(profile.re_engagement_sent_at)) / 86400000;
+        if (daysSince < 30) continue;
+      }
+
+      // Check last login via updated_at on profile or last check created_at
+      const { data: latestCheck } = await supabaseAdmin
+        .from('checks')
+        .select('created_at')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      // Also check profile updated_at as proxy for activity
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('updated_at')
+        .eq('id', profile.id)
+        .single();
+
+      const lastActivity = latestCheck ? latestCheck.created_at : (prof ? prof.updated_at : null);
+      if (!lastActivity) continue;
+      if (new Date(lastActivity) > new Date(fourteenDaysAgo)) continue; // active recently
+
+      const { data: sites } = await supabaseAdmin
+        .from('sites')
+        .select('id')
+        .eq('user_id', profile.id);
+      const siteCount = sites ? sites.length : 0;
+      if (siteCount === 0) continue; // no sites = skip, they're not really a user yet
+
+      await sendReEngagementEmail(profile.email, { siteCount, lastCheckAt: lastActivity });
+
+      await supabaseAdmin.from('profiles')
+        .update({ re_engagement_sent_at: now.toISOString(), updated_at: now.toISOString() })
+        .eq('id', profile.id);
+
+      logEvent('re_engagement_sent', { user_id: profile.id });
+    } catch (_) { /* skip individual user */ }
   }
 }
 
