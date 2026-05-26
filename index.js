@@ -2106,14 +2106,24 @@ app.get('/api/me', requireUser, async (req, res) => {
     profile = repaired || profile;
   }
 
-  // Send onboarding email on first login (non-blocking)
+  // Send onboarding email on first login — atomic flag flip prevents duplicates
+  // even when /api/me is called concurrently on dashboard load.
   if (profile && !profile.onboarding_email_sent && RESEND_API_KEY) {
-    sendOnboardingEmail(req.user.email).then(() => {
-      supabaseAdmin.from('profiles')
-        .update({ onboarding_email_sent: true, updated_at: new Date().toISOString() })
-        .eq('id', req.user.id)
-        .then(() => {});
-    }).catch(() => {});
+    // Atomically claim the send-once slot: only the request that actually
+    // flips the flag from false → true will proceed to send the email.
+    supabaseAdmin.from('profiles')
+      .update({ onboarding_email_sent: true, updated_at: new Date().toISOString() })
+      .eq('id', req.user.id)
+      .eq('onboarding_email_sent', false)   // ← only matches if still false
+      .select('id')
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          // This request won the race — send exactly one email
+          const emailTo = req.user.email || profile.email;
+          if (emailTo) sendOnboardingEmail(emailTo).catch(() => {});
+        }
+      })
+      .catch(() => {});
   }
 
   const plan = profile && PLAN_LIMITS[profile.plan] && profile.subscription_status !== 'canceled' ? profile.plan : 'free';
